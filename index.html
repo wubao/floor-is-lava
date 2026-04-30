@@ -417,13 +417,13 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <rect id="wq2" x="3" y="67" width="60" height="60" rx="12" ry="12" fill="#4a1080" stroke="#1a1a1a" stroke-width="1"/>
       <text id="wt2" x="33" y="100" text-anchor="middle" font-size="22" fill="#fff">📖</text>
       <text id="wc2" x="33" y="118" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffe066">0</text>
-      <!-- Q3: bottom-right — chute 🪂 -->
-      <rect id="wq3" x="67" y="67" width="60" height="60" rx="12" ry="12" fill="#0d5a5a" stroke="#1a1a1a" stroke-width="1"/>
-      <text id="wt3" x="97" y="100" text-anchor="middle" font-size="22" fill="#fff">🪂</text>
-      <text id="wc3" x="97" y="118" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffe066">0</text>
+      <!-- Q3: bottom-right — lava ship 🚀 -->
+	<rect id="wq3" x="67" y="67" width="60" height="60" rx="12" ry="12" fill="#7a2a00" stroke="#1a1a1a" stroke-width="1"/>
+	<text id="wt3" x="97" y="100" text-anchor="middle" font-size="22" fill="#fff">🚀</text>
+	<text id="wc3" x="97" y="118" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffe066">0</text>
       <!-- centre fire button -->
       <circle cx="65" cy="65" r="22" fill="#1a1a1a" stroke="#555" stroke-width="2" id="wheelCenter"/>
-      <text id="wheelCenterTxt" x="65" y="70" text-anchor="middle" font-size="10" fill="#ffe066" font-weight="bold">TAP</text>
+      <text id="wheelCenterTxt" x="65" y="70" text-anchor="middle" font-size="10" fill="#ffe066" font-weight="bold">GO</text>
     </svg>
   </div>
   <div id="itemNotif"></div>
@@ -433,7 +433,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div id="shopCoins"></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Jump Boost</div><div class="shopItemDesc">Stack up to 20. On-demand super-jump. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">20 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. 5 uses. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">20 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Auto-deploys after falling 300px. Steerable slow descent.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Automatically activates when falling. No button needed.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Big head! Pull platform above. 5 uses. Key 4 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! Lava surge won't fire until 100 platforms behind. 1 use.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">150 🪙</button></div>
       <button id="closeShop" onclick="closeShop()">▶ Resume</button>
@@ -2346,7 +2346,8 @@ function buyItem(type){
   else if(type==='skip'&&coins>=20){coins-=20;const b=booksOwned>0?5*booksOwned:5;skipUses+=b;showNotif('⬆️ +'+b+' skips (key 2)');playSound('buy');}
   else if(type==='chute'&&coins>=50){coins-=50;parachutes++;if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+' owned)');playSound('buy');}
   else if(type==='book'&&coins>=100){coins-=100;booksOwned++;bigHead=true;bookUses+=5;showNotif('📖 Big head! Key 4 or wheel.');playSound('buy');}
-  else if(type==='ship'&&coins>=150){coins-=150;lavaShips++;showNotif('🚀 Lava Ship ready! Key 5 or use from shop.');playSound('buy');}
+  else if(type==='ship'&&coins>=150){coins-=150;lavaShips++;if(currentUser) currentUser.ud.lavaShips = lavaShips;showNotif('🚀 Lava Ship ready!');playSound('buy');
+}
   if(currentUser)currentUser.ud.coins=coins;dbSave();updateHUD();
 }
 function updateEndPlatform(){endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;updateHUD();}
@@ -3283,11 +3284,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ── POWER GRID (replaces old rotating dial) ──
 // Slots: 0=top-left boost, 1=top-right skip, 2=bottom-left book, 3=bottom-right chute
 let selectedSlot=0, dialPendingFire=false;
-const DIAL_SLOTS=[
-  {key:'boost',  getCount:()=>jumpBoosts},
-  {key:'skip',   getCount:()=>skipUses},
-  {key:'book',   getCount:()=>bookUses},
-  {key:'chute',  getCount:()=>parachutes},
+const DIAL_SLOTS = [
+  {key:'boost',    getCount:()=>jumpBoosts},
+  {key:'skip',     getCount:()=>skipUses},
+  {key:'book',     getCount:()=>bookUses},
+  {key:'lavaShip', getCount:()=>lavaShips}, // Ensure variable matches what's used in-game
 ];
 // Base colors per slot
 const SLOT_COLORS=['#c8900a','#1a4a8a','#4a1080','#0d5a5a'];
@@ -3323,6 +3324,11 @@ function updateWheelDial(){
   const cnt=slot.getCount();
   const cb=document.getElementById('wheelCenter');
   const ct=document.getElementById('wheelCenterTxt');
+  if (cnt > 0) {
+  ct.textContent = "GO";
+} else {
+  ct.textContent = "EMPTY";
+}
   if(cb){
     cb.setAttribute('fill',dialPendingFire?'#003300':cnt>0?'#2a1a00':'#1a1a1a');
     cb.setAttribute('stroke',dialPendingFire?'#44ff88':cnt>0?'#ffe066':'#555');
@@ -3339,21 +3345,28 @@ if(ct){
   }
 }
 
+// Floor Is Lava v36
 function fireSelectedSlot(){
-  const slot=DIAL_SLOTS[selectedSlot];
-  dialPendingFire=false;
-  if(slot.getCount()<=0){showNotif('None left! Buy in shop.');updateWheelDial();return;}
-  if(slot.key==='boost') jump(false,true);
-  else if(slot.key==='skip') activateSkip();
-  else if(slot.key==='chute'){
-    if(!parachuteActive&&!player.onGround){
-      parachuteActive=true;parachutes--;
-      if(currentUser)currentUser.ud.parachutes=parachutes;
-      dbSave();showNotif('🪂 Parachute!');
-      document.getElementById('parachuteHUD').style.opacity='1';
-    } else showNotif('Chute auto-deploys when falling!');
+  const slot = DIAL_SLOTS[selectedSlot];
+  dialPendingFire = false;
+  
+  if (slot.getCount() <= 0) {
+    showNotif('None left! Buy in shop.');
+    updateWheelDial();
+    return;
   }
-  else if(slot.key==='book') activateBook();
+
+  if (slot.key === 'boost') {
+    jump(false, true);
+  } else if (slot.key === 'skip') {
+    activateSkip();
+  } else if (slot.key === 'lavaShip' || slot.key === 'ship') {
+    // v36 Fix: Call your complete launch function instead of a manual position jump
+    activateLavaShip();
+  } else if (slot.key === 'book') {
+    activateBook();
+  }
+  
   updateWheelDial();
 }
 
@@ -3378,18 +3391,15 @@ document.addEventListener('click',e=>{
   e.stopPropagation();
   const q=getGridQuadrant(e.clientX,e.clientY);
   if(q===-1){
-    // Centre — fire if armed, otherwise arm selected
-    const slot=DIAL_SLOTS[selectedSlot];
-    if(slot.getCount()<=0){ showNotif('None! Buy in shop.'); return; }
-    if(slot.key==='chute'){
-      // Parachute needs arm → fire (only works mid-air)
-      if(dialPendingFire){ fireSelectedSlot(); }
-      else { dialPendingFire=true; showNotif('🪂 Armed! Will deploy when falling.'); updateWheelDial(); }
-    } else {
-      // Boost, skip, book — fire immediately
-      fireSelectedSlot();
-    }
-  } else {
+  // Centre — fire immediately
+  const slot=DIAL_SLOTS[selectedSlot];
+  if(!slot || slot.getCount()<=0){
+    showNotif('None! Buy in shop.');
+    return;
+  }
+
+  fireSelectedSlot();
+} else {
     // Quadrant tapped — select it (disarms pending if switching)
     if(q!==selectedSlot) dialPendingFire=false;
     selectedSlot=q;
@@ -3399,23 +3409,29 @@ document.addEventListener('click',e=>{
 
 // Touch: same as click but touch events
 document.getElementById('powerWheel').addEventListener('touchend',e=>{
-  e.preventDefault();e.stopPropagation();
-  if(!gameRunning||paused)return;
-  if(!e.changedTouches.length)return;
-  const t=e.changedTouches[0];
-  const q=getGridQuadrant(t.clientX,t.clientY);
-  if(q===-1){
-    if(dialPendingFire){fireSelectedSlot();}
-    else{
-      const slot=DIAL_SLOTS[selectedSlot];
-      if(slot.getCount()>0){dialPendingFire=true;showNotif('Armed! Tap GO to fire.');updateWheelDial();}
-      else showNotif('None! Buy in shop.');
+  e.preventDefault(); e.stopPropagation();
+  if(!gameRunning || paused) return;
+  if(!e.changedTouches.length) return;
+
+  const t = e.changedTouches[0];
+  const q = getGridQuadrant(t.clientX, t.clientY);
+
+  if(q === -1){
+    // Centre → fire immediately
+    const slot = DIAL_SLOTS[selectedSlot];
+    if(!slot || slot.getCount() <= 0){
+      showNotif('None! Buy in shop.');
+      return;
     }
+
+    fireSelectedSlot();
+
   } else {
-    if(q!==selectedSlot) dialPendingFire=false;
-    selectedSlot=q;
+    // Quadrant → select
+    selectedSlot = q;
     updateWheelDial();
   }
+
 },{passive:false});
 
 function checkPendingPower(){
