@@ -950,9 +950,21 @@ function initGame(){
     coins = ud.coins || 0;
     jumpBoosts = Math.min(ud.jumpBoosts || 0, 20);
     parachutes = ud.parachutes || 0;
-  } else { coins = 0; jumpBoosts = 0; parachutes = 0; }
+    
+    // v43: Load remaining power-ups and uses from user data
+    skipUses = ud.skipUses || 0;
+    bookUses = ud.bookUses || 0;
+    lavaShips = ud.lavaShips || 0;
+  } else { 
+    coins = 0; 
+    jumpBoosts = 0; 
+    parachutes = 0; 
+    skipUses = 0;
+    bookUses = 0;
+    lavaShips = 0;
+  }
   level = 1; platformCount = 0; bigHead = false;
-  skipUses = 0; bookUses = 0; booksOwned = 0;
+  booksOwned = 0; 
   movingPlatformAbove = null; bookPlatformPulled = false;
   onPurple = false; purpleTimer = 0; purplePlatform = null;
   parachuteActive = false; parachuteDeployY = null;
@@ -972,10 +984,8 @@ function initGame(){
     platforms = customPlayPlatforms.map((p,i)=>({...p, index:i, hasCoin:p.color==='green', origY:p.y, pulled:false, isGap:false}));
     let last = platforms[platforms.length - 1];
     while(platforms.length < 30){ const np = makePlatform(last.y - PLATFORM_GAP, last.index + 10, last.x, last.w); platforms.push(np); last = np; }
-} else {
+  } else {
     let prevP = null;
-    // Frogger: only create 3 starting platforms (player + 2 just below for lava buffer)
-    // Climber: create 22 platforms so 10 are visible above from the start
     const initialCount = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 12 : 22;
     for(let i = 0; i < initialCount; i++){
       const y = -i * PLATFORM_GAP;
@@ -1003,7 +1013,6 @@ function initGame(){
   stalagmiteHiss = [];
   updateHUD();
 }
-
 function updateHUD(){
   document.getElementById('coinDisplay').textContent = '🪙 ' + coins;
   document.getElementById('levelDisplay').textContent = 'Level ' + level + (parachuteActive ? ' 🪂' : '');
@@ -1060,6 +1069,8 @@ function activateBook(){
   showNotif('📖 Elevator incoming! Stand by…');
   playSound('buy');
 }
+
+
 function isDangerous(){
   if(onPurple) return true;
   if(!player.onGround && player.vy > 0){const lsy = lavaWorldY - camera.y, psy = player.y - camera.y; if(lsy - psy < gH * 0.5) return true;}
@@ -1139,6 +1150,7 @@ document.addEventListener('keyup', e => {
 });
 
 // ═══ TOUCH ═══
+// Floor Is Lava v50
 gameCanvas.addEventListener('touchstart', e => {
   e.preventDefault();
   if(e.touches.length === 2){
@@ -1150,22 +1162,35 @@ gameCanvas.addEventListener('touchstart', e => {
   if(paused) return;
   const t = e.touches[0];
   touchStartX = t.clientX; touchStartY = t.clientY;
+  touchMoveX = t.clientX; touchY = t.clientY; // Standardize current touch coordinates
   touchMoveX = t.clientX; touchIsMove = false; touchActive = true;
-  // power wheel handled by ontouchstart on the element
+  
+  // Calculate player center/feet coordinates on the screen
   const playerScreenX = (player.x - camera.x) * currentZoom + player.w/2 * currentZoom;
   const playerScreenY = (player.y - camera.y) * currentZoom + player.h * currentZoom; // feet position
   const dx = t.clientX - playerScreenX;
   const dy = t.clientY - playerScreenY;
+  
   // If tap is BELOW the player's feet — move only zone, no jump
   if(dy > 0){
     touchIsMove = true;
     touchMoveVX = dx > 0 ? 1 : -1;
     return; // suppress jump entirely
   }
-  // Normal jump logic for taps above player feet
-  const half = (dy > -player.h * currentZoom * 0.5 && Math.abs(dy) > Math.abs(dx) * 0.5);
-  if(!half){ if(dx > 40) player.vx = 2.5; else if(dx < -40) player.vx = -2.5; }
-  jump(half, false);
+
+  // v50: Half jump vs Full jump zones
+  // 30 pixels * currentZoom ensures the physical space on screen remains consistent regardless of zoom
+  const bufferOffset = 60 * currentZoom;
+  const halfJumpThreshold = (player.h * currentZoom * 0.5) + bufferOffset;
+  
+  const isHalfJump = (dy > -halfJumpThreshold && Math.abs(dy) > Math.abs(dx) * 0.5);
+
+  if (!isHalfJump) {
+    // Normal jump / directional movement zone
+    if(dx > 40) player.vx = 2.5; else if(dx < -40) player.vx = -2.5;
+  }
+  
+  jump(isHalfJump, false);
 },{passive:false});
 
 gameCanvas.addEventListener('touchmove', e => {
@@ -2129,7 +2154,6 @@ function saveScore(){
 
 function loseCoinsToPiggy(animate=false, onDone=null){
   const lostAmt = coins;
-  // Send current run coins to piggy bank, reset to 0
   if(lostAmt > 0){
     const pig = getPiggyBank() + lostAmt;
     setPiggyBank(pig);
@@ -2137,10 +2161,8 @@ function loseCoinsToPiggy(animate=false, onDone=null){
     if(currentUser){currentUser.ud.coins = 0; dbSave();}
     updateHUD();
     updatePiggyDisplay();
-    // Update goPiggy display so it shows the new total before animation
     const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
   }
-  // Power-ups are NOT saved between games
   jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; booksOwned = 0; bigHead = false; lavaShips = 0; lavaShipActive = false; lavaShipSurgeThreshold = 15;
   if(currentUser){
     currentUser.ud.jumpBoosts = 0;
@@ -2152,7 +2174,8 @@ function loseCoinsToPiggy(animate=false, onDone=null){
   } else {
     if(onDone) onDone();
   }
-}// ═══ RPS ═══
+}
+// ═══ RPS ═══
 const RPS_EMOJIS = ['✊','✋','✌️'];
 const RPS_NAMES = ['Rock','Paper','Scissors'];
 let rpsPlayerChoice = 0;
@@ -2280,7 +2303,7 @@ function gameEnd(fromPurple){
   const rpsBtn=document.getElementById('rpsBtn');if(rpsBtn)rpsBtn.style.display=coins>0?'block':'none';
   document.getElementById('gameOver').classList.add('show');
 }
-// Floor Is Lava v40
+// Floor Is Lava v43
 function gameWin() {
   gameRunning = false;
   cancelAnimationFrame(animId);
@@ -2288,28 +2311,32 @@ function gameWin() {
   
   if (currentUser) {
     currentUser.ud.coins = coins;
+    // v43: Save all power-ups to the user's profile before the next level loads
+    currentUser.ud.jumpBoosts = jumpBoosts;
+    currentUser.ud.skipUses = skipUses;
+    currentUser.ud.bookUses = bookUses;
+    currentUser.ud.parachutes = parachutes;
+    currentUser.ud.lavaShips = lavaShips;
     dbSave();
   }
+  
   updateHUD();
 
   document.getElementById('goTitle').textContent = '🏆 YOU WIN!';
   document.getElementById('goScore').textContent = 'All ' + endPlatform + ' platforms! Level ' + level;
   
-  // v40: Update the coins display so it doesn't show 0
   const gcEl = document.getElementById('goCoins');
   if (gcEl) gcEl.textContent = coins;
   
-  // Hide betting/ad buttons
   const adBtn2 = document.getElementById('goAdBtn');
   if (adBtn2) adBtn2.style.display = 'none';
   
   const rpsBtn2 = document.getElementById('rpsBtn');
   if (rpsBtn2) rpsBtn2.style.display = 'none';
   
-  document.getElementById('penaltyMsg').textContent = 'Coins saved automatically! Entering next level.';
+  document.getElementById('penaltyMsg').textContent = 'Power-ups and coins saved! Entering next level.';
   document.getElementById('gameOver').classList.add('show');
 }
-// Floor Is Lava v39
 function restartGame(){
   const wonAmt = rpsWonCoins;
   rpsWonCoins = 0;
@@ -2318,72 +2345,89 @@ function restartGame(){
     versusMode = false;
     document.getElementById('gameOver').classList.remove('show');
     document.getElementById('rpsOverlay').classList.remove('show');
-    const vr = document.getElementById('versusResult');if(vr){vr.classList.remove('show');vr.style.display='none';}
-    const vh = document.getElementById('versusHUD');if(vh)vh.classList.remove('show');
-    lastTime = null; initGame(); animId = requestAnimationFrame(gameLoop);
+    const vr = document.getElementById('versusResult'); if(vr){vr.classList.remove('show'); vr.style.display='none';}
+    const vh = document.getElementById('versusHUD'); if(vh){vh.classList.remove('show');}
+    lastTime = null; 
+    initGame(); 
+    animId = requestAnimationFrame(gameLoop);
   };
-  
-  // v39: If we won, don't lose coins to piggy
-  if (wonAmt > 0) {
-    if(currentUser){currentUser.ud.coins = wonAmt; dbSave();}
-    animateCoinTransfer('goCoins','startMyCoinsBox', wonAmt, doStart);
-  } else {
-    // Only lose to piggy if we are not in a winning state
-    if (document.getElementById('goTitle').textContent === '🏆 YOU WIN!') {
-      doStart();
-    } else {
-      loseCoinsToPiggy(true, doStart);
-    }
-  }
+
+  // Skip animations and retain items for the next level
+  doStart();
 }
-// Floor Is Lava v39
-// Floor Is Lava v40
+
+function sellAllPowerUps() {
+  // 1. Define shop values
+  const BOOST_VAL = 4;
+  const SKIP_VAL = 4; // 5 uses for 20 coins
+  const CHUTE_VAL = 50;
+  const BOOK_VAL = 20; // 5 uses for 100 coins
+  const SHIP_VAL = 150;
+
+  let totalRefund = 0;
+
+  // 2. Add the values of current power-ups
+  if (typeof jumpBoosts !== 'undefined') totalRefund += jumpBoosts * BOOST_VAL;
+  if (typeof skipUses !== 'undefined') totalRefund += skipUses * SKIP_VAL;
+  if (typeof parachutes !== 'undefined') totalRefund += parachutes * CHUTE_VAL;
+  if (typeof bookUses !== 'undefined') totalRefund += bookUses * BOOK_VAL;
+  if (typeof lavaShips !== 'undefined') totalRefund += lavaShips * SHIP_VAL;
+
+  // 3. Add to coins
+  coins += totalRefund;
+
+  // 4. Reset power-ups in memory
+  jumpBoosts = 0;
+  skipUses = 0;
+  parachutes = 0;
+  bookUses = 0;
+  booksOwned = 0;
+  bigHead = false;
+  lavaShips = 0;
+  lavaShipActive = false;
+  lavaShipSurgeThreshold = 15;
+
+  // 5. Update user profile data and save to localStorage/Database
+  if (currentUser) {
+    currentUser.ud.jumpBoosts = 0;
+    currentUser.ud.parachutes = 0;
+    currentUser.ud.lavaShips = 0;
+    currentUser.ud.coins = coins;
+    dbSave();
+  }
+
+  // 6. Update the UI
+  updateHUD();
+  updatePiggyDisplay();
+}
+
 function goToMenu() {
   gameRunning = false;
   paused = false;
   cancelAnimationFrame(animId);
   
-  const wonAmt = coins; // v40: Use the current coin amount
+  // Convert power-ups and update coin balance
+  sellAllPowerUps();
   
-  const doNavigate = () => {
-    saveScore();
-    document.getElementById('gameOver').classList.remove('show');
-    document.getElementById('rpsOverlay').classList.remove('show');
-    document.getElementById('pauseOverlay').classList.remove('show');
-    showScreen('startScreen');
-    
-    if (currentUser) {
-      document.getElementById('bestScoreDisplay').textContent = currentUser.ud.bestScore > 0 
-        ? '🏆 Best: Platform ' + currentUser.ud.bestScore + ' (Level ' + currentUser.ud.bestLevel + ')' 
-        : 'No runs yet!';
-    }
-    
-    updatePiggyDisplay();
-    
-    // v40: Trigger coin animation when leaving the screen
-    if (wonAmt > 0) {
-      setTimeout(() => animateCoinTransfer('goCoins', 'startMyCoinsBox', wonAmt, () => {
-        updatePiggyDisplay();
-        updateHUD();
-      }), 300);
-    }
-  };
+  // Save progress
+  saveScore();
 
-  // Skip losing coins to piggy if won
-  if (wonAmt > 0) {
-    if (currentUser) {
-      currentUser.ud.coins = wonAmt;
-      dbSave();
-    }
-    doNavigate();
-  } else {
-    if (document.getElementById('goTitle').textContent === '🏆 YOU WIN!') {
-      doNavigate();
-    } else {
-      loseCoinsToPiggy(true, doNavigate);
-    }
+  // Reset overlays
+  document.getElementById('gameOver').classList.remove('show');
+  document.getElementById('rpsOverlay').classList.remove('show');
+  document.getElementById('pauseOverlay').classList.remove('show');
+  showScreen('startScreen');
+
+  if (currentUser) {
+    document.getElementById('bestScoreDisplay').textContent = currentUser.ud.bestScore > 0 
+      ? '🏆 Best: Platform ' + currentUser.ud.bestScore + ' (Level ' + currentUser.ud.bestLevel + ')' 
+      : 'No runs yet!';
   }
+
+  updatePiggyDisplay();
+  updateHUD();
 }
+
 function openShop(){
   if(!gameRunning&&!paused)return;
   if(!paused){paused=true;}
@@ -2394,7 +2438,7 @@ function closeShop(){
   if(paused){paused=false;lastTime=null;animId=requestAnimationFrame(gameLoop);}
 }
 function buyItem(type){
-  if(type==='jump'&&coins>=20&&jumpBoosts<20){coins-=20;jumpBoosts=Math.min(jumpBoosts+1,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('🚀 Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
+  if(type==='jump'&&coins>=20&&jumpBoosts<20){coins-=20;jumpBoosts=Math.min(jumpBoosts+5,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('🚀 Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
   else if(type==='skip'&&coins>=20){coins-=20;const b=booksOwned>0?5*booksOwned:5;skipUses+=b;showNotif('⬆️ +'+b+' skips (key 2)');playSound('buy');}
   else if(type==='chute'&&coins>=50){coins-=50;parachutes++;if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+' owned)');playSound('buy');}
   else if(type==='book'&&coins>=100){coins-=100;booksOwned++;bigHead=true;bookUses+=5;showNotif('📖 Big head! Key 4 or wheel.');playSound('buy');}
