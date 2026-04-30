@@ -1,0 +1,29 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded Background Square -->
+  <rect x="5" y="5" width="90" height="90" rx="15" fill="#1a1a2e" />
+  
+  <!-- Fire/Lava Glow at Bottom -->
+  <path d="M5 80 Q 50 70 95 80 L 95 95 L 5 95 Z" fill="#ff4d00" />
+  
+  <!-- Character Body (Blue Shirt) -->
+  <rect x="40" y="55" width="25" height="25" fill="#4a90e2" />
+  
+  <!-- Arms -->
+  <rect x="30" y="55" width="10" height="15" fill="#edc9af" /> <!-- Left arm -->
+  <rect x="65" y="45" width="10" height="15" fill="#edc9af" transform="rotate(-30 65 45)" /> <!-- Waving arm -->
+
+  <!-- Character Head -->
+  <rect x="35" y="30" width="35" height="30" rx="2" fill="#edc9af" stroke="#000" stroke-width="1.5" />
+  
+  <!-- Face Details -->
+  <rect x="42" y="40" width="4" height="4" fill="#000" /> <!-- Left Eye -->
+  <rect x="58" y="40" width="4" height="4" fill="#000" /> <!-- Right Eye -->
+  
+  <!-- Mouth and Tongue -->
+  <rect x="48" y="50" width="8" height="2" fill="#000" /> <!-- Mouth line -->
+  <rect x="50" y="52" width="4" height="5" rx="1" fill="#ff4b5c" /> <!-- Tongue -->
+  
+  <!-- Legs (Running Pose) -->
+  <rect x="40" y="80" width="8" height="10" fill="#2c3e50" />
+  <rect x="55" y="75" width="10" height="8" fill="#2c3e50" />
+</svg>

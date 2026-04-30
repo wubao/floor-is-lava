@@ -1,0 +1,9 @@
+"main": "main.js",
+"scripts": { "start": "electron .", "build": "electron-builder" },
+"build": {
+  "appId": "com.yourname.floorislava",
+  "productName": "Floor Is Lava",
+  "icon": "icon.png",
+  "win": { "target": "nsis" },
+  "mac": { "target": "dmg" }
+}
