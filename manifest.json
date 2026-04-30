@@ -3,14 +3,10 @@
   "name": "Floor Is Lava v34",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "icon.png",
       "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": ".",
