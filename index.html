@@ -43,6 +43,39 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #zoomControl{display:flex;align-items:center;margin-left:6px;}
 #zoomBtn{background:#222;border:1.5px solid #555;border-radius:14px;color:#ccc;font-size:11px;font-weight:bold;padding:3px 10px;cursor:pointer;white-space:nowrap;}
 #zoomBtn:hover{background:#333;border-color:#ffe066;color:#ffe066;}
+#settingsBtn{margin-left:6px;background:none;border:none;cursor:pointer;font-size:20px;color:#ccc;line-height:1;padding:0 4px;}
+#settingsBtn:hover{color:#ffe066;transform:rotate(30deg);}
+/* SETTINGS PANEL */
+#settingsOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;align-items:flex-start;justify-content:flex-end;}
+#settingsOverlay.open{display:flex;}
+#settingsPanel{background:#12122a;border-left:2px solid #4a5fd4;width:min(320px,95vw);height:100%;overflow-y:auto;padding:0 0 40px;display:flex;flex-direction:column;}
+#settingsHeader{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #2a2a4a;position:sticky;top:0;background:#12122a;z-index:1;}
+#settingsHeader span{font-size:15px;font-weight:bold;color:#ffe066;}
+#settingsClose{background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;line-height:1;}
+#settingsClose:hover{color:#fff;}
+.settingsSection{padding:12px 16px 6px;border-bottom:1px solid #1e1e3a;}
+.settingsSectionTitle{font-size:10px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#6677cc;margin-bottom:8px;}
+.settingsRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.settingsRow label{font-size:12px;color:#ccc;flex:1;}
+.settingsRow select{background:#1e1e38;color:#eee;border:1px solid #444;border-radius:6px;padding:3px 6px;font-size:11px;}
+.settingsToggle{width:40px;height:22px;border-radius:11px;background:#333;border:1.5px solid #555;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;}
+.settingsToggle.on{background:#2a7a2a;border-color:#44bb44;}
+.settingsToggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#888;transition:left .2s,background .2s;}
+.settingsToggle.on::after{left:20px;background:#afe;}
+.diffBtn{padding:4px 10px;border-radius:12px;border:1.5px solid #555;background:#1e1e38;color:#888;font-size:11px;cursor:pointer;}
+.diffBtn.active{background:#ffe066;color:#4a2000;border-color:#ffe066;}
+/* CHARACTER EDITOR inside settings */
+.charEditorWrap{padding:10px 16px 12px;}
+#charPreviewCanvas{display:block;margin:0 auto 10px;border:1px solid #2a2a4a;border-radius:8px;background:#0a0a1a;}
+.charSliderRow{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.charSliderRow label{font-size:10px;color:#aab;min-width:118px;flex-shrink:0;line-height:1.3;}
+.charSliderRow label span{font-size:8.5px;color:#445;display:block;}
+.charSliderRow input[type=range]{flex:1;accent-color:#4a9eff;cursor:pointer;height:3px;}
+.charSliderVal{font-size:10px;color:#ffe066;min-width:30px;text-align:right;font-family:'Share Tech Mono',monospace;}
+.charJumpToggle{width:100%;padding:5px 0;margin-bottom:8px;font-size:10px;
+  border:1.5px solid #2a2a4a;border-radius:7px;background:transparent;
+  color:#667;cursor:pointer;font-family:inherit;transition:all .12s;}
+.charJumpToggle.on{border-color:#4a9eff;color:#4a9eff;background:#0e1830;}
 
 /* AUTH */
 #authScreen{background:linear-gradient(180deg,#0d0d2b,#1a0a0a);align-items:center;justify-content:center;padding:20px 16px 50px;}
@@ -270,18 +303,16 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <div id="modeBar">
   <button class="modeBtn active" id="btnPlay" onclick="goToMenu()">▶ Play</button>
   <button class="modeBtn" id="btnEditor" onclick="setMode('editor')" style="display:none;">✏️ Editor</button>
-  <div id="sizeControls">
-    <label>End:</label>
-    <select id="endPlatformSel" onchange="updateEndPlatform()">
-      <option value="0">∞ Endless</option>
-      <option value="100">100</option>
-      <option value="250">250</option>
-      <option value="500">500</option>
-      <option value="1000" selected>1000</option>
-      <option value="2000">2000</option>
-      <option value="5000">5000</option>
-    </select>
-  </div>
+  <!-- hidden select still needed for updateEndPlatform() logic -->
+  <select id="endPlatformSel" onchange="updateEndPlatform()" style="display:none;">
+    <option value="0">∞ Endless</option>
+    <option value="100">100</option>
+    <option value="250">250</option>
+    <option value="500">500</option>
+    <option value="1000" selected>1000</option>
+    <option value="2000">2000</option>
+    <option value="5000">5000</option>
+  </select>
   <div id="volumeControl">
     <button id="muteBtn" onclick="toggleMute()" title="Mute/Unmute">🔊</button>
     <input type="range" id="volumeSlider" min="0" max="100" value="45"
@@ -290,6 +321,164 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   </div>
   <div id="zoomControl">
     <button id="zoomBtn" onclick="cycleZoom()" title="Cycle zoom level">🔍 <span id="zoomLabel">100%</span></button>
+  </div>
+  <button id="settingsBtn" onclick="openSettings()" title="Settings">⚙️</button>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div id="settingsPanel">
+    <div id="settingsHeader"><span>⚙️ Settings</span><button id="settingsClose" onclick="closeSettings()">✕</button></div>
+    <div class="settingsSection">
+      <div class="settingsSectionTitle">🔊 Sound</div>
+      <div class="settingsRow">
+        <label>Master Volume</label>
+        <input type="range" id="sVolSlider" min="0" max="100" value="45" oninput="setMasterVolume(this.value);saveSettings();" style="flex:1;accent-color:#ffe066;">
+        <span id="sVolLabel" style="min-width:32px;text-align:right;color:#ffe066;">45%</span>
+      </div>
+      <div class="settingsRow">
+        <label>Mute All</label>
+        <div class="settingsToggle" id="sMuteToggle" onclick="toggleMute();saveSettings();"></div>
+      </div>
+      <div class="settingsRow">
+        <label>Background Music</label>
+        <div class="settingsToggle" id="sBgMusicToggle" onclick="toggleBgMusic();saveSettings();"></div>
+      </div>
+    </div>
+    <div class="settingsSection">
+      <div class="settingsSectionTitle">🔍 Display</div>
+      <div class="settingsRow">
+        <label>Starting Zoom</label>
+        <select id="sZoomSel" onchange="setZoomPreset(this.value);saveSettings();">
+          <option value="1.0">100% — Desktop</option>
+          <option value="0.8">80%</option>
+          <option value="0.6" selected>60% — Mobile</option>
+          <option value="0.4">40% — Zoomed Out</option>
+        </select>
+      </div>
+      <div class="settingsRow">
+        <label>Background Effects</label>
+        <div class="settingsToggle on" id="sBgAnimToggle" onclick="toggleBgAnims();saveSettings();"></div>
+      </div>
+    </div>
+    <div class="settingsSection">
+      <div class="settingsSectionTitle">🎮 Gameplay</div>
+      <div class="settingsRow">
+        <label>Level Target</label>
+        <select id="sEndPlatSel" onchange="setEndPlatformFromSettings(this.value);saveSettings();">
+          <option value="0">∞ Endless</option>
+          <option value="100">100 platforms</option>
+          <option value="250">250 platforms</option>
+          <option value="500">500 platforms</option>
+          <option value="1000" selected>1000 platforms</option>
+          <option value="2000">2000 platforms</option>
+          <option value="5000">5000 platforms</option>
+        </select>
+      </div>
+      <div class="settingsRow">
+        <label>Stalagmites</label>
+        <div class="settingsToggle on" id="sStalToggle" onclick="toggleStalagmites();saveSettings();"></div>
+      </div>
+    </div>
+    <div class="settingsSection">
+      <div class="settingsSectionTitle">⚔️ Versus CPU Difficulty</div>
+      <div class="settingsRow">
+        <label>Bot Speed</label>
+        <div id="sBotDiffBtns" style="display:flex;gap:6px;">
+          <button class="diffBtn active" data-diff="easy" onclick="setBotDiff('easy');saveSettings();">Easy</button>
+          <button class="diffBtn" data-diff="normal" onclick="setBotDiff('normal');saveSettings();">Normal</button>
+          <button class="diffBtn" data-diff="hard" onclick="setBotDiff('hard');saveSettings();">Hard</button>
+        </div>
+      </div>
+    </div>
+    <div class="settingsSection">
+      <div class="settingsSectionTitle">📱 Mobile / Controls</div>
+      <div class="settingsRow">
+        <label>HUD Button Side</label>
+        <div id="sHudSideBtns" style="display:flex;gap:6px;">
+          <button class="diffBtn active" data-side="left" onclick="setHudSide('left');saveSettings();">Left</button>
+          <button class="diffBtn" data-side="right" onclick="setHudSide('right');saveSettings();">Right</button>
+        </div>
+      </div>
+      <div class="settingsRow">
+        <label>Hide Reset Button</label>
+        <div class="settingsToggle" id="sHideResetToggle" onclick="toggleHideReset();saveSettings();"></div>
+      </div>
+    </div>
+    <!-- CHARACTER EDITOR -->
+    <div class="settingsSection">
+      <div class="settingsSectionTitle">🎨 Character Appearance</div>
+      <div class="charEditorWrap">
+        <canvas id="charPreviewCanvas" width="140" height="160"></canvas>
+        <button class="charJumpToggle" id="charJumpBtn" onclick="toggleCharJump()">▶ Preview jump face</button>
+
+        <div class="charSliderRow">
+          <label>Player height<span>taller = more body visible</span></label>
+          <input type="range" id="cPh" min="40" max="100" step="1" value="80" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cPh_v">80</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Face width<span>fraction of player width</span></label>
+          <input type="range" id="cFaceWf" min="0.50" max="1.20" step="0.01" value="1.00" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cFaceWf_v">1.00</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Face height<span>fraction of face width</span></label>
+          <input type="range" id="cFaceHf" min="0.50" max="1.20" step="0.01" value="0.88" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cFaceHf_v">0.88</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Face corners<span>0 = sharp, 0.4 = round</span></label>
+          <input type="range" id="cFaceR" min="0" max="0.40" step="0.01" value="0.12" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cFaceR_v">0.12</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Face Y offset<span>px down from sprite top</span></label>
+          <input type="range" id="cFaceOffY" min="-10" max="20" step="1" value="0" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cFaceOffY_v">0</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Body width<span>fraction of player width</span></label>
+          <input type="range" id="cBodyWf" min="0.40" max="1.10" step="0.01" value="0.90" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cBodyWf_v">0.90</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Body height<span>fraction of player height</span></label>
+          <input type="range" id="cBodyHf" min="0.10" max="0.70" step="0.01" value="0.53" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cBodyHf_v">0.53</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Body corners<span>px radius</span></label>
+          <input type="range" id="cBodyR" min="0" max="20" step="1" value="4" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cBodyR_v">4</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Neck width<span>fraction of player width</span></label>
+          <input type="range" id="cNeckWf" min="0.0" max="1.0" step="0.01" value="0.60" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cNeckWf_v">0.60</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Neck gap<span>px between chin and body</span></label>
+          <input type="range" id="cNeckPx" min="0" max="12" step="1" value="1" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cNeckPx_v">1</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Torch X<span>fraction of width from left</span></label>
+          <input type="range" id="cTorchXf" min="0.05" max="0.90" step="0.01" value="0.18" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cTorchXf_v">0.18</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Torch Y<span>fraction of body height</span></label>
+          <input type="range" id="cTorchYf" min="0.05" max="0.95" step="0.01" value="0.38" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cTorchYf_v">0.38</div>
+        </div>
+        <div class="charSliderRow">
+          <label>Torch size<span>fraction of player width</span></label>
+          <input type="range" id="cTorchRf" min="0.05" max="0.35" step="0.01" value="0.17" oninput="onCharSlider()">
+          <div class="charSliderVal" id="cTorchRf_v">0.17</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -409,6 +598,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <div id="timerDisplay"></div>
     <div id="hudUser"></div>
     <div id="zoomDisplay">Zoom: 100%</div>
+    <div id="torchHUD" title="Torch battery">🔦 <span id="torchPct">100%</span></div>
   </div>
   <div id="purpleWarning">⚠️ JUMP OFF!</div>
   <div id="parachuteHUD">🪂</div>
@@ -456,6 +646,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Automatically activates when falling. No button needed.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Big head! Pull platform above. 5 uses. Key 4 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! Lava surge won't fire until 100 platforms behind. 1 use.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">150 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Keeps the light on and night mode at bay.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">50 🪙</button></div>
       <button id="closeShop" onclick="closeShop()">▶ Resume</button>
     </div>
   </div>
@@ -490,8 +681,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button class="goBtn" style="background:linear-gradient(135deg,#4aaa44,#267022);color:#fff;" onclick="openVersusRPS()">🎲 RPS — Save Coins!</button>
     </div>
     <div class="goButtons">
-      <button class="vrBtn" style="background:#ffe066;color:#4a2000;" onclick="restartGame()">▶ Play Again</button>
-      <button class="vrBtn" style="background:#9c27b0;color:#fff;" onclick="startVersus()">Rematch</button>
+      <button class="vrBtn" style="background:#9c27b0;color:#fff;" onclick="startVersus()">⚔️ Rematch</button>
       <button class="vrBtn" style="background:#333;color:#ccc;border:1px solid #555;" onclick="goToMenu()">Menu</button>
     </div>
   </div>
@@ -826,6 +1016,7 @@ function guestLogin(){
   document.getElementById('welcomeUser').textContent = 'Playing as Guest (stats saved locally)';
   document.getElementById('bestScoreDisplay').textContent = guestData.bestScore>0 ? '🏆 Best: Platform '+guestData.bestScore : 'No runs yet!';
   updatePiggyDisplay();
+  loadSettings();
   showScreen('startScreen');
 }
 function saveGuestProgress(){
@@ -864,6 +1055,7 @@ function loginAs(name,ud){
   document.getElementById('welcomeUser').textContent='Welcome back, '+name+'! 👋';
   document.getElementById('bestScoreDisplay').textContent=ud.bestScore>0?'🏆 Best: Platform '+ud.bestScore+' (Level '+ud.bestLevel+')':'No runs yet!';
   updatePiggyDisplay();
+  loadSettings();
   showScreen('startScreen');
 }
 function renderSavedUsers(){
@@ -1073,6 +1265,10 @@ function initGame(){
   lavaShipSurgeThreshold = 15;
   stalagmites = [];
   stalagmiteHiss = [];
+  torchBattery = 100;
+  nightMode = false;
+  nightVisiblePlatforms.clear();
+  updateTorchHUD();
   updateHUD();
 }
 function updateHUD(){
@@ -1096,6 +1292,7 @@ function updateHUD(){
   const zl = document.getElementById('zoomLabel'); if(zl) zl.textContent = Math.round(currentZoom * 100) + '%';
   const bj=document.getElementById('buyJumpBtn'),bs=document.getElementById('buySkipBtn'),bb=document.getElementById('buyBookBtn'),bc=document.getElementById('buyChuteBtn'),bship=document.getElementById('buyShipBtn');
   if(bj)bj.disabled=coins<20;if(bs)bs.disabled=coins<20;if(bb)bb.disabled=coins<100;if(bc)bc.disabled=coins<50;if(bship)bship.disabled=coins<150;
+  const bbat=document.getElementById('buyBatteryBtn');if(bbat)bbat.disabled=coins<50;
   document.getElementById('shopCoins').textContent = '🪙 ' + coins + ' coins';
   const js=document.getElementById('jumpStock'),ss=document.getElementById('skipStock'),bks=document.getElementById('bookStock'),cs=document.getElementById('chuteStock'),shs=document.getElementById('shipStock');
   if(js) js.textContent = jumpBoosts > 0 ? '✅ ' + jumpBoosts + '/20 (key 1)' : '';
@@ -1761,7 +1958,7 @@ function gameLoop(ts){
 			  level = nl; lavaPixPerFrame = lavaSpeedForLevel(level) / 60;
 			  coins += 50; playSound('coin');
 			  showNotif('🌋 Level ' + level + '! +50 coins 🪙');
-			  if(level >= NIGHT_MODE_LEVEL && !nightMode){ nightMode = true; nightVisiblePlatforms.clear(); showNotif('🌑 NIGHT MODE! Everything goes dark...'); }
+			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
             if(endPlatform > 0 && platformCount >= endPlatform){gameWin(); return;}
             updateHUD();
@@ -1794,6 +1991,7 @@ function gameLoop(ts){
 
   updateAnim(dt);
   updateBgAnims(dt);
+  updateTorch(dt);
   if(versusMode){updateBots(dt);checkVersusWin();updateRespawns(dt);}
 
   // camera follows player using zoomed dimensions
@@ -1904,7 +2102,7 @@ function gameLoop(ts){
   }
 
   // ── STALAGMITE UPDATE ──
-  updateStalagmites(dt);
+  if(stalagmitesEnabled) updateStalagmites(dt);
 
   // spawn more platforms — Climber mode: ensure 10 platforms always visible above
   // Frogger mode: standard 50 lookahead
@@ -2000,7 +2198,7 @@ function drawGame(){
   gCtx.fillStyle = bg; gCtx.fillRect(0, 0, zW, zH);
 
  // bg animations (drawn before platforms)
-  drawBgAnims();
+  if(bgAnimsEnabled) drawBgAnims();
 
   // Night mode darkness overlay
   if(nightMode){
@@ -2008,7 +2206,7 @@ function drawGame(){
     gCtx.fillRect(0,0,zW,zH);
     const px=player.x-camera.x+player.w/2;
     const py=player.y-camera.y+player.h;
-    const grd=gCtx.createRadialGradient(px,py,0,px,py,55);
+    const grd=gCtx.createRadialGradient(px,py,0,px,py,getTorchRadius());
     grd.addColorStop(0,'rgba(255,180,60,0.13)');
     grd.addColorStop(1,'rgba(0,0,0,0)');
     gCtx.fillStyle=grd;
@@ -2081,7 +2279,7 @@ function drawTippingPlatform(p){
     gCtx.font = '28px Arial'; gCtx.textAlign = 'center'; gCtx.fillText('🪂', px, py - 10);
   }
 
-  drawStalagmites();
+  if(stalagmitesEnabled) drawStalagmites();
   drawLavaG(lavaScreenY);
 
   // Lava surge flash overlay
@@ -2125,67 +2323,21 @@ function drawPlatform(p, sx, sy){
 }
 
 function drawPlayerG(){
-  const px = player.x - camera.x, py = player.y - camera.y, hw = player.w;
-  const cx = px + hw/2, cy = py + player.h/2;
-  const headSize = bigHead ? hw*1.7 : hw, bodyH = player.h*0.38;
-  gCtx.save(); gCtx.translate(cx, cy); gCtx.rotate(anim.angle); gCtx.translate(-cx, -cy);
+  const hw = player.w;
+  // Visual centre — use charConfig.ph for visual height, player.h for collision
+  const px = player.x - camera.x, py = player.y - camera.y;
+  // Feet align to bottom of collision box; visual is drawn upward from there
+  const cy = py + player.h - charConfig.ph / 2;  // centre of visual sprite
+  const cx = px + hw / 2;
 
+  gCtx.save();
+  gCtx.translate(cx, cy); gCtx.rotate(anim.angle); gCtx.translate(-cx, -cy);
+
+  const jumping = anim.funnyFace && anim.active && !player.onGround;
   if(nightMode){
-    // NIGHT MODE: only draw eyes, expression, and feet — body is invisible
-    const headCX=px+hw/2, headY=py+player.h-bodyH-headSize*0.88;
-    const eyeY=headY-headSize*0.44+headSize*0.35, eyeOff=headSize*0.18;
-
-    // Glowing eyes
-    gCtx.shadowColor='#fffaaa'; gCtx.shadowBlur=10;
-    if(anim.funnyFace && anim.active && !player.onGround){
-      // Surprised wide eyes
-      gCtx.fillStyle='#fff';gCtx.beginPath();gCtx.arc(headCX-eyeOff,eyeY,headSize*0.13,0,Math.PI*2);gCtx.arc(headCX+eyeOff,eyeY,headSize*0.13,0,Math.PI*2);gCtx.fill();
-      gCtx.fillStyle='#222';gCtx.beginPath();gCtx.arc(headCX-eyeOff+2,eyeY+1,headSize*0.07,0,Math.PI*2);gCtx.arc(headCX+eyeOff+2,eyeY+1,headSize*0.07,0,Math.PI*2);gCtx.fill();
-      // Star pupils
-      gCtx.shadowBlur=0;
-      gCtx.fillStyle='#ffe066';gCtx.font=(headSize*0.13)+'px Arial';gCtx.textAlign='center';
-      gCtx.fillText('★',headCX-eyeOff,eyeY+headSize*0.05);gCtx.fillText('★',headCX+eyeOff,eyeY+headSize*0.05);
-      // Mouth glow
-      gCtx.shadowColor='#ff88aa'; gCtx.shadowBlur=8;
-      gCtx.fillStyle='#ff6699';gCtx.beginPath();gCtx.ellipse(headCX,eyeY+headSize*0.42,headSize*0.1,headSize*0.14,0,0,Math.PI*2);gCtx.fill();
-    } else {
-      // Normal eyes
-      gCtx.fillStyle='#fffde0';gCtx.beginPath();gCtx.arc(headCX-eyeOff,eyeY,headSize*0.09,0,Math.PI*2);gCtx.arc(headCX+eyeOff,eyeY,headSize*0.09,0,Math.PI*2);gCtx.fill();
-      gCtx.shadowBlur=0;
-      gCtx.fillStyle='#111';gCtx.beginPath();gCtx.arc(headCX-eyeOff+1,eyeY,headSize*0.05,0,Math.PI*2);gCtx.arc(headCX+eyeOff+1,eyeY,headSize*0.05,0,Math.PI*2);gCtx.fill();
-      // Smile
-      gCtx.shadowColor='#ffccaa'; gCtx.shadowBlur=6;
-      gCtx.strokeStyle='#ffccaa';gCtx.lineWidth=1.5;gCtx.beginPath();gCtx.arc(headCX,eyeY+headSize*0.28,headSize*0.12,0,Math.PI);gCtx.stroke();
-    }
-    gCtx.shadowBlur=0;
-
-    // Feet — glowing shoes at bottom of player
-    const footY=py+player.h;
-    const legBob=player.onGround?(Math.sin(Date.now()*0.01)*2):0;
-    gCtx.shadowColor='#88aaff'; gCtx.shadowBlur=8;
-    gCtx.fillStyle='#3a5fff';
-    gCtx.beginPath();gCtx.roundRect(px+hw*0.08,footY-9+legBob,hw*0.38,9,3);gCtx.fill();
-    gCtx.beginPath();gCtx.roundRect(px+hw*0.54,footY-9-legBob,hw*0.38,9,3);gCtx.fill();
-    gCtx.shadowBlur=0;
-
+    drawCharacterNightMode(gCtx, cx, cy, hw, charConfig, jumping);
   } else {
-    // NORMAL MODE: full character
-    gCtx.fillStyle='#4a9eff'; gCtx.fillRect(px+hw*0.05,py+player.h-bodyH,hw*0.9,bodyH);
-    const headCX=px+hw/2, headY=py+player.h-bodyH-headSize*0.88;
-    gCtx.fillStyle='#f0c27f'; gCtx.beginPath(); gCtx.roundRect(px+(hw-headSize)/2,headY-headSize*0.44,headSize,headSize*0.88,headSize*0.12); gCtx.fill();
-    gCtx.strokeStyle='#c9955a'; gCtx.lineWidth=1.5; gCtx.stroke();
-    const eyeY=headY-headSize*0.44+headSize*0.35, eyeOff=headSize*0.18;
-    if(anim.funnyFace && anim.active && !player.onGround){
-      gCtx.fillStyle='#fff';gCtx.beginPath();gCtx.arc(headCX-eyeOff,eyeY,headSize*0.12,0,Math.PI*2);gCtx.arc(headCX+eyeOff,eyeY,headSize*0.12,0,Math.PI*2);gCtx.fill();
-      gCtx.fillStyle='#1a1a1a';gCtx.beginPath();gCtx.arc(headCX-eyeOff+2,eyeY+1,headSize*0.065,0,Math.PI*2);gCtx.arc(headCX+eyeOff+2,eyeY+1,headSize*0.065,0,Math.PI*2);gCtx.fill();
-      gCtx.fillStyle='#ffe066';gCtx.font=(headSize*0.12)+'px Arial';gCtx.textAlign='center';gCtx.fillText('★',headCX-eyeOff,eyeY+headSize*0.04);gCtx.fillText('★',headCX+eyeOff,eyeY+headSize*0.04);
-      gCtx.fillStyle='#ff6699';gCtx.beginPath();gCtx.ellipse(headCX,eyeY+headSize*0.42,headSize*0.1,headSize*0.14,0,0,Math.PI*2);gCtx.fill();
-    } else {
-      gCtx.fillStyle='#1a1a1a';gCtx.beginPath();gCtx.arc(headCX-eyeOff,eyeY,headSize*0.07,0,Math.PI*2);gCtx.arc(headCX+eyeOff,eyeY,headSize*0.07,0,Math.PI*2);gCtx.fill();
-      gCtx.fillStyle='#fff';gCtx.beginPath();gCtx.arc(headCX-eyeOff+1.5,eyeY-1,headSize*0.025,0,Math.PI*2);gCtx.arc(headCX+eyeOff+1.5,eyeY-1,headSize*0.025,0,Math.PI*2);gCtx.fill();
-      gCtx.strokeStyle='#c9955a';gCtx.lineWidth=1.2;gCtx.beginPath();gCtx.arc(headCX,eyeY+headSize*0.28,headSize*0.12,0,Math.PI);gCtx.stroke();
-    }
-    if(bigHead){gCtx.font=Math.round(headSize*0.3)+'px Arial';gCtx.textAlign='center';gCtx.fillText('📖',headCX,headY-headSize*0.44-4);}
+    drawCharacterFromConfig(gCtx, cx, cy, hw, charConfig, torchBattery, jumping, bigHead);
   }
   gCtx.restore();
 }
@@ -2568,6 +2720,15 @@ function buyItem(type){
   else if(type==='book'&&coins>=100){coins-=100;booksOwned++;bigHead=true;bookUses+=5;showNotif('📖 Big head! Key 4 or wheel.');playSound('buy');}
   else if(type==='ship'&&coins>=150){coins-=150;lavaShips++;if(currentUser) currentUser.ud.lavaShips = lavaShips;showNotif('🚀 Lava Ship ready!');playSound('buy');
 }
+  else if(type==='battery'&&coins>=50){
+    coins-=50;
+    torchBattery=100;
+    nightMode=false;
+    nightVisiblePlatforms.clear();
+    showNotif('🔋 Torch refilled to 100%! 🔦');
+    playSound('buy');
+    updateTorchHUD();
+  }
   if(currentUser)currentUser.ud.coins=coins;dbSave();updateHUD();
 }
 function updateEndPlatform(){endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;updateHUD();}
@@ -3397,6 +3558,536 @@ function updateMuteBtn(){
 
 // ═══ ZOOM CYCLE ═══
 // Preset steps: default → zoomed in → mid → zoomed out → default
+// ═══ CHARACTER CONFIG ═══
+// These are the live values used by drawPlayerG every frame.
+// Loaded from settings on login, saved whenever a slider changes.
+// hw (player width = 40) is fixed by collision; ph drives visual height.
+let charConfig = {
+  ph:        80,    // visual player height (collision box is still player.h)
+  faceWf:    1.00,  // face width  as fraction of hw
+  faceHf:    0.88,  // face height as fraction of face width
+  faceR:     0.12,  // corner radius as fraction of min(fw,fh)
+  faceOffY:  0,     // px down from sprite top
+  bodyWf:    0.90,  // body width  as fraction of hw
+  bodyHf:    0.53,  // body height as fraction of ph
+  bodyR:     4,     // body corner radius px
+  neckWf:    0.60,  // neck width  as fraction of hw
+  neckPx:    1,     // neck gap px
+  torchXf:   0.18,  // torch X fraction of hw
+  torchYf:   0.38,  // torch Y fraction of bodyH
+  torchRf:   0.17,  // torch radius fraction of hw
+};
+
+function defaultCharConfig(){
+  return {
+    ph:80, faceWf:1.00, faceHf:0.88, faceR:0.12, faceOffY:0,
+    bodyWf:0.90, bodyHf:0.53, bodyR:4,
+    neckWf:0.60, neckPx:1,
+    torchXf:0.18, torchYf:0.38, torchRf:0.17,
+  };
+}
+
+// ── Shared draw routine used by BOTH drawPlayerG and the settings preview ──
+// ctx: canvas context  cx,cy: centre of bounding box in canvas coords
+// hw: player width   cfg: charConfig   bat: torchBattery 0-100
+// jumping: bool (true = surprised face)  bigH: bigHead bool
+function drawCharacterFromConfig(ctx, cx, cy, hw, cfg, bat, jumping, bigH){
+  const ph      = cfg.ph;
+  const faceW   = hw * cfg.faceWf;
+  const faceH   = faceW * cfg.faceHf;
+  const bodyW   = hw * cfg.bodyWf;
+  const bodyH   = ph * cfg.bodyHf;
+  const neckW   = hw * cfg.neckWf;
+
+  // Sprite anchor: feet at cy + ph/2
+  const px       = cx - hw/2;
+  const py       = cy - ph/2;
+  const bodyTop  = py + ph - bodyH;
+  const bodyLeft = px + (hw - bodyW) / 2;
+  const faceLeft = cx - faceW / 2;
+  const faceTop  = py + cfg.faceOffY;
+  const chinBot  = faceTop + faceH;
+  const neckLeft = cx - neckW / 2;
+  const torchX   = px + hw * cfg.torchXf;
+  const torchY   = bodyTop + bodyH * cfg.torchYf;
+  const torchR   = hw * cfg.torchRf;
+  const cornerR  = Math.min(faceW, faceH) * cfg.faceR;
+
+  // ── Body ──
+  ctx.fillStyle = '#4a9eff';
+  const br = Math.min(cfg.bodyR, bodyH / 2, bodyW / 2);
+  if(br > 0){
+    ctx.beginPath(); ctx.roundRect(bodyLeft, bodyTop, bodyW, bodyH, br); ctx.fill();
+  } else {
+    ctx.fillRect(bodyLeft, bodyTop, bodyW, bodyH);
+  }
+
+  // ── Neck strip ──
+  if(cfg.neckWf > 0){
+    const neckH = Math.max(1, bodyTop - chinBot + cfg.neckPx);
+    ctx.fillStyle = '#4a9eff';
+    ctx.fillRect(neckLeft, chinBot, neckW, neckH + 1);
+  }
+
+  // ── Torch ──
+  const torchCol = bat > 0 ? (bat>75?'#FFE600':bat>50?'#FFB300':bat>25?'#FF8800':'#FF5500') : '#2a2a2a';
+  ctx.shadowColor = bat > 0 ? torchCol : 'transparent';
+  ctx.shadowBlur  = bat>75?10 : bat>50?7 : bat>25?4 : bat>0?2 : 0;
+  ctx.fillStyle   = torchCol;
+  ctx.beginPath(); ctx.arc(torchX, torchY, torchR, 0, Math.PI*2); ctx.fill();
+  if(bat > 0){
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath(); ctx.arc(torchX - torchR*0.27, torchY - torchR*0.27, torchR*0.38, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // ── Face ──
+  ctx.fillStyle = bigH ? '#f0c27f' : '#f0c27f';
+  const hScale  = bigH ? 1.7 : 1.0;
+  const bFaceW  = faceW * hScale, bFaceH = faceH * hScale;
+  const bFaceLeft = cx - bFaceW/2, bCornerR = Math.min(bFaceW, bFaceH) * cfg.faceR;
+  ctx.fillStyle = '#f0c27f';
+  ctx.beginPath(); ctx.roundRect(bFaceLeft, faceTop, bFaceW, bFaceH, bCornerR); ctx.fill();
+  ctx.strokeStyle = '#c9955a'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  const eyeY   = faceTop + bFaceH * 0.42;
+  const eyeOff = bFaceW * 0.20;
+  const eyeR   = bFaceW * 0.088;
+
+  if(jumping){
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(cx-eyeOff,eyeY,eyeR*1.45,0,Math.PI*2);ctx.arc(cx+eyeOff,eyeY,eyeR*1.45,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#1a1a1a';
+    ctx.beginPath();ctx.arc(cx-eyeOff+2,eyeY+1,eyeR*0.78,0,Math.PI*2);ctx.arc(cx+eyeOff+2,eyeY+1,eyeR*0.78,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#ffe066';ctx.font=(bFaceW*0.13)+'px Arial';ctx.textAlign='center';
+    ctx.fillText('★',cx-eyeOff,eyeY+bFaceW*0.05);ctx.fillText('★',cx+eyeOff,eyeY+bFaceW*0.05);
+    ctx.fillStyle='#ff6699';
+    ctx.beginPath();ctx.ellipse(cx,eyeY+bFaceH*0.32,bFaceW*0.10,bFaceH*0.13,0,0,Math.PI*2);ctx.fill();
+  } else {
+    ctx.fillStyle='#1a1a1a';
+    ctx.beginPath();ctx.arc(cx-eyeOff,eyeY,eyeR,0,Math.PI*2);ctx.arc(cx+eyeOff,eyeY,eyeR,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(cx-eyeOff+1.5,eyeY-1,eyeR*0.30,0,Math.PI*2);ctx.arc(cx+eyeOff+1.5,eyeY-1,eyeR*0.30,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#c9955a';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.arc(cx,eyeY+bFaceH*0.28,bFaceW*0.14,0,Math.PI);ctx.stroke();
+  }
+  if(bigH){
+    ctx.font=Math.round(bFaceW*0.3)+'px Arial';ctx.textAlign='center';
+    ctx.fillText('📖',cx,faceTop-4);
+  }
+}
+
+// Night-mode version — only eyes + feet
+function drawCharacterNightMode(ctx, cx, cy, hw, cfg, jumping){
+  const ph = cfg.ph;
+  const px = cx - hw/2, py = cy - ph/2;
+  const faceW = hw * cfg.faceWf, faceH = faceW * cfg.faceHf;
+  const faceTop = py + cfg.faceOffY;
+  const eyeY = faceTop + faceH * 0.42;
+  const eyeOff = faceW * 0.20, eyeR = faceW * 0.088;
+
+  ctx.shadowColor='#fffaaa'; ctx.shadowBlur=10;
+  if(jumping){
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx-eyeOff,eyeY,eyeR*1.45,0,Math.PI*2);ctx.arc(cx+eyeOff,eyeY,eyeR*1.45,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';ctx.beginPath();ctx.arc(cx-eyeOff+2,eyeY+1,eyeR*0.78,0,Math.PI*2);ctx.arc(cx+eyeOff+2,eyeY+1,eyeR*0.78,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#ffe066';ctx.font=(faceW*0.13)+'px Arial';ctx.textAlign='center';
+    ctx.fillText('★',cx-eyeOff,eyeY+faceW*0.05);ctx.fillText('★',cx+eyeOff,eyeY+faceW*0.05);
+    ctx.shadowColor='#ff88aa';ctx.shadowBlur=8;
+    ctx.fillStyle='#ff6699';ctx.beginPath();ctx.ellipse(cx,eyeY+faceH*0.42,faceW*0.1,faceH*0.14,0,0,Math.PI*2);ctx.fill();
+  } else {
+    ctx.fillStyle='#fffde0';ctx.beginPath();ctx.arc(cx-eyeOff,eyeY,eyeR*1.02,0,Math.PI*2);ctx.arc(cx+eyeOff,eyeY,eyeR*1.02,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(cx-eyeOff+1,eyeY,eyeR*0.55,0,Math.PI*2);ctx.arc(cx+eyeOff+1,eyeY,eyeR*0.55,0,Math.PI*2);ctx.fill();
+    ctx.shadowColor='#ffccaa';ctx.shadowBlur=6;
+    ctx.strokeStyle='#ffccaa';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,eyeY+faceH*0.28,faceW*0.12,0,Math.PI);ctx.stroke();
+  }
+  ctx.shadowBlur=0;
+  // Feet
+  const footY = py + ph;
+  const legBob = Math.sin(Date.now()*0.01)*2;
+  ctx.shadowColor='#88aaff'; ctx.shadowBlur=8; ctx.fillStyle='#3a5fff';
+  ctx.beginPath();ctx.roundRect(px+hw*0.08,footY-9+legBob,hw*0.38,9,3);ctx.fill();
+  ctx.beginPath();ctx.roundRect(px+hw*0.54,footY-9-legBob,hw*0.38,9,3);ctx.fill();
+  ctx.shadowBlur=0;
+}
+// ─────────────────────────────────────────────────────────────────────
+// ★ TO ADJUST HOW FAST THE TORCH DRAINS — change the number below ★
+//
+//   TORCH_TOTAL_SECONDS = how long the torch lasts at full charge
+//
+//   210  → drains in 3.5 minutes  (current — roughly 500 platforms)
+//   300  → drains in 5 minutes    (easier)
+//   120  → drains in 2 minutes    (harder)
+//    60  → drains in 1 minute     (very hard)
+//
+const TORCH_TOTAL_SECONDS = 630; // ← CHANGE THIS NUMBER
+// ─────────────────────────────────────────────────────────────────────
+const TORCH_DRAIN_RATE = 100 / (TORCH_TOTAL_SECONDS * 60); // do not edit this line
+let torchBattery = 100; // 0–100
+
+function getTorchColor(){
+  if(torchBattery > 75) return '#FFE600';       // bright yellow
+  if(torchBattery > 50) return '#FFB300';       // dimming
+  if(torchBattery > 25) return '#FF8800';       // half dim
+  return '#FF5500';                              // amber almost dead
+}
+
+function getTorchRadius(){
+  // Full battery = large radius; dying = much smaller
+  if(torchBattery > 75) return 55;
+  if(torchBattery > 50) return 42;
+  if(torchBattery > 25) return 28;
+  return 14;
+}
+
+function updateTorch(dt){
+  if(!gameRunning || paused) return;
+  torchBattery = Math.max(0, torchBattery - TORCH_DRAIN_RATE * dt * 16.67);
+  // Torch dies → night mode on
+  if(torchBattery <= 0 && !nightMode){
+    nightMode = true;
+    nightVisiblePlatforms.clear();
+    showNotif('🔦 Torch dead! Buy 🔋 batteries in shop!');
+  }
+  // Torch alive → ensure night mode off
+  if(torchBattery > 0 && nightMode){
+    nightMode = false;
+    nightVisiblePlatforms.clear();
+  }
+  updateTorchHUD();
+}
+
+function updateTorchHUD(){
+  const el = document.getElementById('torchPct');
+  if(!el) return;
+  el.textContent = Math.ceil(torchBattery) + '%';
+  const th = document.getElementById('torchHUD');
+  if(th){
+    const c = getTorchColor();
+    th.style.color = torchBattery <= 0 ? '#555' : c;
+    th.style.textShadow = torchBattery > 0 ? ('0 0 8px '+c) : 'none';
+  }
+}
+
+// ═══ SETTINGS SYSTEM ═══
+let bgMusicEnabled = true;
+let bgAnimsEnabled = true;
+let stalagmitesEnabled = true;
+let botDifficulty = 'easy';   // 'easy' | 'normal' | 'hard'
+let hudSide = 'left';
+let hideResetBtn = false;
+
+// Bot interval bases: [Roxy(slowest), Blaze(mid), Zippy(fastest)] per difficulty
+const BOT_INTERVALS = {
+  easy:   [160, 120, 90],
+  normal: [110, 70,  45],
+  hard:   [60,  40,  25],
+};
+
+const SETTINGS_KEY = 'fil_settings';
+
+function defaultSettings(){
+  return {
+    masterVolume: 45,
+    isMuted: false,
+    bgMusicEnabled: true,
+    bgAnimsEnabled: true,
+    stalagmitesEnabled: true,
+    startingZoom: ('ontouchstart' in window) ? 0.6 : 1.0,
+    endPlatform: 1000,
+    botDifficulty: 'easy',
+    hudSide: 'left',
+    hideResetBtn: false,
+    charConfig: defaultCharConfig(),
+  };
+}
+
+function loadSettings(){
+  let s;
+  // Try user profile first, then localStorage fallback for guests
+  if(currentUser && currentUser.ud.settings){
+    s = currentUser.ud.settings;
+  } else {
+    try{ s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); }catch(e){ s = null; }
+  }
+  s = Object.assign(defaultSettings(), s || {});
+  applySettings(s);
+}
+
+function saveSettings(){
+  const s = captureSettings();
+  if(currentUser){ currentUser.ud.settings = s; dbSave(); }
+  else { try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }catch(e){} }
+}
+
+function captureSettings(){
+  return {
+    masterVolume: Math.round(masterVolume * 100),
+    isMuted,
+    bgMusicEnabled,
+    bgAnimsEnabled,
+    stalagmitesEnabled,
+    startingZoom: currentZoom,
+    endPlatform,
+    botDifficulty,
+    hudSide,
+    hideResetBtn,
+    charConfig: {...charConfig},
+  };
+}
+
+function applySettings(s){
+  // Volume
+  masterVolume = (s.masterVolume ?? 45) / 100;
+  isMuted = s.isMuted ?? false;
+  applyVolume();
+  const vs = document.getElementById('volumeSlider');
+  if(vs) vs.value = Math.round(masterVolume * 100);
+  const sv = document.getElementById('sVolSlider');
+  if(sv){ sv.value = Math.round(masterVolume * 100); }
+  const svl = document.getElementById('sVolLabel');
+  if(svl) svl.textContent = Math.round(masterVolume * 100) + '%';
+  updateMuteBtn();
+  syncToggle('sMuteToggle', isMuted);
+
+  // BG Music
+  bgMusicEnabled = s.bgMusicEnabled ?? true;
+  syncToggle('sBgMusicToggle', bgMusicEnabled);
+  if(!bgMusicEnabled) stopBgMusic();
+
+  // BG Anims
+  bgAnimsEnabled = s.bgAnimsEnabled ?? true;
+  syncToggle('sBgAnimToggle', bgAnimsEnabled);
+
+  // Stalagmites
+  stalagmitesEnabled = s.stalagmitesEnabled ?? true;
+  syncToggle('sStalToggle', stalagmitesEnabled);
+
+  // Zoom
+  const z = s.startingZoom ?? (('ontouchstart' in window) ? 0.6 : 1.0);
+  currentZoom = z;
+  const zi = ZOOM_PRESETS.indexOf(z);
+  if(zi !== -1) zoomPresetIndex = zi;
+  const zsel = document.getElementById('sZoomSel');
+  if(zsel) zsel.value = String(z);
+  const zl = document.getElementById('zoomLabel');
+  if(zl) zl.textContent = Math.round(z * 100) + '%';
+
+  // End platform
+  endPlatform = s.endPlatform ?? 1000;
+  const ep = document.getElementById('endPlatformSel');
+  if(ep) ep.value = String(endPlatform);
+  const se = document.getElementById('sEndPlatSel');
+  if(se) se.value = String(endPlatform);
+  updateHUD();
+
+  // Bot difficulty
+  botDifficulty = s.botDifficulty ?? 'easy';
+  setBotDiff(botDifficulty, true);
+
+  // HUD side
+  hudSide = s.hudSide ?? 'left';
+  setHudSide(hudSide, true);
+
+  // Hide reset
+  hideResetBtn = s.hideResetBtn ?? false;
+  syncToggle('sHideResetToggle', hideResetBtn);
+  applyHideReset();
+
+  // Character config
+  charConfig = Object.assign(defaultCharConfig(), s.charConfig || {});
+  syncCharSliders();
+}
+
+function syncToggle(id, on){
+  const el = document.getElementById(id);
+  if(el) el.classList.toggle('on', on);
+}
+
+// ── Settings control functions ──
+function openSettings(){
+  document.getElementById('settingsOverlay').classList.add('open');
+  syncCharSliders();
+  renderCharPreview();
+  startCharPreviewLoop();
+}
+function closeSettings(){
+  document.getElementById('settingsOverlay').classList.remove('open');
+  stopCharPreviewLoop();
+}
+
+function toggleBgMusic(){
+  bgMusicEnabled = !bgMusicEnabled;
+  syncToggle('sBgMusicToggle', bgMusicEnabled);
+  if(bgMusicEnabled) updateBgMusic(); else stopBgMusic();
+}
+
+function toggleBgAnims(){
+  bgAnimsEnabled = !bgAnimsEnabled;
+  syncToggle('sBgAnimToggle', bgAnimsEnabled);
+}
+
+function toggleStalagmites(){
+  stalagmitesEnabled = !stalagmitesEnabled;
+  syncToggle('sStalToggle', stalagmitesEnabled);
+  if(!stalagmitesEnabled){ stalagmites = []; stalagmiteHiss = []; }
+}
+
+function toggleHideReset(){
+  hideResetBtn = !hideResetBtn;
+  syncToggle('sHideResetToggle', hideResetBtn);
+  applyHideReset();
+}
+
+function applyHideReset(){
+  const rb = document.getElementById('resetBtn');
+  if(rb) rb.style.display = hideResetBtn ? 'none' : '';
+}
+
+// ── Character editor (inside settings panel) ──────────────────
+let charPreviewJumping = false;
+let charPreviewT = 0;
+let charPreviewAnimId = null;
+
+const CHAR_SLIDER_MAP = [
+  ['cPh',      'ph',        v=>parseInt(v),          v=>v],
+  ['cFaceWf',  'faceWf',    v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cFaceHf',  'faceHf',    v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cFaceR',   'faceR',     v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cFaceOffY','faceOffY',  v=>parseInt(v),          v=>v],
+  ['cBodyWf',  'bodyWf',    v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cBodyHf',  'bodyHf',    v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cBodyR',   'bodyR',     v=>parseInt(v),          v=>v],
+  ['cNeckWf',  'neckWf',    v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cNeckPx',  'neckPx',    v=>parseInt(v),          v=>v],
+  ['cTorchXf', 'torchXf',   v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cTorchYf', 'torchYf',   v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cTorchRf', 'torchRf',   v=>parseFloat(v),        v=>v.toFixed(2)],
+];
+
+function syncCharSliders(){
+  CHAR_SLIDER_MAP.forEach(([id, key, , fmt])=>{
+    const el = document.getElementById(id);
+    const vl = document.getElementById(id+'_v');
+    if(el) el.value = charConfig[key];
+    if(vl) vl.textContent = fmt(charConfig[key]);
+  });
+}
+
+function onCharSlider(){
+  CHAR_SLIDER_MAP.forEach(([id, key, parse, fmt])=>{
+    const el = document.getElementById(id);
+    const vl = document.getElementById(id+'_v');
+    if(el){ charConfig[key] = parse(el.value); }
+    if(el && vl) vl.textContent = fmt(charConfig[key]);
+  });
+  saveSettings();
+  renderCharPreview();
+}
+
+function toggleCharJump(){
+  charPreviewJumping = !charPreviewJumping;
+  const btn = document.getElementById('charJumpBtn');
+  if(btn){
+    btn.textContent = charPreviewJumping ? '⏹ Back to idle' : '▶ Preview jump face';
+    btn.classList.toggle('on', charPreviewJumping);
+  }
+  renderCharPreview();
+}
+
+function renderCharPreview(){
+  const cv = document.getElementById('charPreviewCanvas');
+  if(!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H);
+  // ground shadow
+  const feetY = H*0.5 + charConfig.ph*0.5 + 2;
+  ctx.fillStyle='rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.ellipse(W/2, feetY, 18, 3, 0, 0, Math.PI*2); ctx.fill();
+  // character centred; feet at H*0.5 + charConfig.ph/2
+  const cy = H*0.5;
+  drawCharacterFromConfig(ctx, W/2, cy, 40, charConfig, 100, charPreviewJumping, false);
+}
+
+// Start a lightweight animation loop just for the settings preview
+function startCharPreviewLoop(){
+  if(charPreviewAnimId) return;
+  function frame(){
+    charPreviewT += 0.04;
+    renderCharPreview();
+    charPreviewAnimId = requestAnimationFrame(frame);
+  }
+  charPreviewAnimId = requestAnimationFrame(frame);
+}
+function stopCharPreviewLoop(){
+  if(charPreviewAnimId){ cancelAnimationFrame(charPreviewAnimId); charPreviewAnimId=null; }
+}
+
+// Hook into openSettings / closeSettings to start/stop the preview loop
+// (openSettings and closeSettings defined above with full implementation)
+
+function setZoomPreset(val){
+  currentZoom = parseFloat(val);
+  const zi = ZOOM_PRESETS.indexOf(currentZoom);
+  if(zi !== -1) zoomPresetIndex = zi;
+  resizeGame(); updateHUD();
+}
+
+function setEndPlatformFromSettings(val){
+  endPlatform = parseInt(val) || 0;
+  const ep = document.getElementById('endPlatformSel');
+  if(ep) ep.value = String(endPlatform);
+  updateHUD();
+}
+
+function setBotDiff(diff, silent){
+  botDifficulty = diff;
+  document.querySelectorAll('#sBotDiffBtns .diffBtn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.diff === diff);
+  });
+}
+
+function setHudSide(side, silent){
+  hudSide = side;
+  document.querySelectorAll('#sHudSideBtns .diffBtn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.side === side);
+  });
+  const rb = document.getElementById('rightBtns');
+  const pw = document.getElementById('powerWheel');
+  const hud = document.getElementById('hud');
+  if(side === 'right'){
+    // Buttons go right → HUD info goes left (default)
+    if(rb){ rb.style.left='auto'; rb.style.right='6px'; }
+    if(pw){ pw.style.left='auto'; pw.style.right='6px'; }
+    if(hud){ hud.style.left='7px'; hud.style.right='auto'; hud.style.textAlign='left'; }
+  } else {
+    // Buttons go left → HUD info goes right
+    if(rb){ rb.style.left='6px'; rb.style.right='auto'; }
+    if(pw){ pw.style.left='6px'; pw.style.right='auto'; }
+    if(hud){ hud.style.left='auto'; hud.style.right='7px'; hud.style.textAlign='right'; }
+  }
+}
+
+// Sync the settings volume slider label as player drags
+document.addEventListener('input', e=>{
+  if(e.target.id === 'sVolSlider'){
+    const svl = document.getElementById('sVolLabel');
+    if(svl) svl.textContent = e.target.value + '%';
+    // also sync the navbar slider
+    const vs = document.getElementById('volumeSlider');
+    if(vs) vs.value = e.target.value;
+  }
+  if(e.target.id === 'volumeSlider'){
+    const sv = document.getElementById('sVolSlider');
+    if(sv) sv.value = e.target.value;
+    const svl = document.getElementById('sVolLabel');
+    if(svl) svl.textContent = e.target.value + '%';
+  }
+});
+
 const ZOOM_PRESETS = [1.0, 0.8, 0.6, 0.4];
 let zoomPresetIndex = 0;
 
@@ -3755,7 +4446,7 @@ function startVersus(){
       x:sp?sp.x+sp.w*(0.2+i*0.25):200+i*180,
       y:sp?sp.y-52:-(1+i)*PLATFORM_GAP-52,
       vy:0,vx:0,onGround:true,currentPlatformIndex:1+i,
-      eliminated:false,interval:[110,70,45][i]+Math.floor(Math.random()*20),
+      eliminated:false,interval:BOT_INTERVALS[botDifficulty||'easy'][i]+Math.floor(Math.random()*20),
       animAngle:0,animProgress:0,animActive:false,idleT:Math.random()*100,frameT:0};
   });
   botTimers=bots.map(b=>b.interval);
@@ -3846,6 +4537,15 @@ if(!bot){return;}
 function endVersus(won,reason){
   gameRunning=false;cancelAnimationFrame(animId);versusMode=false;saveScore();
   document.getElementById('versusHUD').classList.remove('show');
+
+  // Apply the same coin/power-up rules as single player:
+  // Win → keep everything. Loss → coins to piggy, power-ups reset.
+  if(won){
+    handleCoinsAndPowerUps('win');
+  } else {
+    handleCoinsAndPowerUps('die');
+  }
+
   const el=document.getElementById('versusResult');el.style.display='flex';el.classList.add('show');
   document.getElementById('vrTitle').textContent=won?'YOU WIN!':'YOU LOST!';
   document.getElementById('vrTitle').style.color=won?'#ffe066':'#ff4444';
@@ -3853,12 +4553,14 @@ function endVersus(won,reason){
   bots.forEach(b=>{desc+=b.name+': platform '+b.platIndex+(b.eliminated?' ☠️':' running')+'\n';});
   desc+='\nYou: platform '+platformCount;
   document.getElementById('vrDesc').textContent=desc;
-  // Populate coin displays
+
+  // Populate coin displays — after die path: coins=0, piggy has the amount
   const vc=document.getElementById('vrCoins');if(vc)vc.textContent=coins;
   const vp=document.getElementById('vrPiggy');if(vp)vp.textContent=getPiggyBank();
-  // Show RPS button only if player has coins to save and lost
+
+  // RPS only if player lost AND piggy has coins to fight for
   const rpsRow=document.getElementById('vrRpsRow');
-  if(rpsRow) rpsRow.style.display=(coins>0)?'flex':'none';
+  if(rpsRow) rpsRow.style.display=(!won && getPiggyBank()>0)?'flex':'none';
 }
 
 function openVersusRPS(){
