@@ -708,6 +708,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     </div>
     <div class="goButtons">
       <button class="goBtn" id="restartBtn" onclick="restartGame()">▶ Play Again</button>
+      <button class="goBtn" id="goRematchBtn" onclick="diedInVersus=false;startVersus();" style="display:none;background:linear-gradient(135deg,#9c27b0,#6a1b9a);color:#fff;">⚔️ Rematch</button>
       <button class="goBtn" id="menuBtn" onclick="goToMenu()">🏠 Menu</button>
     </div>
   </div>
@@ -1237,7 +1238,7 @@ function initGame(){
   if(customPlayPlatforms && customPlayPlatforms.length > 0){
     platforms = customPlayPlatforms.map((p,i)=>({...p, index:i, hasCoin:p.color==='green', origY:p.y, pulled:false, isGap:false}));
     let last = platforms[platforms.length - 1];
-    while(platforms.length < 30){ const np = makePlatform(last.y - PLATFORM_GAP, last.index + 10, last.x, last.w); platforms.push(np); last = np; }
+    while(platforms.length < 30){ const np = makePlatform(last.y - PLATFORM_GAP, last.index + 1, last.x, last.w); platforms.push(np); last = np; }
   } else {
     let prevP = null;
     const initialCount = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 12 : 22;
@@ -2154,7 +2155,7 @@ function gameLoop(ts){
     if(aboveCount < 10){
       const topPlt = platforms.reduce((a,p) => p.y < a.y ? p : a, platforms[0]);
       for(let ext = 0; ext < 8; ext++){
-        const np = makePlatform(topPlt.y - PLATFORM_GAP * (ext+1), topPlt.index + (ext+1)*10, topPlt.x, topPlt.w);
+        const np = makePlatform(topPlt.y - PLATFORM_GAP * (ext+1), topPlt.index + (ext+1), topPlt.x, topPlt.w);
         platforms.push(np);
       }
     }
@@ -2545,6 +2546,8 @@ function checkMath(){
 }
 document.getElementById('mathInput').addEventListener('keydown',e=>{if(e.key==='Enter')checkMath();});
 // ═══ GAME END ═══
+let diedInVersus = false; // tracks whether last death was mid-versus-game
+
 function gameEnd(fromPurple){
   if(versusMode){endVersus(false,fromPurple?'Burned on purple!':'You burned!');return;}
   gameRunning=false;cancelAnimationFrame(animId);saveScore();
@@ -2572,6 +2575,17 @@ function gameEnd(fromPurple){
   if(adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
   const rpsBtn = document.getElementById('rpsBtn');
   if(rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+
+  // Show Rematch (versus) or Play Again (solo) — mutually exclusive
+  const rematchBtn = document.getElementById('goRematchBtn');
+  const playAgainBtn = document.getElementById('restartBtn');
+  if(diedInVersus){
+    if(rematchBtn) rematchBtn.style.display = 'inline-block';
+    if(playAgainBtn) playAgainBtn.style.display = 'none';
+  } else {
+    if(rematchBtn) rematchBtn.style.display = 'none';
+    if(playAgainBtn) playAgainBtn.style.display = 'inline-block';
+  }
 
   document.getElementById('gameOver').classList.add('show');
 }
@@ -2679,6 +2693,7 @@ function goToMenu() {
   paused = false;
   cancelAnimationFrame(animId);
   lastGameWon = false;
+  diedInVersus = false;
 
   // Sell power-ups back to coins and keep coins (menu path)
   handleCoinsAndPowerUps('menu');
@@ -4105,7 +4120,7 @@ function cycleZoom(){
   updateHUD();
 }
 
-function startGame(){if(startLavaAnim)cancelAnimationFrame(startLavaAnim);showScreen('gameScreen');lastTime=null;initGame();animId=requestAnimationFrame(gameLoop);}
+function startGame(){if(startLavaAnim)cancelAnimationFrame(startLavaAnim);diedInVersus=false;showScreen('gameScreen');lastTime=null;initGame();animId=requestAnimationFrame(gameLoop);}
 window.addEventListener('resize',()=>{isMobile='ontouchstart' in window;if(currentMode==='play'&&gameRunning)resizeGame();else if(currentMode==='editor')resizeEditor();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{resizeGame();},200));
 // Block pattern dial — desktop drag (mousedown is on the dial element, move/up on window)
@@ -4537,6 +4552,9 @@ if(!bot){return;}
 function endVersus(won,reason){
   gameRunning=false;cancelAnimationFrame(animId);versusMode=false;saveScore();
   document.getElementById('versusHUD').classList.remove('show');
+
+  // Track whether this was a versus death so gameOver screen shows Rematch
+  diedInVersus = !won;
 
   // Apply the same coin/power-up rules as single player:
   // Win → keep everything. Loss → coins to piggy, power-ups reset.
