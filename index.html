@@ -36,6 +36,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #sizeControls{display:flex;gap:5px;margin-left:auto;align-items:center;}
 #sizeControls label{color:#aaa;font-size:10px;}
 #sizeControls select{background:#222;color:#eee;border:1px solid #555;border-radius:5px;padding:2px 4px;font-size:10px;}
+#volumeControl{display:flex;gap:5px;align-items:center;margin-left:6px;}
+#muteBtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;color:#eee;}
+#muteBtn:hover{transform:scale(1.15);}
+#volumeSlider{accent-color:#ffe066;height:4px;}
 
 /* AUTH */
 #authScreen{background:linear-gradient(180deg,#0d0d2b,#1a0a0a);align-items:center;justify-content:center;padding:20px 16px 50px;}
@@ -261,8 +265,8 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <body>
 <div id="root">
 <div id="modeBar">
-  <button class="modeBtn active" id="btnPlay" onclick="setMode('play')">▶ Play</button>
-  <button class="modeBtn" id="btnEditor" onclick="setMode('editor')">✏️ Editor</button>
+  <button class="modeBtn active" id="btnPlay" onclick="goToMenu()">▶ Play</button>
+  <button class="modeBtn" id="btnEditor" onclick="setMode('editor')" style="display:none;">✏️ Editor</button>
   <div id="sizeControls">
     <label>End:</label>
     <select id="endPlatformSel" onchange="updateEndPlatform()">
@@ -274,6 +278,12 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <option value="2000">2000</option>
       <option value="5000">5000</option>
     </select>
+  </div>
+  <div id="volumeControl">
+    <button id="muteBtn" onclick="toggleMute()" title="Mute/Unmute">🔊</button>
+    <input type="range" id="volumeSlider" min="0" max="100" value="45"
+           oninput="setMasterVolume(this.value)"
+           title="Volume" style="width:70px;cursor:pointer;vertical-align:middle;">
   </div>
 </div>
 
@@ -494,7 +504,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button class="goBtn" id="rpsBtn" onclick="openRPS()">🎲 RPS — Save Coins!</button>
     </div>
     <div class="goButtons">
-      <button class="goBtn" id="goAdBtn" onclick="openGameOverAd()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Save Coins!</button>
+      <button class="goBtn" id="goAdBtn" onclick="openGameOverAd()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Reclaim Piggy Coins!</button>
     </div>
     <div class="goButtons">
       <button class="goBtn" id="restartBtn" onclick="restartGame()">▶ Play Again</button>
@@ -714,7 +724,8 @@ const LAVA_MAX_PPS = (4 * PLATFORM_GAP) / (2 * 2 * Math.abs(JUMP_FORCE) / GRAVIT
 // PINCH_ZOOM: min/max zoom scale (1.0 = no change, 0.2 = zoomed way out)
 const ZOOM_MIN = 0.2;    // most zoomed out (see most of level)
 const ZOOM_MAX = 1.0;    // normal size (starting zoom)
-const ZOOM_DEFAULT = 1.0; // starting zoom — CHANGE THIS to adjust start size on mobile
+// Mobile gets 0.6 so more platforms are visible; desktop stays at 1.0
+const ZOOM_DEFAULT = ('ontouchstart' in window) ? 0.6 : 1.0;
 
 // World width (virtual pixels)
 const WORLD_W = 900;
@@ -728,6 +739,44 @@ const PURPLE_DEATH_MS = 1200;
 // Cheat reset penalty
 const PENALTY = 40;
 
+// ═══════════════════════════════════════════
+// ██ STALAGMITE CONFIG ██
+// ═══════════════════════════════════════════
+// Tune the stalagmite system per level here.
+// Each entry covers a range of levels (fromLevel inclusive, up to the next entry).
+//
+//  triggerPlatforms : how many platforms above the lava icicles can spawn on
+//                     (higher = more warning time; lower = nasty surprise near lava)
+//  maxPerPlatform   : max icicles that can hang from a single platform (min is always 1)
+//  spawnChance      : 0–1 probability a qualifying platform actually gets icicles
+//                     (1.0 = always spawn, 0.5 = 50% of eligible platforms get them)
+//
+// Strategy:
+//   Early levels  → lots of icicles, spawning far above lava → easy to see and dodge
+//   Later levels  → fewer icicles, spawning close to lava    → less warning, surprise timing
+//
+const STALAGMITE_CONFIG = [
+  { fromLevel: 1,  triggerPlatforms: 5, maxPerPlatform: 3, spawnChance: 1.0, notes: 'Full icicles, lots of warning'        },
+  { fromLevel: 4,  triggerPlatforms: 5, maxPerPlatform: 3, spawnChance: 0.85, notes: 'Same range, slightly fewer'          },
+  { fromLevel: 6,  triggerPlatforms: 4, maxPerPlatform: 2, spawnChance: 0.8,  notes: 'Tighter zone, fewer per platform'   },
+  { fromLevel: 8,  triggerPlatforms: 4, maxPerPlatform: 2, spawnChance: 0.7,  notes: 'Reduced spawn chance'               },
+  { fromLevel: 10, triggerPlatforms: 3, maxPerPlatform: 2, spawnChance: 0.65, notes: '3-platform warning zone'            },
+  { fromLevel: 13, triggerPlatforms: 3, maxPerPlatform: 1, spawnChance: 0.6,  notes: 'Only singles now'                   },
+  { fromLevel: 16, triggerPlatforms: 2, maxPerPlatform: 1, spawnChance: 0.55, notes: '2-platform zone, rare singles'      },
+  { fromLevel: 20, triggerPlatforms: 2, maxPerPlatform: 1, spawnChance: 0.45, notes: 'Very sparse'                        },
+  { fromLevel: 25, triggerPlatforms: 1, maxPerPlatform: 1, spawnChance: 0.4,  notes: '1-platform zone — almost on lava'  },
+  { fromLevel: 30, triggerPlatforms: 1, maxPerPlatform: 1, spawnChance: 0.3,  notes: 'Rare, right on top of lava'         },
+];
+
+// Returns the config entry for the current level
+function getStalagmiteConfig(){
+  let cfg = STALAGMITE_CONFIG[0];
+  for(const c of STALAGMITE_CONFIG){
+    if(level >= c.fromLevel) cfg = c;
+    else break;
+  }
+  return cfg;
+}
 // ═══════════════════════════════════════════
 
 const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af'};
@@ -945,13 +994,16 @@ function getCustomLevelChunk(startIndex){
 let nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
 
 function initGame(){
-  if(currentUser){
+  if(lastGameWon){
+    // Carry coins and power-ups over from the just-won level — they are already in memory
+    // (handleCoinsAndPowerUps('win') saved them to ud and they're still in the live vars)
+    // Just leave coins/jumpBoosts/etc as-is; don't reload from ud (which is the same values)
+    lastGameWon = false; // reset flag for next run
+  } else if(currentUser){
     const ud = currentUser.ud;
     coins = ud.coins || 0;
     jumpBoosts = Math.min(ud.jumpBoosts || 0, 20);
     parachutes = ud.parachutes || 0;
-    
-    // v43: Load remaining power-ups and uses from user data
     skipUses = ud.skipUses || 0;
     bookUses = ud.bookUses || 0;
     lavaShips = ud.lavaShips || 0;
@@ -1381,8 +1433,9 @@ function checkTipKillsPlayer(p){
 // ██ STALAGMITE SYSTEM ██
 // ═══════════════════════════════════════════
 function updateStalagmites(dt){
+  const cfg = getStalagmiteConfig();
   const lavaScreenY = (lavaWorldY - camera.y) * currentZoom;
-  const triggerZone = 3 * PLATFORM_GAP; // spawn stals on platforms within 3 platforms of lava
+  const triggerZone = cfg.triggerPlatforms * PLATFORM_GAP;
 
   // Spawn stalagmites on platforms near lava that don't have them yet
   for(const p of platforms){
@@ -1390,23 +1443,24 @@ function updateStalagmites(dt){
     if(p.isGap) continue;
     const distToLava = lavaWorldY - p.y; // positive = lava is below platform
     if(distToLava >= 0 && distToLava <= triggerZone){
-      // Check if this platform already has a stalactite
       const hasStal = stalagmites.some(s => s.platIndex === p.index);
       if(!hasStal){
-        // Add 1-3 stalagmites hanging from the bottom of this platform
-        const count = 1 + Math.floor(Math.random() * 3);
+        // Probabilistic spawn — skip this platform based on spawnChance
+        if(Math.random() > cfg.spawnChance) continue;
+        // 1 to maxPerPlatform icicles
+        const count = 1 + Math.floor(Math.random() * cfg.maxPerPlatform);
         for(let i=0; i<count; i++){
           const offset = (i + 1) * p.w / (count + 1);
           stalagmites.push({
             x: p.x + offset,
-            platY: p.y + p.h, // bottom of platform
+            platY: p.y + p.h,
             worldY: p.y + p.h,
             platIndex: p.index,
             phase: 'hanging',
             wobbleT: 0,
             fallT: 0,
             fallVY: 0,
-            size: 6 + Math.random() * 8 // height in world px
+            size: 6 + Math.random() * 8
           });
         }
       }
@@ -1418,15 +1472,12 @@ function updateStalagmites(dt){
     const s = stalagmites[i];
 
     if(s.phase === 'hanging'){
-      // Check if player passes through or near the stalagmite
-      const stalScreenX = (s.x - camera.x) * currentZoom;
-      const stalScreenY = (s.worldY - camera.y) * currentZoom;
-      const px = (player.x - camera.x) * currentZoom;
-      const py = (player.y - camera.y) * currentZoom;
-      const pw = player.w * currentZoom, ph = player.h * currentZoom;
-      // Hit check: generous area around the stalagmite
-      if(stalScreenX > px - 15 && stalScreenX < px + pw + 15 &&
-         stalScreenY > py - 10 && stalScreenY < py + ph + 10){
+      // Hit detection in WORLD coordinates — completely zoom-independent.
+      // s.x / s.worldY are world positions; player.x/y/w/h are also world positions.
+      // Margins in world units: 10px horizontal, 8px vertical.
+      const HIT_MX = 10, HIT_MY = 8;
+      if(s.x > player.x - HIT_MX && s.x < player.x + player.w + HIT_MX &&
+         s.worldY > player.y - HIT_MY && s.worldY < player.y + player.h + HIT_MY){
         s.phase = 'wobbling';
         s.wobbleT = 400; // 400ms wobble
       }
@@ -2152,28 +2203,75 @@ function saveScore(){
   else saveGuestProgress();
 }
 
-function loseCoinsToPiggy(animate=false, onDone=null){
-  const lostAmt = coins;
-  if(lostAmt > 0){
-    const pig = getPiggyBank() + lostAmt;
-    setPiggyBank(pig);
-    coins = 0;
-    if(currentUser){currentUser.ud.coins = 0; dbSave();}
+// ═══ UNIFIED COINS + POWER-UPS HANDLER ═══
+// outcome: 'die'  — reset power-ups, send coins to piggy
+//          'menu' — sell power-ups back to coins, keep coins (go to menu)
+//          'win'  — keep coins AND power-ups (level win / play again on win)
+function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
+  if(outcome === 'die'){
+    // Power-ups lost; coins go to piggy bank
+    const lostAmt = coins;
+    if(lostAmt > 0){
+      const pig = getPiggyBank() + lostAmt;
+      setPiggyBank(pig);
+      coins = 0;
+      if(currentUser){currentUser.ud.coins = 0; dbSave();}
+      updateHUD();
+      updatePiggyDisplay();
+      const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
+    }
+    // Reset all power-ups
+    jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; booksOwned = 0; bigHead = false; lavaShips = 0; lavaShipActive = false; lavaShipSurgeThreshold = 15;
+    if(currentUser){
+      currentUser.ud.jumpBoosts = 0;
+      currentUser.ud.parachutes = 0;
+      currentUser.ud.skipUses = 0;
+      currentUser.ud.bookUses = 0;
+      currentUser.ud.lavaShips = 0;
+      currentUser.ud.coins = 0;
+      dbSave();
+    }
+    if(animate && lostAmt > 0){
+      animateCoinTransfer('goCoins','goPiggy',lostAmt,onDone);
+    } else {
+      if(onDone) onDone();
+    }
+
+  } else if(outcome === 'menu'){
+    // Sell power-ups → coins, keep coins, go to menu
+    sellAllPowerUps();
+    if(currentUser){
+      currentUser.ud.coins = coins;
+      currentUser.ud.jumpBoosts = 0;
+      currentUser.ud.parachutes = 0;
+      currentUser.ud.skipUses = 0;
+      currentUser.ud.bookUses = 0;
+      currentUser.ud.lavaShips = 0;
+      dbSave();
+    }
     updateHUD();
     updatePiggyDisplay();
-    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
-  }
-  jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; booksOwned = 0; bigHead = false; lavaShips = 0; lavaShipActive = false; lavaShipSurgeThreshold = 15;
-  if(currentUser){
-    currentUser.ud.jumpBoosts = 0;
-    currentUser.ud.parachutes = 0;
-    dbSave();
-  }
-  if(animate && lostAmt > 0){
-    animateCoinTransfer('goCoins','goPiggy',lostAmt,onDone);
-  } else {
+    if(onDone) onDone();
+
+  } else if(outcome === 'win'){
+    // Keep everything — coins and power-ups carry over
+    if(currentUser){
+      currentUser.ud.coins = coins;
+      currentUser.ud.jumpBoosts = jumpBoosts;
+      currentUser.ud.skipUses = skipUses;
+      currentUser.ud.bookUses = bookUses;
+      currentUser.ud.parachutes = parachutes;
+      currentUser.ud.lavaShips = lavaShips;
+      dbSave();
+    }
+    updateHUD();
     if(onDone) onDone();
   }
+}
+
+// Legacy wrapper kept so any external calls still work
+function loseCoinsToPiggy(animate=false, onDone=null){
+  handleCoinsAndPowerUps('die', animate, onDone);
 }
 // ═══ RPS ═══
 const RPS_EMOJIS = ['✊','✋','✌️'];
@@ -2200,18 +2298,12 @@ function cycleRPS(){if(rpsPlayed)return;setRPS((rpsPlayerChoice+1)%3);}
 function setRPS(i){if(rpsPlayed)return;rpsPlayerChoice=i;document.getElementById('playerEmoji').textContent=RPS_EMOJIS[i];document.querySelectorAll('.rpsChoiceBtn').forEach((b,ii)=>b.classList.toggle('active',ii===i));}
 function doRPS(){
   if(rpsPlayed)return;rpsPlayed=true;
-  // CPU: 1/10 chance of winning, else player wins
   const r=Math.random();
   let cpuChoice;
-  if(r<0.3){
-    // cpu picks winning move
-    cpuChoice=(rpsPlayerChoice+1)%3;
-  } else if(r<0.15){
-    // tie
-    cpuChoice=rpsPlayerChoice;
+  if(r<0.1){
+    cpuChoice=(rpsPlayerChoice+1)%3; // cpu wins (10%)
   } else {
-    // player wins — cpu picks losing move
-    cpuChoice=(rpsPlayerChoice+2)%3;
+    cpuChoice=(rpsPlayerChoice+2)%3; // player wins (90%)
   }
   document.getElementById('cpuEmoji').textContent=RPS_EMOJIS[cpuChoice];
   const pl=rpsPlayerChoice,cp=cpuChoice;
@@ -2220,27 +2312,28 @@ function doRPS(){
   else if((pl===0&&cp===2)||(pl===1&&cp===0)||(pl===2&&cp===1)) result='win';
   else result='lose';
   const resEl=document.getElementById('rpsResult');
-  if(result==='win'){
-    resEl.textContent='🎉 You WIN! Coins saved!';resEl.style.color='#44ff88';
-
-// keep coins — player won RPS
+  if(result==='win'||result==='draw'){
+    // Pull coins from piggy back into wallet
+    const pig=getPiggyBank();
+    coins=pig;
+    setPiggyBank(0);
     if(currentUser){currentUser.ud.coins=coins;dbSave();}
-    rpsWonCoins=coins; // flag for animation
-  } else if(result==='draw'){
-    resEl.textContent='🤝 Draw! Coins saved!';resEl.style.color='#ffe066';
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
-} else {
-    resEl.textContent='😬 CPU wins! Coins → Piggy Bank.';resEl.style.color='#ff6666';
-    loseCoinsToPiggy();
+    rpsWonCoins=coins;
+    resEl.textContent=result==='win'?'🎉 You WIN! Coins returned!':'🤝 Draw! Coins returned!';
+    resEl.style.color=result==='win'?'#44ff88':'#ffe066';
+    // Update both displays
+    const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
+    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=0;
+  } else {
+    // Coins stay in piggy — nothing to move, already there from death
+    resEl.textContent='😬 CPU wins! Coins stay in Piggy Bank.';resEl.style.color='#ff6666';
     piggyAttemptUnlocked=true;
     piggyAttemptUsed=false;
-    // Show Watch Ad button so player can choose to reclaim coins
     const adRow=document.getElementById('rpsAdRow');
     if(adRow) adRow.style.display='flex';
   }
   document.getElementById('rpsGo').style.display='none';
   document.getElementById('rpsButtons').style.display='flex';
-  // Refresh versus result coin boxes if they exist
   const vc=document.getElementById('vrCoins');if(vc)vc.textContent=coins;
   const vp=document.getElementById('vrPiggy');if(vp)vp.textContent=getPiggyBank();
 }
@@ -2288,71 +2381,88 @@ function checkMath(){
   }
 }
 document.getElementById('mathInput').addEventListener('keydown',e=>{if(e.key==='Enter')checkMath();});
-
 // ═══ GAME END ═══
 function gameEnd(fromPurple){
   if(versusMode){endVersus(false,fromPurple?'Burned on purple!':'You burned!');return;}
   gameRunning=false;cancelAnimationFrame(animId);saveScore();
+  lastGameWon = false;
+
+  // Move coins to piggy and reset power-ups FIRST so both displays are consistent
+  handleCoinsAndPowerUps('die');
+
   document.getElementById('purpleWarning').style.opacity='0';
   document.getElementById('goTitle').textContent=fromPurple?'💀 YOU DIED! (Purple got you)':'💀 YOU DIED!';
   document.getElementById('goScore').textContent='Platform '+platformCount+' — Level '+level;
   document.getElementById('penaltyMsg').textContent='';
-  const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
-  const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=getPiggyBank();
-  const adBtn=document.getElementById('goAdBtn');if(adBtn)adBtn.style.display=coins>0?'block':'none';
-  const rpsBtn=document.getElementById('rpsBtn');if(rpsBtn)rpsBtn.style.display=coins>0?'block':'none';
+
+  // coins is now 0; piggy holds everything
+  const gcEl = document.getElementById('goCoins');
+  if(gcEl) gcEl.textContent = 0;
+
+  const piggyAmt = getPiggyBank();
+  const gpEl = document.getElementById('goPiggy');
+  if(gpEl) gpEl.textContent = piggyAmt;
+  if(gpEl) gpEl.parentElement.style.display = '';
+
+  // RPS and Ad buttons gate on piggy amount, not wallet (wallet is always 0 now)
+  const adBtn = document.getElementById('goAdBtn');
+  if(adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+  const rpsBtn = document.getElementById('rpsBtn');
+  if(rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+
   document.getElementById('gameOver').classList.add('show');
 }
-// Floor Is Lava v43
+// Floor Is Lava v36
 function gameWin() {
   gameRunning = false;
   cancelAnimationFrame(animId);
   saveScore();
-  
-  if (currentUser) {
-    currentUser.ud.coins = coins;
-    // v43: Save all power-ups to the user's profile before the next level loads
-    currentUser.ud.jumpBoosts = jumpBoosts;
-    currentUser.ud.skipUses = skipUses;
-    currentUser.ud.bookUses = bookUses;
-    currentUser.ud.parachutes = parachutes;
-    currentUser.ud.lavaShips = lavaShips;
-    dbSave();
-  }
-  
+  lastGameWon = true;
+
+  // Win path — keep coins AND power-ups, no piggy/RPS/ad
+  handleCoinsAndPowerUps('win');
+
   updateHUD();
 
   document.getElementById('goTitle').textContent = '🏆 YOU WIN!';
   document.getElementById('goScore').textContent = 'All ' + endPlatform + ' platforms! Level ' + level;
-  
+
   const gcEl = document.getElementById('goCoins');
-  if (gcEl) gcEl.textContent = coins;
-  
+  if(gcEl) gcEl.textContent = coins;
+
+  // Hide the piggy display — player keeps their coins
+  const gpEl = document.getElementById('goPiggy');
+  if(gpEl) gpEl.parentElement.style.display = 'none';
+
+  // Hide RPS and Ad buttons — player won, they keep everything
   const adBtn2 = document.getElementById('goAdBtn');
-  if (adBtn2) adBtn2.style.display = 'none';
-  
+  if(adBtn2) adBtn2.style.display = 'none';
   const rpsBtn2 = document.getElementById('rpsBtn');
-  if (rpsBtn2) rpsBtn2.style.display = 'none';
-  
-  document.getElementById('penaltyMsg').textContent = 'Power-ups and coins saved! Entering next level.';
+  if(rpsBtn2) rpsBtn2.style.display = 'none';
+
+  document.getElementById('penaltyMsg').textContent = '🎉 Coins & power-ups saved! Play Again to continue.';
   document.getElementById('gameOver').classList.add('show');
 }
+// Track whether the last game ended in a win so restartGame can carry state over
+
 function restartGame(){
   const wonAmt = rpsWonCoins;
   rpsWonCoins = 0;
-  
+
   const doStart = () => {
     versusMode = false;
     document.getElementById('gameOver').classList.remove('show');
     document.getElementById('rpsOverlay').classList.remove('show');
+    // Restore piggy display visibility in case gameWin hid it
+    const gpEl = document.getElementById('goPiggy');
+    if(gpEl) gpEl.parentElement.style.display = '';
     const vr = document.getElementById('versusResult'); if(vr){vr.classList.remove('show'); vr.style.display='none';}
     const vh = document.getElementById('versusHUD'); if(vh){vh.classList.remove('show');}
-    lastTime = null; 
-    initGame(); 
+    lastTime = null;
+    initGame();
     animId = requestAnimationFrame(gameLoop);
   };
 
-  // Skip animations and retain items for the next level
   doStart();
 }
 
@@ -2405,17 +2515,20 @@ function goToMenu() {
   gameRunning = false;
   paused = false;
   cancelAnimationFrame(animId);
-  
-  // Convert power-ups and update coin balance
-  sellAllPowerUps();
-  
+  lastGameWon = false;
+
+  // Sell power-ups back to coins and keep coins (menu path)
+  handleCoinsAndPowerUps('menu');
+
   // Save progress
   saveScore();
 
-  // Reset overlays
+  // Reset overlays (also restore piggy display if gameWin hid it)
   document.getElementById('gameOver').classList.remove('show');
   document.getElementById('rpsOverlay').classList.remove('show');
   document.getElementById('pauseOverlay').classList.remove('show');
+  const gpEl = document.getElementById('goPiggy');
+  if(gpEl) gpEl.parentElement.style.display = '';
   showScreen('startScreen');
 
   if (currentUser) {
@@ -3194,7 +3307,7 @@ function playBgMusic(track){
   bgMusicTrack = track;
   bgAudio = new Audio(BG_MUSIC[track]);
   bgAudio.loop = true;
-  bgAudio.volume = 0.45;
+  bgAudio.volume = isMuted ? 0 : masterVolume;
   bgAudio.play().catch(()=>{});
 }
 function stopBgMusic(){
@@ -3214,13 +3327,61 @@ function updateBgMusic(){
 }
 
 // ═══ AUDIO ═══
+let masterVolume = 0.45;
+let isMuted = false;
+let premuteVolume = 0.45;
 const audioCtx=typeof AudioContext!=='undefined'?new AudioContext():null;
+let masterGain = null;
+if(audioCtx){
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = masterVolume;
+  masterGain.connect(audioCtx.destination);
+}
 function playSound(type){
-  if(!audioCtx)return;const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();osc.connect(gain);gain.connect(audioCtx.destination);const now=audioCtx.currentTime;
+  if(!audioCtx)return;
+  const dest = masterGain || audioCtx.destination;
+  const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+  osc.connect(gain);gain.connect(dest);const now=audioCtx.currentTime;
   if(type==='jump'){osc.type='square';osc.frequency.setValueAtTime(300,now);osc.frequency.exponentialRampToValueAtTime(600,now+0.1);gain.gain.setValueAtTime(0.15,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.15);osc.start(now);osc.stop(now+0.15);}
   else if(type==='coin'){osc.type='sine';osc.frequency.setValueAtTime(880,now);osc.frequency.setValueAtTime(1320,now+0.08);gain.gain.setValueAtTime(0.18,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.22);osc.start(now);osc.stop(now+0.22);}
   else if(type==='death'){osc.type='sawtooth';osc.frequency.setValueAtTime(400,now);osc.frequency.exponentialRampToValueAtTime(80,now+0.5);gain.gain.setValueAtTime(0.25,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.5);osc.start(now);osc.stop(now+0.5);}
   else if(type==='buy'){osc.type='sine';osc.frequency.setValueAtTime(660,now);osc.frequency.setValueAtTime(990,now+0.1);gain.gain.setValueAtTime(0.15,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.2);osc.start(now);osc.stop(now+0.2);}
+}
+
+// ═══ MASTER VOLUME ═══
+
+function setMasterVolume(val){
+  masterVolume = Math.max(0, Math.min(1, val / 100));
+  isMuted = (masterVolume === 0);
+  applyVolume();
+  updateMuteBtn();
+}
+
+function toggleMute(){
+  if(isMuted){
+    isMuted = false;
+    masterVolume = premuteVolume || 0.45;
+    const slider = document.getElementById('volumeSlider');
+    if(slider) slider.value = Math.round(masterVolume * 100);
+  } else {
+    premuteVolume = masterVolume;
+    isMuted = true;
+  }
+  applyVolume();
+  updateMuteBtn();
+}
+
+function applyVolume(){
+  const v = isMuted ? 0 : masterVolume;
+  if(bgAudio) bgAudio.volume = v;
+  if(masterGain) masterGain.gain.value = v;
+}
+
+function updateMuteBtn(){
+  const btn = document.getElementById('muteBtn');
+  if(!btn) return;
+  const v = isMuted ? 0 : masterVolume;
+  btn.textContent = v === 0 ? '🔇' : v < 0.35 ? '🔉' : '🔊';
 }
 
 function startGame(){if(startLavaAnim)cancelAnimationFrame(startLavaAnim);showScreen('gameScreen');lastTime=null;initGame();animId=requestAnimationFrame(gameLoop);}
@@ -3866,12 +4027,34 @@ function showAdModal(coinsAtRisk){
 let adFromPiggy=false;
 let adFromGameOver=false;
 let adFromRpsLoss=false;
+let lastGameWon=false; // set true by gameWin(), cleared by restartGame()/goToMenu()/gameEnd()
 
 function openGameOverAd(){
-  if(coins<=0){showNotif('No coins to save!');return;}
+  // After death, coins are 0 — they're in the piggy. This ad reclaims them from piggy.
+  const pig=getPiggyBank();
+  if(pig<=0){showNotif('Nothing in Piggy Bank!');return;}
   adFromGameOver=true;
-  // Show ad modal — on finish, coins are kept and we go to menu with animation
-  showAdModal(coins);
+  adCoinsAtRisk=pig;
+  setPiggyBank(0);
+  adCountVal=5;
+  document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
+  document.getElementById('adCountdown').textContent=5;
+  document.getElementById('adWatchBtn').disabled=true;
+  document.getElementById('adWatchBtn').textContent='Watching... (5s)';
+  document.getElementById('adSkipBtn').style.display='none';
+  document.getElementById('adModal').classList.add('show');
+  clearInterval(adTimer);
+  adTimer=setInterval(()=>{
+    adCountVal--;
+    document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
+    if(adCountVal<=0){
+      clearInterval(adTimer);
+      document.getElementById('adWatchBtn').disabled=false;
+      document.getElementById('adWatchBtn').textContent='Claim My '+adCoinsAtRisk+' Coins!';
+    } else {
+      document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
+    }
+  },1000);
 }
 
 function finishAd(){
@@ -3881,19 +4064,24 @@ function finishAd(){
   adCoinsAtRisk=0;
 
   if(adFromGameOver){
-    // From game-over Watch Ad button — keep coins, go to menu with animation
+    // From game-over Watch Ad — reclaim coins from piggy back to wallet, go to menu
     adFromGameOver=false;
-    rpsWonCoins=amt;
-    if(currentUser){currentUser.ud.coins=amt;dbSave();}
-    showNotif('📺 Ad watched! Coins saved!');
+    coins=amt;
+    if(currentUser){currentUser.ud.coins=coins;dbSave();}
+    showNotif('📺 Ad watched! Coins reclaimed!');
+    // Update the death screen displays before going to menu
+    const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
+    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=0;
     goToMenu();
 
   } else if(adFromRpsLoss){
-    // From RPS loss Watch Ad button — reclaim piggy coins, go to menu with animation
+    // From RPS loss Watch Ad — reclaim piggy coins to wallet, go to menu
     adFromRpsLoss=false;
-    rpsWonCoins=amt;
-    if(currentUser){currentUser.ud.coins=amt;dbSave();}
+    coins=amt;
+    if(currentUser){currentUser.ud.coins=coins;dbSave();}
     showNotif('📺 Ad watched! Coins reclaimed!');
+    const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
+    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=0;
     goToMenu();
 
   } else if(adFromPiggy){
@@ -3920,11 +4108,12 @@ function finishAd(){
 function skipAd(){
   clearInterval(adTimer);
   document.getElementById('adModal').classList.remove('show');
+  // Put the at-risk coins back to piggy (they came from piggy; wallet is already 0)
   const pig=getPiggyBank()+adCoinsAtRisk;
   setPiggyBank(pig);
-  coins=0;
   if(currentUser){currentUser.ud.coins=0;dbSave();}
-  showNotif('🐷 Coins sent to Piggy Bank');
+  showNotif('🐷 Coins stay in Piggy Bank');
+  const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
   updateHUD();
   adCoinsAtRisk=0;
   adFromPiggy=false; adFromGameOver=false; adFromRpsLoss=false;
@@ -3971,40 +4160,6 @@ function openRpsLossAd(){
     document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
     if(adCountVal<=0){clearInterval(adTimer);document.getElementById('adWatchBtn').disabled=false;document.getElementById('adWatchBtn').textContent='Claim My '+adCoinsAtRisk+' Coins!';}
     else document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
-  },1000);
-}
-
-function openGameOverAd(){
-  if(coins<=0){showNotif('No coins to save!');return;}
-  adFromGameOver=true;
-  showAdModal(coins);
-}
-
-function openRpsLossAd(){
-  // Player lost RPS — coins already in piggy. Watch ad to reclaim them back.
-  const pig=getPiggyBank();
-  if(pig<=0){showNotif('Nothing in Piggy Bank!');return;}
-  adFromPiggy=true;
-  adCoinsAtRisk=pig;
-  setPiggyBank(0);
-  adCountVal=5;
-  document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent=5;
-  document.getElementById('adWatchBtn').disabled=true;
-  document.getElementById('adWatchBtn').textContent='Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display='none';
-  document.getElementById('adModal').classList.add('show');
-  clearInterval(adTimer);
-  adTimer=setInterval(()=>{
-    adCountVal--;
-    document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
-    if(adCountVal<=0){
-      clearInterval(adTimer);
-      document.getElementById('adWatchBtn').disabled=false;
-      document.getElementById('adWatchBtn').textContent='Claim My '+adCoinsAtRisk+' Coins!';
-    } else {
-      document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
-    }
   },1000);
 }
 
