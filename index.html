@@ -40,6 +40,9 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #muteBtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;color:#eee;}
 #muteBtn:hover{transform:scale(1.15);}
 #volumeSlider{accent-color:#ffe066;height:4px;}
+#zoomControl{display:flex;align-items:center;margin-left:6px;}
+#zoomBtn{background:#222;border:1.5px solid #555;border-radius:14px;color:#ccc;font-size:11px;font-weight:bold;padding:3px 10px;cursor:pointer;white-space:nowrap;}
+#zoomBtn:hover{background:#333;border-color:#ffe066;color:#ffe066;}
 
 /* AUTH */
 #authScreen{background:linear-gradient(180deg,#0d0d2b,#1a0a0a);align-items:center;justify-content:center;padding:20px 16px 50px;}
@@ -285,6 +288,9 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
            oninput="setMasterVolume(this.value)"
            title="Volume" style="width:70px;cursor:pointer;vertical-align:middle;">
   </div>
+  <div id="zoomControl">
+    <button id="zoomBtn" onclick="cycleZoom()" title="Cycle zoom level">🔍 <span id="zoomLabel">100%</span></button>
+  </div>
 </div>
 
 <!-- AUTH -->
@@ -297,14 +303,18 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div class="authTab" id="tabSignup" onclick="switchAuthTab('signup')">Sign Up</div>
     </div>
     <div id="loginForm">
-      <input class="authInput" id="loginUser" placeholder="Username" autocomplete="off">
-      <input class="authInput" id="loginPass" placeholder="Password" type="password">
-      <button class="authBtn primary" onclick="doLogin()">Log In</button>
+      <input class="authInput" id="loginUser" placeholder="Username" autocomplete="off"
+             tabindex="1" onkeydown="if(event.key==='Enter'){document.getElementById('loginPass').focus();}">
+      <input class="authInput" id="loginPass" placeholder="Password" type="password"
+             tabindex="2" onkeydown="if(event.key==='Enter'){doLogin();}">
+      <button class="authBtn primary" onclick="doLogin()" tabindex="3">Log In</button>
     </div>
     <div id="signupForm" style="display:none">
-      <input class="authInput" id="signupUser" placeholder="Choose username" autocomplete="off">
-      <input class="authInput" id="signupPass" placeholder="Choose password" type="password">
-      <button class="authBtn primary" onclick="doSignup()">Create Account</button>
+      <input class="authInput" id="signupUser" placeholder="Choose username" autocomplete="off"
+             tabindex="1" onkeydown="if(event.key==='Enter'){document.getElementById('signupPass').focus();}">
+      <input class="authInput" id="signupPass" placeholder="Choose password" type="password"
+             tabindex="2" onkeydown="if(event.key==='Enter'){doSignup();}">
+      <button class="authBtn primary" onclick="doSignup()" tabindex="3">Create Account</button>
     </div>
     <button class="authBtn guest" onclick="guestLogin()">🎮 Play as Guest</button>
     <div class="authMsg" id="authMsg"></div>
@@ -1083,6 +1093,7 @@ function updateHUD(){
     }
   }
   document.getElementById('zoomDisplay').textContent = 'Zoom: ' + Math.round(currentZoom * 100) + '%';
+  const zl = document.getElementById('zoomLabel'); if(zl) zl.textContent = Math.round(currentZoom * 100) + '%';
   const bj=document.getElementById('buyJumpBtn'),bs=document.getElementById('buySkipBtn'),bb=document.getElementById('buyBookBtn'),bc=document.getElementById('buyChuteBtn'),bship=document.getElementById('buyShipBtn');
   if(bj)bj.disabled=coins<20;if(bs)bs.disabled=coins<20;if(bb)bb.disabled=coins<100;if(bc)bc.disabled=coins<50;if(bship)bship.disabled=coins<150;
   document.getElementById('shopCoins').textContent = '🪙 ' + coins + ' coins';
@@ -1434,7 +1445,6 @@ function checkTipKillsPlayer(p){
 // ═══════════════════════════════════════════
 function updateStalagmites(dt){
   const cfg = getStalagmiteConfig();
-  const lavaScreenY = (lavaWorldY - camera.y) * currentZoom;
   const triggerZone = cfg.triggerPlatforms * PLATFORM_GAP;
 
   // Spawn stalagmites on platforms near lava that don't have them yet
@@ -1527,9 +1537,10 @@ function updateStalagmites(dt){
 
 function drawStalagmites(){
   for(const s of stalagmites){
-    const sx = (s.x - camera.x) * currentZoom;
-    const topY = (s.worldY - camera.y) * currentZoom;
-    const sz = s.size * currentZoom;
+    // All coordinates are in world-space minus camera — the canvas scale handles zoom
+    const sx = s.x - camera.x;
+    const topY = s.worldY - camera.y;
+    const sz = s.size; // size in world units; canvas scale handles display size
     let wobbleOff = 0;
     if(s.phase === 'wobbling'){
       wobbleOff = Math.sin(s.wobbleT * 0.06) * 3 * (s.wobbleT / 400);
@@ -1559,8 +1570,8 @@ function drawStalagmites(){
 
   // Draw hiss particles
   for(const h of stalagmiteHiss){
-    const sx = (h.x - camera.x) * currentZoom;
-    const sy = (h.y - camera.y) * currentZoom;
+    const sx = h.x - camera.x;
+    const sy = h.y - camera.y;
     const alpha = Math.max(0, 1 - h.t / h.maxT);
     gCtx.save();
     gCtx.globalAlpha = alpha * 0.7;
@@ -1590,10 +1601,10 @@ function activateLavaShip(){
 function drawLavaShip(){
   if(!lavaShipActive) return;
   const progress = Math.min(lavaShipTimer / LAVA_SHIP_DURATION, 1);
-  const px = (player.x - camera.x) * currentZoom;
-  const py = (player.y - camera.y) * currentZoom;
-  const pw = player.w * currentZoom;
-  const ph = player.h * currentZoom;
+  const px = player.x - camera.x;
+  const py = player.y - camera.y;
+  const pw = player.w;
+  const ph = player.h;
   const cx = px + pw/2, cy = py + ph/2;
 
   gCtx.save();
@@ -3384,6 +3395,25 @@ function updateMuteBtn(){
   btn.textContent = v === 0 ? '🔇' : v < 0.35 ? '🔉' : '🔊';
 }
 
+// ═══ ZOOM CYCLE ═══
+// Preset steps: default → zoomed in → mid → zoomed out → default
+const ZOOM_PRESETS = [1.0, 0.8, 0.6, 0.4];
+let zoomPresetIndex = 0;
+
+function cycleZoom(){
+  // Initialise index to match current zoom on first press
+  if(zoomPresetIndex === 0 && Math.abs(currentZoom - ZOOM_DEFAULT) > 0.05){
+    // find nearest preset to start from
+    let nearest = 0, nearDist = 99;
+    ZOOM_PRESETS.forEach((z,i)=>{ const d=Math.abs(z-currentZoom); if(d<nearDist){nearDist=d;nearest=i;} });
+    zoomPresetIndex = nearest;
+  }
+  zoomPresetIndex = (zoomPresetIndex + 1) % ZOOM_PRESETS.length;
+  currentZoom = ZOOM_PRESETS[zoomPresetIndex];
+  resizeGame();
+  updateHUD();
+}
+
 function startGame(){if(startLavaAnim)cancelAnimationFrame(startLavaAnim);showScreen('gameScreen');lastTime=null;initGame();animId=requestAnimationFrame(gameLoop);}
 window.addEventListener('resize',()=>{isMobile='ontouchstart' in window;if(currentMode==='play'&&gameRunning)resizeGame();else if(currentMode==='editor')resizeEditor();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{resizeGame();},200));
@@ -3533,6 +3563,12 @@ function checkWord(){
 }
 document.addEventListener('DOMContentLoaded',()=>{
   const wi=document.getElementById('wordInput');if(wi)wi.addEventListener('keydown',e=>{if(e.key==='Enter')checkWord();});
+  // Initialise navbar zoom label to match actual starting zoom
+  const zl=document.getElementById('zoomLabel');
+  if(zl) zl.textContent = Math.round(currentZoom * 100) + '%';
+  // Set zoomPresetIndex to match ZOOM_DEFAULT
+  const zi = ZOOM_PRESETS.indexOf(currentZoom);
+  if(zi !== -1) zoomPresetIndex = zi;
 });
 
 // ══════════════════════════════════════════════
