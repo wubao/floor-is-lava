@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava</title>
+<title>Floor Is Lava v50</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
@@ -17,7 +17,7 @@
 <meta name="theme-color" content="#ffe066">
 <style>
 /* ═══════════════════════════════════════════════════
-   FLOOR IS LAVA v34
+   FLOOR IS LAVA v50
    PINCH ZOOM: search "PINCH_ZOOM" to find scale vars
    LAVA SPEED: search "LAVA_SPEED" to find speed vars
    PLATFORM GAP: search "PLATFORM_GAP" to adjust gaps
@@ -175,6 +175,12 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #menuBtn{background:#333;color:#ccc;border:1px solid #555;}
 #rpsBtn{background:linear-gradient(135deg,#4aaa44,#267022);color:#fff;}
 
+/* DEMO ANIMATION (start screen) */
+#demoContainer{margin:8px auto 12px;background:#1a1a3ecc;border-radius:24px;padding:6px 12px 10px;width:100%;max-width:440px;backdrop-filter:blur(3px);border:1px solid #4a5fd4;}
+.demo-label{font-size:9px;font-weight:bold;color:#aef;text-align:center;margin-bottom:6px;letter-spacing:1px;}
+#demoCanvas{display:block;margin:0 auto;border-radius:16px;background:#0d1020;box-shadow:0 4px 14px rgba(0,0,0,0.4);width:100%;height:auto;cursor:default;}
+.demo-hint{font-size:9px;color:#ffe066;text-align:center;margin-top:5px;background:#0e0e22aa;border-radius:14px;padding:3px;width:fit-content;margin-left:auto;margin-right:auto;}
+
 /* RPS OVERLAY */
 #rpsOverlay{display:none;position:absolute;inset:0;background:#000e;z-index:40;align-items:center;justify-content:center;flex-direction:column;}
 #rpsOverlay.show{display:flex;}
@@ -265,6 +271,9 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 .edBtn.danger{border-color:#e05;color:#f88;}
 #editorCanvas{cursor:crosshair;display:block;width:100%;flex:1;}
 
+/* Editor save toast */
+#edSaveToast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a3e;border:1.5px solid #27ae60;color:#7af07a;font-size:12px;font-weight:bold;padding:8px 18px;border-radius:22px;z-index:9999;opacity:0;pointer-events:none;transition:opacity 0.35s;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,0.5);}
+#edSaveToast.show{opacity:1;}
 /* BLOCK PATTERN PANEL */
 #bpPanel{display:none;flex-direction:column;gap:0;background:#0f0f22;border-bottom:2px solid #27ae6044;flex-shrink:0;}
 #bpTopBar{display:flex;gap:6px;align-items:center;padding:4px 8px;flex-wrap:wrap;background:#111120;}
@@ -296,6 +305,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 .bpTrayDel{position:absolute;top:2px;right:3px;font-size:9px;color:#f88;cursor:pointer;background:#0008;border-radius:3px;padding:0 2px;display:none;}
 .bpTrayCard:hover .bpTrayDel{display:block;}
 #bpTrayEmpty{color:#2a4a2a;font-size:10px;padding:0 10px;white-space:nowrap;}
+
 </style>
 </head>
 <body>
@@ -360,6 +370,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
         <label>Background Effects</label>
         <div class="settingsToggle on" id="sBgAnimToggle" onclick="toggleBgAnims();saveSettings();"></div>
       </div>
+	  <div class="settingsRow">
+	    <label>Show Tutorial on Home Screen</label>
+	    <div class="settingsToggle on" id="sShowTutorialToggle" onclick="toggleShowTutorial();saveSettings();"></div>
+	  </div>
     </div>
     <div class="settingsSection">
       <div class="settingsSectionTitle">🎮 Gameplay</div>
@@ -477,6 +491,11 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
           <input type="range" id="cTorchRf" min="0.05" max="0.35" step="0.01" value="0.17" oninput="onCharSlider()">
           <div class="charSliderVal" id="cTorchRf_v">0.17</div>
         </div>
+		<div class="charSliderRow">
+		  <label>Shirt color<span>pick any color</span></label>
+		  <input type="color" id="cShirtColor" value="#4a9eff" oninput="onCharSlider()">
+		  <div class="charSliderVal" id="cShirtColor_v">#4a9eff</div>
+		</div>
       </div>
     </div>
   </div>
@@ -518,6 +537,13 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <div class="tagline">Jump. Survive. Don't touch the lava.</div>
   <div class="welcomeUser" id="welcomeUser"></div>
   <div id="bestScoreDisplay"></div>
+  <!-- 🌟 INTERACTIVE DEMO ANIMATION 🌟 -->
+<div id="demoContainer" style="position:relative;">
+  <button id="closeDemoBtn" style="position:absolute; top:2px; right:6px; background:transparent; border:none; color:#ffaa88; font-size:14px; cursor:pointer; z-index:10;" title="Hide tutorial">✕</button>
+  <div class="demo-label">🎮 SHOWCASE CONTROLS — watch me move!</div>
+  <canvas id="demoCanvas" width="400" height="150" style="width:100%; height:auto; max-width:400px; aspect-ratio:400/150;"></canvas>
+  <div class="demo-hint" id="demoHintText">🎮 Space=Jump | ⬇️+Space=Half jump | ⬅️➡️=Move | ⬆️=Use selected power | 1=Boost 2=Skip 3=Book 4=Ship 5=Parachute 6=Torch | ⬇️+1-6=Buy power</div>
+</div>
   <div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;">
     <div style="background:#1a1a3e;border:1.5px solid #4a5fd4;border-radius:10px;padding:6px 14px;text-align:center;min-width:90px;" id="startMyCoinsBox">
       <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🪙 MY COINS</div>
@@ -550,37 +576,63 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <div id="infoScreen" class="screen">
   <div id="infoPanel">
     <h2>📋 HOW TO PLAY</h2>
+    <div class="infoSection" style="background:#1a1a3e66; border-radius:14px; padding:6px; margin-bottom:12px;">
+      <h3 style="color:#ffe066; text-align:center;">🎮 QUICK DEMO</h3>
+      <div style="display:flex; justify-content:center; margin:5px 0;">
+        <canvas id="infoDemoCanvas" width="300" height="100" style="width:100%; max-width:300px; background:#0d1020; border-radius:12px;"></canvas>
+      </div>
+      <div class="demo-hint" style="font-size:8px; text-align:center; color:#aef;">Space=Jump | ⬇️+Space=Half hop | ➡️⬅️=Move | ⬆️=Use selected power | 1=Boost 2=Skip 3=Book 4=Ship 5=Parachute 6=Torch</div>
+    </div>
     <div class="infoSection">
       <h3>🎮 Desktop Controls</h3>
-      <div class="infoRow"><div class="infoIcon">⬆️</div><div class="infoText"><b>Space/A</b> — Jump. <b>Down+Jump</b> = short hop.</div></div>
-      <div class="infoRow"><div class="infoIcon">⬅️</div><div class="infoText"><b>Arrow Keys / Q & D</b> — Move. Walk off either edge into <b>blank void</b> — use a parachute to survive the fall!</div></div>
-      <div class="infoRow"><div class="infoIcon">🧗</div><div class="infoText"><b>Climber mode</b> (toggle on start screen): player sits lower on screen, 10 platforms always visible above. <b>Frogger mode</b>: player centred — you can't see above until you jump!</div></div>
-      <div class="infoRow"><div class="infoIcon">⏸</div><div class="infoText"><b>P</b> — Pause. <b>1</b>=Boost, <b>2</b>=Skip, <b>4</b>=Book.</div></div>
+      <div class="infoRow"><div class="infoIcon">⬆️</div><div class="infoText"><b>Space</b> — Jump. <b>⬇️+Space</b> = short hop. <b>⬆️ Arrow</b> = use selected power from wheel.</div></div>
+      <div class="infoRow"><div class="infoIcon">⬅️</div><div class="infoText"><b>← → Arrow Keys</b> — Move left/right.</div></div>
+      <div class="infoRow"><div class="infoIcon">🔢</div><div class="infoText"><b>1</b>=Jump Boost · <b>2</b>=Skip · <b>3</b>=The Book · <b>4</b>=Lava Ship · <b>5</b>=Parachute · <b>6</b>=Torch. <b>⬇️+1–6</b> = Buy that power.</div></div>
+      <div class="infoRow"><div class="infoIcon">⏸</div><div class="infoText"><b>P</b> — Pause/unpause.</div></div>
     </div>
     <div class="infoSection">
       <h3>📱 Mobile Touch</h3>
-      <div class="infoRow"><div class="infoIcon">👆</div><div class="infoText">Tap left=jump left, right=jump right, top=jump up, near player=short hop.</div></div>
-      <div class="infoRow"><div class="infoIcon">👉</div><div class="infoText">Drag = move player until you lift finger.</div></div>
-      <div class="infoRow"><div class="infoIcon">🤏</div><div class="infoText"><b>Pinch in</b> = zoom out (see more). <b>Pinch out</b> = zoom in. See PINCH_ZOOM in code to adjust.</div></div>
-      <div class="infoRow"><div class="infoIcon">🎯</div><div class="infoText">Power Wheel bottom center: tap quadrant to use that power.</div></div>
+      <div class="infoRow"><div class="infoIcon">👆</div><div class="infoText">Tap left side=move left, right side=move right, top half=jump, near player=short hop.</div></div>
+      <div class="infoRow"><div class="infoIcon">👉</div><div class="infoText">Drag = slide player sideways until you lift your finger.</div></div>
+      <div class="infoRow"><div class="infoIcon">🤏</div><div class="infoText"><b>Pinch in</b> = zoom out (see more platforms). <b>Pinch out</b> = zoom in (bigger view).</div></div>
+      <div class="infoRow"><div class="infoIcon">🎯</div><div class="infoText">Power Wheel — bottom-left corner. Tap a quadrant to use that power-up instantly.</div></div>
     </div>
     <div class="infoSection">
-      <h3>🌋 Lava &amp; Difficulty</h3>
-      <div class="infoRow"><div class="infoIcon">📊</div><div class="infoText">The HUD shows <b>🌋 +X plts below</b> — how many platforms the lava is below you. Turns red when lava is close!</div></div>
-      <div class="infoRow"><div class="infoIcon">🌋</div><div class="infoText">Rises <b>1.8 platforms/sec</b> at start. Every 25 levels speed increases by 25%, up to a hard cap. If you climb more than <b>15 platforms above lava</b>, it surges up to within 5 platforms of you!</div></div>
-      <div class="infoRow"><div class="infoIcon">📐</div><div class="infoText">Higher levels: platforms shift sideways, bigger gaps, narrower platforms.</div></div>
+      <h3>🎮 Game Modes</h3>
+      <div class="infoRow"><div class="infoIcon">🧗</div><div class="infoText"><b>Climber</b> — You can see 10 platforms above. Great for beginners and high scores.</div></div>
+      <div class="infoRow"><div class="infoIcon">🐸</div><div class="infoText"><b>Frogger</b> — Blind mode. You can only see 2 platforms above. Platforms still exist above — jump to find them!</div></div>
+      <div class="infoRow"><div class="infoIcon">⚔️</div><div class="infoText"><b>Versus</b> — Race 3 AI bots (Roxy, Blaze, Zippy) to the highest platform. Death costs 30 coins.</div></div>
+      <div class="infoRow"><div class="infoIcon">🌋</div><div class="infoText"><b>Volcano Chronicles</b> — Story mode. Rescue artifacts from real-world volcanoes. Each volcano's elevation = your platform target.</div></div>
     </div>
     <div class="infoSection">
-      <h3>🪙 On Death</h3>
-      <div class="infoRow"><div class="infoIcon">🎲</div><div class="infoText">Play Rock Paper Scissors (you win 9/10 chance!) to keep your coins. Lose = coins go to Piggy Bank.</div></div>
-      <div class="infoRow"><div class="infoIcon">🐷</div><div class="infoText">Piggy Bank holds lost coins. Win mini-games to reclaim them.</div></div>
+      <h3>🌋 Lava &amp; Platforms</h3>
+      <div class="infoRow"><div class="infoIcon">📈</div><div class="infoText">Lava rises faster every 25 levels. If you climb more than <b>25 platforms above lava</b>, it surges up to within 5 of you!</div></div>
+      <div class="infoRow"><div class="infoIcon">🟥</div><div class="infoText"><b>Red/Blue/Yellow</b> — normal. <b>Green</b> — has a 🪙 coin on it. <b>Purple</b> — kills you after a few seconds, jump off! <b>❄️ Ice</b> — slippery!</div></div>
+      <div class="infoRow"><div class="infoIcon">🧊</div><div class="infoText">Stalagmites hang from platforms near the lava — they fall and slow lava when they hit it.</div></div>
+      <div class="infoRow"><div class="infoIcon">🌙</div><div class="infoText">Night mode activates at level 20. Use a Torch Battery to restore vision.</div></div>
+      <div class="infoRow"><div class="infoIcon">📐</div><div class="infoText">At higher levels platforms shift sideways, gaps grow wider, and platforms get narrower.</div></div>
     </div>
     <div class="infoSection">
-      <h3>🛍️ Shop</h3>
-      <div class="infoRow"><div class="infoIcon">⬆️</div><div class="infoText"><b>Jump Boost 20🪙</b> — Stack up to 20. Press 1 or wheel to fire.</div></div>
-      <div class="infoRow"><div class="infoIcon">💫</div><div class="infoText"><b>Platform Skip 20🪙</b> — 5 uses. Press 2.</div></div>
-      <div class="infoRow"><div class="infoIcon">🪂</div><div class="infoText"><b>Parachute 50🪙</b> — Auto-deploys after falling 300px. Slow descent.</div></div>
-      <div class="infoRow"><div class="infoIcon">📖</div><div class="infoText"><b>The Book 100🪙</b> — Big head! Press 4 or wheel. Pull platform above.</div></div>
+      <h3>🪙 Death &amp; Coins</h3>
+      <div class="infoRow"><div class="infoIcon">🎲</div><div class="infoText">On death, play <b>Rock Paper Scissors</b> (90% win rate!) to keep your coins. Lose = coins go to Piggy Bank.</div></div>
+      <div class="infoRow"><div class="infoIcon">🐷</div><div class="infoText"><b>Piggy Bank</b> — holds coins lost on death. Win Piggy mini-games (Memory, Math, RPS) to reclaim them.</div></div>
+      <div class="infoRow"><div class="infoIcon">📺</div><div class="infoText">Lost RPS? Watch an ad to save your coins instead of sending them to the Piggy.</div></div>
+    </div>
+    <div class="infoSection">
+      <h3>🛍️ Power-Ups (buy in shop or press ⬇️+key)</h3>
+      <div class="infoRow"><div class="infoIcon">⬆️</div><div class="infoText"><b>Jump Boost 20🪙</b> — Super-high jump. Stack up to 20. Press <b>1</b> or wheel top-left.</div></div>
+      <div class="infoRow"><div class="infoIcon">💫</div><div class="infoText"><b>Platform Skip 20🪙</b> — Teleport to 5 platforms above. 5 uses. Press <b>2</b> or wheel top-right.</div></div>
+      <div class="infoRow"><div class="infoIcon">📖</div><div class="infoText"><b>The Book 100🪙</b> — Big head! Pulls the platform above to you. Press <b>3</b> or wheel bottom-left.</div></div>
+      <div class="infoRow"><div class="infoIcon">🚀</div><div class="infoText"><b>Lava Ship 150🪙</b> — Rocket 50 platforms upward instantly! Press <b>4</b> or wheel bottom-right.</div></div>
+      <div class="infoRow"><div class="infoIcon">🪂</div><div class="infoText"><b>Parachute 50🪙</b> — Auto-deploys when you fall off the edge. Slow safe descent. Press <b>5</b>.</div></div>
+      <div class="infoRow"><div class="infoIcon">🔋</div><div class="infoText"><b>Torch Battery 50🪙</b> — Refills torch to 100%, fighting off night mode. Press <b>6</b>.</div></div>
+    </div>
+    <div class="infoSection">
+      <h3>✏️ Level Editor</h3>
+      <div class="infoRow"><div class="infoIcon">🟥</div><div class="infoText">Place platforms by tapping the canvas. Choose color, width. Use <b>Block Pattern</b> mode to stamp repeating rows.</div></div>
+      <div class="infoRow"><div class="infoIcon">💾</div><div class="infoText">Press <b>Save</b> to store your level. A toast confirmation appears. Press <b>▶ Play</b> to test immediately.</div></div>
+      <div class="infoRow"><div class="infoIcon">🚪</div><div class="infoText">Press <b>Exit</b> in the editor toolbar to return to the main menu at any time.</div></div>
+      <div class="infoRow"><div class="infoIcon">🔁</div><div class="infoText">Enable <b>Repeatable</b> on saved levels in Custom Levels to have them appear randomly during endless play.</div></div>
     </div>
     <button id="closeInfo" onclick="closeInfoScreen()">Got it!</button>
   </div>
@@ -641,11 +693,11 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <div id="shopPanel">
       <h2>🛍️ SHOP</h2>
       <div id="shopCoins"></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">Stack up to 20. On-demand super-jump. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">20 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">💫 Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. 5 uses. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">20 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">On-demand super-jump. 3 uses. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">20 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">💫 Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. 3 uses. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">20 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Automatically activates when falling. No button needed.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Big head! Pull platform above. 5 uses. Key 4 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! Lava surge won't fire until 100 platforms behind. 1 use.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">150 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Big head! Pull platform above. 5 uses. Key 3 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! 1 use. Key 4.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">150 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Keeps the light on and night mode at bay.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">50 🪙</button></div>
       <button id="closeShop" onclick="closeShop()">▶ Resume</button>
     </div>
@@ -676,9 +728,13 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
         <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🐷 PIGGY</div>
         <div id="vrPiggy" style="font-size:16px;font-weight:bold;color:#ffb3c6;">0</div>
       </div>
+	  <div id="vrPenaltyMsg" style="color:#ff9944; font-size:10px; text-align:center; margin-top:5px; margin-bottom:5px;"></div>
     </div>
     <div class="goButtons" id="vrRpsRow">
       <button class="goBtn" style="background:linear-gradient(135deg,#4aaa44,#267022);color:#fff;" onclick="openVersusRPS()">🎲 RPS — Save Coins!</button>
+    </div>
+	<div class="goButtons" id="vrAdRow" style="display:none;">
+      <button class="goBtn" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;" onclick="openGameOverAd()">📺 Watch Ad — Reclaim Piggy Coins!</button>
     </div>
     <div class="goButtons">
       <button class="vrBtn" style="background:#9c27b0;color:#fff;" onclick="startVersus()">⚔️ Rematch</button>
@@ -816,7 +872,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <div id="editorScreen" class="screen">
   <div id="editorToolbar">
     <label>Color:</label>
-    <select id="edColor"><option value="red">🟥 Red</option><option value="blue">🟦 Blue</option><option value="yellow">🟨 Yellow</option><option value="green">🟩 Green</option><option value="purple">🟪 Purple</option></select>
+    <select id="edColor"><option value="red">🟥 Red</option><option value="blue">🟦 Blue</option><option value="yellow">🟨 Yellow</option><option value="green">🟩 Green</option><option value="purple">🟪 Purple</option><option value="ice">❄️ Ice</option></select>
     <label>Width:</label>
     <button class="edBtn" onclick="stepEdWidth(-50)">◀</button>
     <select id="edWidth" onchange="snapEdWidth()" style="width:58px">
@@ -841,8 +897,11 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <button class="edBtn" onclick="exportLevel()">📤 Export</button>
     <button class="edBtn" id="bpToggleBtn" onclick="bpToggle()" title="Block Pattern mode" style="border-color:#27ae60;color:#7af07a;">🧱 Pattern</button>
     <button class="edBtn" onclick="edToggleZoom()" title="Cycle zoom" style="margin-left:auto;">🔍</button>
+    <button class="edBtn" onclick="goToMenu()" style="border-color:#ff6644;color:#ff9977;margin-left:6px;" title="Exit editor and return to main menu">🚪 Exit</button>
     <span style="color:#444;font-size:9px;" id="edClickHint">Click=place</span>
   </div>
+  <!-- Save toast notification (above canvas) -->
+  <div id="edSaveToast">✅ Custom Level Saved!</div>
 
   <!-- BLOCK PATTERN PANEL -->
   <div id="bpPanel">
@@ -938,7 +997,7 @@ const PARACHUTE_DEPLOY_PX = 300; // auto-deploy after falling this many px
 const PURPLE_DEATH_MS = 1200;
 
 // Cheat reset penalty
-const PENALTY = 40;
+const PENALTY = 30;
 
 // ═══════════════════════════════════════════
 // ██ STALAGMITE CONFIG ██
@@ -980,7 +1039,7 @@ function getStalagmiteConfig(){
 }
 // ═══════════════════════════════════════════
 
-const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af'};
+const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af', ice:'#a0f0ff'};
 const TRICK_TYPES = ['flip','backflip','tilt'];
 
 function lavaSpeedForLevel(lvl) {
@@ -989,6 +1048,62 @@ function lavaSpeedForLevel(lvl) {
   return Math.min(pps, LAVA_MAX_PPS);
 }
 
+window.VOLCANO_EPISODES = [
+  { id:0, name:"Krakatoa (Anak Krakatau)", location:"Indonesia", elevation:157, targetPlats:157, lat:-6.102, lng:105.423, rescue:"🌊 Sunda Strait Relic", summary:"Amidst the restless waves, salvage a siren gem that records tsunamis.", connection:"Gem sings frequency of next volcano: Taal.", completed:false, unlocked:true },
+  { id:1, name:"Wizard Island (Crater Lake)", location:"Oregon, USA", elevation:188, targetPlats:188, lat:42.942, lng:-122.108, rescue:"🌀 Mazama Anchor", summary:"Rescue the submerged anchor from the collapsed caldera lake.", connection:"Anchor stabilizes final artifact matrix. AWAKEN VOLCANO RUSH.", completed:false, unlocked:false },
+  { id:2, name:"Taal Volcano", location:"Philippines", elevation:311, targetPlats:311, lat:14.002, lng:120.993, rescue:"🪶 Lake Crater Pearl", summary:"Dive into the acidic lake, recover a pearl that neutralises volcanic gas.", connection:"Pearl shows star chart pointing to Mt. Fuji.", completed:false, unlocked:false },
+  { id:3, name:"Santorini Caldera", location:"Greece", elevation:367, targetPlats:367, lat:36.393, lng:25.461, rescue:"🧩 Pumice Anchor", summary:"Inside the flooded caldera, retrieve the anchor that stabilises tectonic pressure readings.", connection:"Anchor core reveals map to Mt. Vesuvius’ forgotten sister – Campi Flegrei.", completed:false, unlocked:false },
+  { id:4, name:"Campi Flegrei", location:"Italy", elevation:458, targetPlats:458, lat:40.827, lng:14.139, rescue:"🔥 Phlegraean Ember", summary:"Evade hydrothermal vents to snatch an ember that pulses with geothermal rhythm.", connection:"Ember activates the Volcanic Chronometer base. Next clue: Merapi.", completed:false, unlocked:false },
+  { id:5, name:"Campi Flegrei Deep Zone", location:"Italy", elevation:458, targetPlats:458, lat:40.827, lng:14.139, rescue:"🔔 Solfatara Harmonic Bell", summary:"Inside the bradyseismic dome, retrieve bell that hums at magma frequency.", connection:"Harmonics neutralise Etna's unrest, draw final rescue: Erta Ale.", completed:false, unlocked:false },
+  { id:6, name:"Erta Ale", location:"Ethiopia", elevation:613, targetPlats:613, lat:13.600, lng:40.667, rescue:"🌋 Gate of Hell Serpent", summary:"Walk the permanent lava lake edge – rescue molten serpent artifact.", connection:"Serpent sets off chain completion → unlock secret volcano: Ol Doinyo Lengai.", completed:false, unlocked:false },
+  { id:7, name:"Cerro Negro", location:"Nicaragua", elevation:728, targetPlats:728, lat:12.505, lng:-86.702, rescue:"🖤 Black Sand Sigil", summary:"Ash-covered slab with magnetic anomalies. Decode the sigil under eclipse.", connection:"Sigil triggers chain reaction – next artifact at Cotopaxi.", completed:false, unlocked:false },
+  { id:8, name:"Lake Toba", location:"Indonesia", elevation:905, targetPlats:905, lat:2.684, lng:98.876, rescue:"🧬 Youngest Toba Tuff", summary:"Recover a silica-rich sample to understand the supereruption pattern.", connection:"Sync with Chronometer leading to Campi Flegrei's deep chamber.", completed:false, unlocked:false },
+  { id:9, name:"Soufrière Hills", location:"Montserrat", elevation:915, targetPlats:915, lat:16.720, lng:-62.180, rescue:"🏚️ Plymouth Relic", summary:"From buried city, take the clock that stopped at the moment of collapse.", connection:"Clock synchronizes with all collected items. Final volcano activation: Mount Spurr.", completed:false, unlocked:false },
+  { id:10, name:"Stromboli", location:"Italy", elevation:924, targetPlats:924, lat:38.789, lng:15.213, rescue:"🌋 Tephra Compass", summary:"Ride the rhythmic explosions and retrieve a compass that points to the next volcanic weak point.", connection:"Compass needle spins toward Santorini.", completed:false, unlocked:false },
+  { id:11, name:"Sakurajima", location:"Kyushu, Japan", elevation:1117, targetPlats:1117, lat:31.580, lng:130.650, rescue:"🎐 Showa Vent Bell", summary:"Hang from a rope above explosive vent to collect a resonant bell.", connection:"Bell's ring predicts next location: Aso.", completed:false, unlocked:false },
+  { id:12, name:"Kīlauea", location:"Hawaiʻi, USA", elevation:1247, targetPlats:1247, lat:19.407, lng:-155.283, rescue:"🌺 Pele’s Tear", summary:"Walk on active lava crust to take Pele’s Tear, a solidified droplet with mythical power.", connection:"Tear resonates with Mauna Loa’s caldera.", completed:false, unlocked:false },
+  { id:13, name:"Mount Vesuvius", location:"Italy", elevation:1281, targetPlats:1281, lat:40.822, lng:14.426, rescue:"⚱️ Ash-Covered Scroll", summary:"Deep inside Pompeii's shadow, recover a scroll that predicts the next supereruption. Decode the first glyph of the Chronometer.", connection:"Scroll reveals the Obsidian Key location – Mount Etna.", completed:false, unlocked:false },
+  { id:14, name:"Mount Pelée", location:"Martinique", elevation:1397, targetPlats:1397, lat:14.816, lng:-61.166, rescue:"⚠️ 1902 Nuée Ardente Pearl", summary:"Retrieve a petrified witness of the deadliest pyroclastic flow of 20th century.", connection:"Pearl unlocks the SUPERCHAIN mission.", completed:false, unlocked:false },
+  { id:15, name:"Mount Unzen", location:"Japan", elevation:1486, targetPlats:1486, lat:32.758, lng:130.296, rescue:"🏯 Hizen Chrono-Katana", summary:"Retrieve the volcano-forged blade that seals eruptive pressure.", connection:"Katana makes glider escape successful. Tutorial mode complete. Volcano World Map unlocked.", completed:false, unlocked:false },
+  { id:16, name:"Hekla", location:"Iceland", elevation:1488, targetPlats:1488, lat:63.992, lng:-19.666, rescue:"🏛️ Gateway Rune", summary:"Activate the runic gate inside Hekla's magma duct.", connection:"Rune powers the artifact fusion. Piton de la Fournaise beacon lit.", completed:false, unlocked:false },
+  { id:17, name:"Mount Aso", location:"Japan", elevation:1592, targetPlats:1592, lat:32.884, lng:131.104, rescue:"🐉 Kyushu Caldera Eye", summary:"Descend into the world’s largest caldera; retrieve the obsidian dragon eye.", connection:"Eye unlocks path to Rinjani.", completed:false, unlocked:false },
+  { id:18, name:"Eyjafjallajökull", location:"Iceland", elevation:1666, targetPlats:1666, lat:63.619, lng:-19.616, rescue:"❄️ Jökulhlaup Stone", summary:"Chase glacial outburst to capture a prismatic stone.", connection:"Stone assembles the Chronometer — one component left at Hekla.", completed:false, unlocked:false },
+  { id:19, name:"Cleveland", location:"Aleutian Islands, USA", elevation:1730, targetPlats:1730, lat:52.822, lng:-169.944, rescue:"🪽 Chuginadak Talisman", summary:"From the remote island volcano, rescue a talisman that protects from ashfall.", connection:"Talisman unlocks the volcano rush finale scenario.", completed:false, unlocked:false },
+  { id:20, name:"Mount Bromo", location:"East Java, Indonesia", elevation:2329, targetPlats:2329, lat:-7.942, lng:112.953, rescue:"🎭 Kasada Cosmic Mask", summary:"During the annual ceremony inside the crater, claim the mask of eruption deity.", connection:"Mask unites all 37 artifacts to stabilize the Ring of Fire. Side quest: Teide.", completed:false, unlocked:false },
+  { id:21, name:"Mount Sinabung", location:"Sumatra, Indonesia", elevation:2460, targetPlats:2460, lat:3.170, lng:98.392, rescue:"🪶 Karo Heritage Feather", summary:"Amid pyroclastic flow debris, recover an heirloom that calms magma convection.", connection:"Feather binds with Oracle Stone – next Ruapehu.", completed:false, unlocked:false },
+  { id:22, name:"Mayon", location:"Philippines", elevation:2463, targetPlats:2463, lat:13.258, lng:123.685, rescue:"📿 Perfect Cone Amulet", summary:"Scout the perfect cone’s gully to retrieve amulet used by ancient priests.", connection:"Amulet reveals the last part – the Chronometer’s dial.", completed:false, unlocked:false },
+  { id:23, name:"Mount St. Helens", location:"Washington, USA", elevation:2549, targetPlats:2549, lat:46.200, lng:-122.186, rescue:"💥 Spirit Lake Helix", summary:"Inside the blast zone, recover a twisted metal helix that absorbs volcanic shockwaves.", connection:"Helix vibration matches Nevado del Ruiz.", completed:false, unlocked:false },
+  { id:24, name:"Piton de la Fournaise", location:"Réunion, France", elevation:2632, targetPlats:2632, lat:-21.244, lng:55.708, rescue:"🔥 Solar Pyroxene", summary:"At dawn inside the active crater, catch the first light reflecting a rare mineral.", connection:"Pyroxene provides energy. Final missing link: Mount Rainier.", completed:false, unlocked:false },
+  { id:25, name:"Mount Garibaldi", location:"Canada", elevation:2678, targetPlats:2678, lat:49.850, lng:-123.000, rescue:"🪶 Squamish Rescue Amulet", summary:"Recover the sea-to-sky artifact before the caldera collapses.", connection:"Amulet triggers escape sequence: exit volcano on glider.", completed:false, unlocked:false },
+  { id:26, name:"Mount Ruapehu", location:"New Zealand", elevation:2797, targetPlats:2797, lat:-39.280, lng:175.570, rescue:"🧊 Crater Lake Chrono", summary:"Submerge into the warm acidic lake and bring out a timed quartz.", connection:"Quartz stabilizes tectonic drift → puzzle solved at Mount Nyiragongo.", completed:false, unlocked:false },
+  { id:27, name:"Yellowstone Caldera", location:"USA", elevation:2805, targetPlats:2805, lat:44.430, lng:-110.670, rescue:"🌋 Superplume Emblem", summary:"Mission: retrieve geo-seismic stabilizer before the caldera inflates too far.", connection:"Emblem warns of eruption in-coming → race to Toba.", completed:false, unlocked:false },
+  { id:28, name:"Villarrica", location:"Chile", elevation:2847, targetPlats:2847, lat:-39.420, lng:-71.930, rescue:"🌋 Rucapillán Idol", summary:"Rescue the Mapuche guardian idol stolen by seismic cracks.", connection:"Idol opens path to Mount St. Helens.", completed:false, unlocked:false },
+  { id:29, name:"Mount Tambora", location:"Indonesia", elevation:2850, targetPlats:2850, lat:-8.250, lng:118.000, rescue:"💀 1815 Chrono-Ash", summary:"Unearth a sealed time capsule from the year without summer.", connection:"Ash reveals final piece location – Eyjafjallajökull.", completed:false, unlocked:false },
+  { id:30, name:"Bezymianny", location:"Kamchatka, Russia", elevation:2882, targetPlats:2882, lat:55.978, lng:160.587, rescue:"⚡ 1956 Lateral Key", summary:"Recover the key from the infamous sector collapse.", connection:"All 45+ components converge → Chronometer prototype operational.", completed:false, unlocked:false },
+  { id:31, name:"Mount Merapi", location:"Java, Indonesia", elevation:2910, targetPlats:2910, lat:-7.540, lng:110.446, rescue:"🐉 Dragon’s Tephra", summary:"Ancient Javanese temple inside the crater. Rescue the artifact of the 'fire keeper'.", connection:"Tephra combines with ember to reveal Kraken’s caldera.", completed:false, unlocked:false },
+  { id:32, name:"Ol Doinyo Lengai", location:"Tanzania", elevation:2962, targetPlats:2962, lat:-2.764, lng:35.914, rescue:"🧂 Natrocarbonatite Star", summary:"Recover the only cooled carbonate lava fragment from the 'Mountain of God'.", connection:"Star reveals global eruption timeline. Next: Colima's hidden chamber.", completed:false, unlocked:false },
+  { id:33, name:"Mount Merbabu", location:"Indonesia", elevation:3145, targetPlats:3145, lat:-7.454, lng:110.440, rescue:"📜 Lontar Codex", summary:"Lost manuscript inside the volcanic crater that predicts volcano's heartbeat.", connection:"Codex sequence leads to Mount Sinabung recovery.", completed:false, unlocked:false },
+  { id:34, name:"Mount Etna", location:"Sicily, Italy", elevation:3357, targetPlats:3357, lat:37.751, lng:14.994, rescue:"🗝️ Obsidian Key", summary:"Descend into a lava tube guarded by pyroclastic traps. The key unlocks a sealed cinder cone.", connection:"Unlocks the entrance to Stromboli’s ‘Tephra Vault’.", completed:false, unlocked:false },
+  { id:35, name:"Mount Spurr", location:"Alaska, USA", elevation:3374, targetPlats:3374, lat:61.299, lng:-152.251, rescue:"❄️ Tephra Winter Orb", summary:"Retrieve an ash-globule that carries subarctic volcanic history.", connection:"Orb reveals final test chamber: Bezymianny.", completed:false, unlocked:false },
+  { id:36, name:"Koryaksky", location:"Russia", elevation:3456, targetPlats:3456, lat:53.321, lng:158.712, rescue:"⛰️ Avacha Petroglyph", summary:"Ancient rock art inside the crater holds the last instruction.", connection:"All artifacts assembled → The Great Eruption prediction system activates.", completed:false, unlocked:false },
+  { id:37, name:"Nyiragongo", location:"DR Congo", elevation:3470, targetPlats:3470, lat:-1.520, lng:29.250, rescue:"💎 Lava Lake Prism", summary:"Descend into the world's most fluid lava lake and extract a prism.", connection:"Prism refracts the next artifact: Mayon's Bicol Amulet.", completed:false, unlocked:false },
+  { id:38, name:"Teide", location:"Tenerife, Spain", elevation:3715, targetPlats:3715, lat:28.273, lng:-16.641, rescue:"🌵 Guanche Eruption Glyph", summary:"Inside the lava tubes of Teide, recover a glyph that predicts lateral blast.", connection:"Glyph triggers final 'volcano rush' escape sequence.", completed:false, unlocked:false },
+  { id:39, name:"Mount Rinjani", location:"Indonesia", elevation:3726, targetPlats:3726, lat:-8.412, lng:116.458, rescue:"🌙 Segara Anak Crescent", summary:"Swim the crater lake to retrieve a moon-shaped crystal forged by ancient eruption.", connection:"Crystal reflects the trail to Mt. Tambora.", completed:false, unlocked:false },
+  { id:40, name:"Fuego", location:"Guatemala", elevation:3763, targetPlats:3763, lat:14.473, lng:-90.880, rescue:"🔥 Blood of the Volcano", summary:"During a strombolian outburst, capture a piece of incandescent spatter that holds memory.", connection:"Blood sample leads to Cerro Negro’s vent.", completed:false, unlocked:false },
+  { id:41, name:"Mount Fuji", location:"Honshu, Japan", elevation:3776, targetPlats:3776, lat:35.361, lng:138.727, rescue:"🌸 Blossom of the Sleeping Giant", summary:"Inside a hidden subglacial shrine, fetch the sacred cherry branch artifact.", connection:"Branch awakens map of Pacific Ring of Fire — next stop: Kīlauea.", completed:false, unlocked:false },
+  { id:42, name:"Mount Erebus", location:"Antarctica", elevation:3794, targetPlats:3794, lat:-77.530, lng:167.170, rescue:"❄️ Phonolite Bell", summary:"On the icy slopes, extract a unique lava fragment that rings at subzero temperatures.", connection:"Final artifact: The Chronometer is fully restored.", completed:false, unlocked:false },
+  { id:43, name:"Colima", location:"Mexico", elevation:3850, targetPlats:3850, lat:19.514, lng:-103.620, rescue:"⚙️ Fuego Ancestral Gear", summary:"Deep in the scoria tunnels, retrieve an ancient volcanic gear wheel.", connection:"Gear activates Chronometer final phase → mt. Merbabu clue.", completed:false, unlocked:false },
+  { id:44, name:"Mount Cameroon", location:"Cameroon", elevation:4040, targetPlats:4040, lat:4.217, lng:9.170, rescue:"🐚 Mongo Ma Bell", summary:"Obtain the ceremonial bell of the mountain god to calm seismic shift.", connection:"Bell starts final countdown: escape all volcanos with glider.", completed:false, unlocked:false },
+  { id:45, name:"Mauna Loa", location:"Hawaiʻi, USA", elevation:4169, targetPlats:4169, lat:19.475, lng:-155.608, rescue:"🏔️ Mokuʻāweoweo Core", summary:"Retrieve a meteorite-like core from the summit pit, forged by ancient eruptions.", connection:"Core reveals a sequence to decode the magma cipher at Popocatépetl.", completed:false, unlocked:false },
+  { id:46, name:"Mauna Kea", location:"Hawaiʻi, USA", elevation:4205, targetPlats:4205, lat:19.820, lng:-155.468, rescue:"🔭 Poliʻahu Scepter", summary:"Recover the snow goddess’ scepter – last artifact needed to complete the rescue catalogue.", connection:"Scepter completes the 'Volcano Sage' quest → new game plus endings.", completed:false, unlocked:false },
+  { id:47, name:"Mount Shasta", location:"California, USA", elevation:4317, targetPlats:4317, lat:41.409, lng:-122.195, rescue:"✨ Lemurian Crystal", summary:"Legendary crystal within the volcano's spiritual chambers. Bring it to prevent global supervolcano chain.", connection:"Crystal powers the final escape glider – Volcano Rush endgame begins.", completed:false, unlocked:false },
+  { id:48, name:"Mount Rainier", location:"Washington, USA", elevation:4392, targetPlats:4392, lat:46.853, lng:-121.760, rescue:"💧 Nisqually Tear", summary:"Under ice caves, get a droplet that carries ancient volcanic memory.", connection:"Tear completes the Chronometer prototype. Warning: supervolcano Yellowstone stirs.", completed:false, unlocked:false },
+  { id:49, name:"Nevado del Ruiz", location:"Colombia", elevation:5321, targetPlats:5321, lat:4.892, lng:-75.324, rescue:"⛰️ La Cumbre Turquoise", summary:"Retrieve a hardened lava turquoise from the 1985 lahar zone.", connection:"Turquoise fits into Chronometer’s third slot – trigger: Sakurajima.", completed:false, unlocked:false },
+  { id:50, name:"Popocatépetl", location:"Mexico", elevation:5426, targetPlats:5426, lat:19.023, lng:-98.622, rescue:"🪶 Quetzalcoatl's Chalice", summary:"Climb the smoking colossus — rescue a pre-Aztec chalice full of crystallized magma.", connection:"Chalice's glyph aligns with Fuego volcano.", completed:false, unlocked:false },
+  { id:51, name:"Cotopaxi", location:"Ecuador", elevation:5897, targetPlats:5897, lat:-0.677, lng:-78.436, rescue:"🧊 Glacial Pyroclast", summary:"Ice meets fire: capture a rare frozen pyroclast inside the glacier cap.", connection:"Shows coordinates to Villarrica.", completed:false, unlocked:false },
+  { id:52, name:"Chimborazo", location:"Ecuador", elevation:6263, targetPlats:6263, lat:-1.469, lng:-78.817, rescue:"🌍 Earth's Core Echo", summary:"Retrieve a magnetic sample from the inner crater, closest point to the stars.", connection:"Echo sends signal to Mauna Kea's final sanctuary.", completed:false, unlocked:false }
+];
+
 // ═══ DB ═══
 const DB_KEY = 'fil_v4';
 let db = {users:{}, piggyBank:0};
@@ -996,7 +1111,15 @@ function dbLoad(){try{const s=localStorage.getItem(DB_KEY);if(s)db=JSON.parse(s)
 function dbSave(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
 function hashPass(p){let h=0;for(let i=0;i<p.length;i++){h=((h<<5)-h)+p.charCodeAt(i);h|=0;}return h.toString(36);}
 function getUser(u){return db.users[u.toLowerCase()];}
-function saveUser(u,data){db.users[u.toLowerCase()]=data;dbSave();}
+function saveUser(u, data){
+  db.users[u.toLowerCase()] = data;
+  dbSave();
+  // If this is the current user, update the session and currentUser
+  if (currentUser && currentUser.name === u) {
+    currentUser.ud = data;
+    localStorage.setItem('fil_current_user', JSON.stringify({ name: u, ud: data }));
+  }
+}
 function allUsers(){return Object.keys(db.users);}
 
 // ═══ CUSTOM LEVELS ═══
@@ -1006,6 +1129,10 @@ function levelsLoad(){try{const s=localStorage.getItem(LEVELS_KEY);if(s)savedLev
 function levelsSave(){try{localStorage.setItem(LEVELS_KEY,JSON.stringify(savedLevels));}catch(e){}}
 
 let currentUser = null, infoReturnScreen = 'startScreen', currentMode = 'play', endPlatform = 1000;
+Object.defineProperty(window, 'endPlatform', {
+  get: function() { return endPlatform; },
+  set: function(val) { endPlatform = val; }
+});
 let gameMode = 'climber'; // 'climber' = see 10 above; 'frogger' = blind mode
 let customPlayPlatforms = null; // set when "Play" is hit in editor
 let isMobile = ('ontouchstart' in window);
@@ -1014,16 +1141,19 @@ let isMobile = ('ontouchstart' in window);
 function guestLogin(){
   const guestData = {passHash:'', coins: parseInt(localStorage.getItem('guestCoins')||0), bestScore: parseInt(localStorage.getItem('guestBest')||0), bestLevel:1, jumpBoosts:0, parachutes:0, isGuest:true};
   currentUser = {name:'Guest', ud: guestData};
+  localStorage.setItem('fil_current_user', JSON.stringify(currentUser));
   document.getElementById('welcomeUser').textContent = 'Playing as Guest (stats saved locally)';
   document.getElementById('bestScoreDisplay').textContent = guestData.bestScore>0 ? '🏆 Best: Platform '+guestData.bestScore : 'No runs yet!';
   updatePiggyDisplay();
   loadSettings();
   showScreen('startScreen');
+  ud.hideTutorial = false;
 }
 function saveGuestProgress(){
-  if(!currentUser||!currentUser.ud.isGuest)return;
-  localStorage.setItem('guestCoins', currentUser.ud.coins||0);
-  localStorage.setItem('guestBest', currentUser.ud.bestScore||0);
+  if(!currentUser || !currentUser.ud.isGuest) return;
+  localStorage.setItem('guestCoins', currentUser.ud.coins || 0);
+  localStorage.setItem('guestBest', currentUser.ud.bestScore || 0);
+  localStorage.setItem('fil_current_user', JSON.stringify(currentUser));
 }
 
 // ═══ Auth ═══
@@ -1053,11 +1183,13 @@ function doSignup(){
 function loginAs(name,ud){
   if(!ud.jumpBoosts)ud.jumpBoosts=0;if(!ud.parachutes)ud.parachutes=0;if(!ud.piggyBank)ud.piggyBank=0;
   currentUser={name,ud};renderSavedUsers();
+  localStorage.setItem('fil_current_user', JSON.stringify({name, ud}));
   document.getElementById('welcomeUser').textContent='Welcome back, '+name+'! 👋';
   document.getElementById('bestScoreDisplay').textContent=ud.bestScore>0?'🏆 Best: Platform '+ud.bestScore+' (Level '+ud.bestLevel+')':'No runs yet!';
   updatePiggyDisplay();
   loadSettings();
   showScreen('startScreen');
+  ud.hideTutorial = false;
 }
 function renderSavedUsers(){
   const el=document.getElementById('savedUsers');el.innerHTML='';
@@ -1079,15 +1211,35 @@ function updatePiggyDisplay(){
 
 // ═══ Screen routing ═══
 function showScreen(id, from){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(id==='infoScreen')infoReturnScreen=from==='game'?'gameScreen':'startScreen';
+     if(id === 'infoScreen') {
+    // start info demo if canvas exists
+    setTimeout(() => {
+      if (document.getElementById('infoScreen').classList.contains('active')) {
+        if (!infoDemoCanvas) initInfoDemo();
+        startInfoDemo();
+      }
+    }, 100);
+  }
   if(id==='startScreen'){initStartLava();updatePiggyDisplay();}
   if(id==='gameScreen')resizeGame();
   if(id==='editorScreen'){resizeEditor(); bpRenderTray();}
   if(id==='customLevelsScreen')renderCustomLevelsList();
   if(id==='piggyScreen'){document.getElementById('piggyAmt').textContent=getPiggyBank()+' coins saved';hideMiniPanels();clearTimeout(reactTimer);updatePiggyCards();}
+    // Stop info demo when leaving info screen
+  if (id !== 'infoScreen' && infoDemoActive) {
+    stopInfoDemo();
+  }
   updateBgMusic();
+  
+  // --- START/STOP DEMO ---
+  if(id === 'startScreen') {
+    setTimeout(() => { if (document.getElementById('startScreen').classList.contains('active')) startDemo(); updateDemoVisibility();}, 50);
+  } else {
+    if (demoActive) stopDemo();
+  }
 }
 function closeInfoScreen(){
   showScreen(infoReturnScreen);
@@ -1096,6 +1248,8 @@ function closeInfoScreen(){
 
 // ═══ GAME VARIABLES ═══
 let gW, gH, coins, level, platformCount, bigHead, jumpBoosts, skipUses, bookUses, booksOwned, parachutes;
+// Expose platformCount to story mode (and any other global scripts)
+window.getPlatformCount = function() { return platformCount; };
 let parachuteActive=false, parachuteDeployY=null;
 let movingPlatformAbove=null, bookPlatformPulled=false;
 let bookElevatorState='idle'; // 'idle' | 'descending' | 'riding' | 'ascending'
@@ -1103,7 +1257,7 @@ let bookElevatorSpeed=0;
 let platforms, player, camera, lavaWorldY, lavaPixPerFrame, initialTimer, initialTimerActive;
 let purpleTimer=0, onPurple=false, purplePlatform=null;
 let gameRunning=false, paused=false, animId, lastTime=null;
-let anim={active:false,type:'none',angle:0,funnyFace:false,tiltDir:1,progress:0};
+let anim = {active:false, type:'none', angle:0, funnyFace:false, tiltDir:1, progress:0, vine: null};
 const keys={};
 let touchMoveVX=0, touchActive=false, touchStartX=0, touchStartY=0, touchIsMove=false, touchMoveX=0;
 let lavaSurgeCooldown=0, lavaSurgeFlash=0;
@@ -1113,7 +1267,7 @@ let lavaShips = 0;           // owned count
 let lavaShipActive = false;  // animation in progress
 let lavaShipTimer = 0;       // animation timer (ms)
 const LAVA_SHIP_DURATION = 1800; // ms for launch + ascent
-let lavaShipSurgeThreshold = 15; // current surge threshold in platforms (normally 15, 100 during ship power)
+let lavaShipSurgeThreshold = 25; // current surge threshold in platforms (normally 15, 100 during ship power)
 
 // ── STALAGMITES ──
 let stalagmites = [];  // [{x, platY, phase:'hanging'|'wobbling'|'falling', wobbleT, fallT, fallVY, worldY, platIndex}]
@@ -1142,13 +1296,14 @@ function resizeGame(){
 
 function getZoomedCanvasW(){ return gW / currentZoom; }
 function getZoomedCanvasH(){ return gH / currentZoom; }
-
 function makePlatform(y, index, prevX, prevW){
   const lvl = Math.floor(index / 100) + 1;
   const t = Math.min((lvl - 1) / 20, 1);
-  let color; const r = Math.random();
-  if(r < 0.05) color='purple'; else if(r < 0.15) color='green';
-  else color = ['red','blue','yellow'][Math.floor(Math.random()*3)];
+    let color; const r = Math.random();
+  if (r < 0.05) color = 'purple';
+  else if (r < 0.13) color = 'green';    // 8%
+  else if (r < 0.21) color = 'ice';      // 8%
+  else color = ['red','blue','yellow'][Math.floor(Math.random() * 3)];
   // Platform width narrows with level.
   // lvl 1: base ~0.38 (full), random adds up to 0.18 → max ~0.56 of world width
   // lvl 10: base ~0.25, random up to 0.12
@@ -1173,24 +1328,40 @@ function makePlatform(y, index, prevX, prevW){
   const tipChance = lvl <= 1 ? 0.025 : lvl <= 2 ? 0.04 : lvl >= 10 ? 0.10 : 0.04 + (lvl-2)*0.007;
   const canTip = color !== 'purple' && !isGap && Math.random() < tipChance;
   const tipDir = Math.random() < 0.5 ? 'left' : 'right'; // which end is the pivot
+
+  // --- VINE: randomly spawn on gap platforms (30% chance) ---
+  let vine = null;
+  if (isGap && Math.random() < 0.3) {
+    const positions = ['left', 'center', 'right'];
+    const pos = positions[Math.floor(Math.random() * positions.length)];
+    vine = { active: true, position: pos, swingAngle: 0, swingSpeed: 0, launched: false };
+  }
+
   return {x, y: y - extraGap, w, h: PLATFORM_H, color, index, hasCoin: color==='green',
     origY: y - extraGap, pulled: false, isGap,
-    tipping: canTip ? 'idle' : null,  // null | 'idle' | 'shaking' | 'falling' | 'landed'
-    tipDir,          // 'left' pivot stays, right end falls — or vice versa
-    tipAngle: 0,     // current rotation angle (radians)
-    tipTimer: canTip ? 3000 + Math.random() * 8000 : 0,  // ← here, once, only here
-    tipShakeTimer: 0,// shake duration
-    tipPivotX: 0, tipPivotY: 0  // set when falling begins
+    tipping: canTip ? 'idle' : null,
+    tipDir,
+    tipAngle: 0,
+    tipTimer: canTip ? 3000 + Math.random() * 8000 : 0,
+    tipShakeTimer: 0,
+    tipPivotX: 0, tipPivotY: 0,
+    iceUsed: false,
+    vine: vine   // <-- added vine property
   };
 }
-
 function getCustomLevelChunk(startIndex){
-  // returns a chunk of platforms from an enabled saved level, or null
-  const enabled = savedLevels.filter(l=>l.enabled&&l.platforms&&l.platforms.length>0);
+  const enabled = savedLevels.filter(l=>l.enabled && l.platforms && l.platforms.length > 0);
   if(!enabled.length) return null;
-  // pick random enabled level
   const lvl = enabled[Math.floor(Math.random() * enabled.length)];
-  return lvl.platforms.map((p, i) => ({...p, index: startIndex + i, hasCoin: p.color==='green', origY: p.y, pulled: false, isGap: false}));
+  return lvl.platforms.map((p, i) => ({
+    ...p,
+    index: startIndex + i,
+    hasCoin: p.color === 'green',
+    origY: p.y,
+    pulled: false,
+    isGap: false,
+    iceUsed: false      // 👈 add this line
+  }));
 }
 
 // Track when to inject custom chunks
@@ -1235,8 +1406,16 @@ function initGame(){
   nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
   bgAnimations = [];
 
-  if(customPlayPlatforms && customPlayPlatforms.length > 0){
-    platforms = customPlayPlatforms.map((p,i)=>({...p, index:i, hasCoin:p.color==='green', origY:p.y, pulled:false, isGap:false}));
+if(customPlayPlatforms && customPlayPlatforms.length > 0){
+  platforms = customPlayPlatforms.map((p,i) => ({
+    ...p,
+    index: i,
+    hasCoin: p.color === 'green',
+    origY: p.y,
+    pulled: false,
+    isGap: false,
+    iceUsed: p.iceUsed !== undefined ? p.iceUsed : false  // 👈 preserve or default false
+  }));
     let last = platforms[platforms.length - 1];
     while(platforms.length < 30){ const np = makePlatform(last.y - PLATFORM_GAP, last.index + 1, last.x, last.w); platforms.push(np); last = np; }
   } else {
@@ -1263,7 +1442,7 @@ function initGame(){
   lavaSurgeFlash = 0;
   lavaShipActive = false;
   lavaShipTimer = 0;
-  lavaShipSurgeThreshold = 15;
+  lavaShipSurgeThreshold = 25;
   stalagmites = [];
   stalagmiteHiss = [];
   torchBattery = 100;
@@ -1298,9 +1477,9 @@ function updateHUD(){
   const js=document.getElementById('jumpStock'),ss=document.getElementById('skipStock'),bks=document.getElementById('bookStock'),cs=document.getElementById('chuteStock'),shs=document.getElementById('shipStock');
   if(js) js.textContent = jumpBoosts > 0 ? '✅ ' + jumpBoosts + '/20 (key 1)' : '';
   if(ss) ss.textContent = skipUses > 0 ? '✅ ' + skipUses + ' left (key 2)' : '';
-  if(bks) bks.textContent = bookUses > 0 ? '✅ ' + bookUses + ' uses (key 4)' : booksOwned > 0 ? 'Owned' : '';
+  if(bks) bks.textContent = bookUses > 0 ? '✅ ' + bookUses + ' uses (key 3)' : booksOwned > 0 ? 'Owned' : '';
   if(cs) cs.textContent = parachutes > 0 ? '✅ ' + parachutes + ' owned (auto)' : '';
-  if(shs) shs.textContent = lavaShips > 0 ? '✅ ' + lavaShips + ' ready (key 5)' : lavaShipActive ? '🚀 LAUNCHING!' : '';
+  if(shs) shs.textContent = lavaShips > 0 ? '✅ ' + lavaShips + ' ready (key 4)' : lavaShipActive ? '🚀 LAUNCHING!' : '';
   updateWheelDial();
 }
 
@@ -1399,8 +1578,8 @@ document.addEventListener('keydown', e => {
   if(e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault(); if(dialPendingFire){fireSelectedSlot();}else{const slot=DIAL_SLOTS[selectedSlot];if(slot&&slot.getCount()>0)fireSelectedSlot();}}
   if(e.code==='Digit1'){e.preventDefault(); jump(false, true);}
   if(e.code==='Digit2'){e.preventDefault(); activateSkip();}
-  if(e.code==='Digit4'){e.preventDefault(); activateBook();}
-  if(e.code==='Digit5'){e.preventDefault(); activateLavaShip();}
+  if(e.code==='Digit3'){e.preventDefault(); activateBook();}
+  if(e.code==='Digit4'){e.preventDefault(); activateLavaShip();}
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyW','KeyD','KeyS'].includes(e.code)) e.preventDefault();
 });
 document.addEventListener('keyup', e => {
@@ -1408,6 +1587,21 @@ document.addEventListener('keyup', e => {
                      document.getElementById('gameScreen').classList.contains('active');
   if(gameActive) keys[e.code] = false;
   else { Object.keys(keys).forEach(k => keys[k] = false); } // clear all keys when leaving game
+});
+document.addEventListener('keydown', function(e){
+  // Ignore typing in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key.toLowerCase() === 's') {
+    const shop = document.getElementById('shopOverlay');
+    if (!shop) return;
+
+    if (shop.classList.contains('open')) {
+      closeShop();
+    } else {
+      openShop();
+    }
+  }
 });
 
 // ═══ TOUCH ═══
@@ -1561,11 +1755,75 @@ function checkParachute(){
 
 function updateAnim(dt){
   if(!anim.active) return;
-  anim.progress += dt * 0.055; if(anim.progress > 1) anim.progress = 1;
-  if(anim.type==='flip') anim.angle = anim.progress * Math.PI * 2;
-  else if(anim.type==='backflip') anim.angle = -anim.progress * Math.PI * 2;
-  else if(anim.type==='tilt') anim.angle = anim.tiltDir * (35 * Math.PI/180) * Math.sin(anim.progress * Math.PI);
-  if(player.onGround){anim.active = false; anim.angle = 0; anim.funnyFace = false;}
+  
+  const now = performance.now();
+  
+  if(anim.type === 'vineSwing'){
+    const swing = anim.vine;
+    if(!swing.launched){
+      // Swing phase (0 to 1)
+      const elapsed = Math.min(1, (now - swing.swingStartTime) / swing.swingDuration);
+      // Sine easing: starts slow, speeds up to bottom (elapsed=0.5), then slows
+      const swingAngle = Math.sin(elapsed * Math.PI) * Math.PI; // 0 to PI to 0
+      // Player position follows arc with radius = 40px
+      const radius = 40;
+      const offsetX = Math.sin(swingAngle) * radius;
+      const offsetY = Math.cos(swingAngle) * radius - radius;
+      player.x = swing.anchorX - player.w/2 + offsetX;
+      player.y = swing.anchorY + offsetY;
+      // Rotate player based on swing angle
+      anim.angle = swingAngle * 0.8; // slight tilt
+      anim.progress = elapsed;
+      
+      if(elapsed >= 1){
+        // Start launch phase
+        swing.launched = true;
+        swing.launchStartTime = now;
+        anim.type = 'vineLaunch';
+        anim.progress = 0;
+        // Play launch sound
+        playSound('jump');
+      }
+    }
+  }
+  else if(anim.type === 'vineLaunch'){
+    const launch = anim.vine;
+    const elapsed = Math.min(1, (now - launch.launchStartTime) / launch.launchDuration);
+    // Ease out cubic: slow start, fast end
+    const easeOut = 1 - Math.pow(1 - elapsed, 3);
+    const targetY = launch.startY - (15 * PLATFORM_GAP);
+    player.y = launch.startY + (targetY - launch.startY) * easeOut;
+    player.vy = 0;
+    // Add a flip animation during launch
+    anim.angle = Math.sin(elapsed * Math.PI * 2) * 1.5;
+    anim.funnyFace = true;
+    anim.progress = elapsed;
+    
+    if(elapsed >= 1){
+      // Launch complete, reset animation
+      anim.active = false;
+      anim.type = 'none';
+      anim.angle = 0;
+      anim.vine = null;
+      player.vy = 0;
+      // Small upward boost to finish
+      player.vy = -2;
+      showNotif('🚀 Launched 15 platforms!');
+    }
+  }
+  else {
+    // Existing flip/backflip/tilt handling
+    anim.progress += dt * 0.055;
+    if(anim.progress > 1) anim.progress = 1;
+    if(anim.type === 'flip') anim.angle = anim.progress * Math.PI * 2;
+    else if(anim.type === 'backflip') anim.angle = -anim.progress * Math.PI * 2;
+    else if(anim.type === 'tilt') anim.angle = anim.tiltDir * (35 * Math.PI/180) * Math.sin(anim.progress * Math.PI);
+    if(player.onGround && anim.type !== 'vineSwing' && anim.type !== 'vineLaunch'){
+      anim.active = false;
+      anim.angle = 0;
+      anim.funnyFace = false;
+    }
+  }
 }
 
 function updateTippingPlatforms(dt){
@@ -1951,7 +2209,17 @@ function gameLoop(ts){
           document.getElementById('parachuteHUD').style.opacity = '0';
           if(onPurple){onPurple=false;purpleTimer=0;purplePlatform=null;document.getElementById('purpleWarning').style.opacity='0';}
           if(p.color==='green' && p.hasCoin){p.hasCoin=false;coins+=20;playSound('coin');showNotif('+20 coins! 🪙');updateHUD();}
-          if(p.index > player.currentPlatformIndex){
+// Ice platform: lowers lava by 2 platform gaps
+if (p.color === 'ice' && !p.iceUsed) {
+  p.iceUsed = true;
+  const drop = 2 * PLATFORM_GAP;
+  const oldY = lavaWorldY;
+  lavaWorldY = lavaWorldY + drop;
+  console.log(`ICE PLATFORM: lavaY from ${oldY} to ${lavaWorldY} (${drop}px down)`);
+  showNotif('❄️ Ice platform! Lava drops by 2 levels!');
+  playSound('buy');
+  updateHUD();
+}          if(p.index > player.currentPlatformIndex){
             player.currentPlatformIndex = p.index; platformCount = p.index;
             player.lowestLandedY = p.y;
             const nl = Math.floor(platformCount / 100) + 1;
@@ -1969,6 +2237,53 @@ function gameLoop(ts){
       }
     }
   }
+  
+ // VINE COLLISION & SWING ANIMATION
+if (!anim.active || anim.type !== 'vineSwing') { // only check if not already swinging
+  for (let p of platforms) {
+    if (!p.isGap || !p.vine || !p.vine.active || p.vine.launched) continue;
+    
+    let vineWorldX = p.x;
+    if (p.vine.position === 'center') vineWorldX = p.x + p.w/2;
+    else if (p.vine.position === 'right') vineWorldX = p.x + p.w - 10;
+    else vineWorldX = p.x + 10;
+    const vineWorldY = p.y + p.h;
+    const playerCenterX = player.x + player.w/2;
+    const playerCenterY = player.y + player.h/2;
+    const dx = playerCenterX - vineWorldX;
+    const dy = playerCenterY - vineWorldY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    
+    if (dist < 20) { // collision radius
+      // Start vine swing animation
+      p.vine.active = false;  // prevent re-trigger
+      p.vine.launched = true;
+      
+      // Store vine data in anim
+      anim.active = true;
+      anim.type = 'vineSwing';
+      anim.progress = 0;
+      anim.angle = 0;
+      anim.funnyFace = true;
+      anim.vine = {
+        anchorX: vineWorldX,
+        anchorY: vineWorldY,
+        startY: player.y,
+        targetLaunchY: player.y - (15 * PLATFORM_GAP), // 15 platforms up
+        swingDuration: 600,   // ms
+        launchDuration: 400,  // ms
+        swingStartTime: performance.now(),
+        launched: false
+      };
+      // Disable normal movement and gravity during swing
+      player.vx = 0;
+      player.vy = 0;
+      player.onGround = false;
+      showNotif('🌿 Grab the vine!');
+      break;
+    }
+  }
+}
 
   // Tipped ramp landing
   for(const p of platforms){
@@ -2073,8 +2388,8 @@ function gameLoop(ts){
     lavaSurgeCooldown = platformCount + SURGE_PLATFORM_COOLDOWN;
     lavaSurgeFlash = 20;
     // Reset ship threshold back to normal after surge fires
-    if(lavaShipSurgeThreshold !== 15){
-      lavaShipSurgeThreshold = 15;
+    if(lavaShipSurgeThreshold !== 25){
+      lavaShipSurgeThreshold = 25;
       showNotif('🚀 Ship surge triggered — back to normal!');
     } else {
       showNotif('🌋 LAVA SURGE! You climbed too far!');
@@ -2104,32 +2419,49 @@ function gameLoop(ts){
 
   // ── STALAGMITE UPDATE ──
   if(stalagmitesEnabled) updateStalagmites(dt);
+// spawn more platforms — Climber mode: need 10 above player, Frogger: need 2 above player
+const isFrogger = (typeof gameMode !== 'undefined' && gameMode === 'frogger');
+const minAbove = isFrogger ? 2 : 10;
 
-  // spawn more platforms — Climber mode: ensure 10 platforms always visible above
-  // Frogger mode: standard 50 lookahead
-  const isFrogger = (typeof gameMode !== 'undefined' && gameMode === 'frogger');
-  const minPlatformsAhead = isFrogger ? 50 : 60;
-  // Frogger: cap how many platforms appear ABOVE player's head at any time
-  while(platforms.length < minPlatformsAhead && platforms.length < 80){
-    if(isFrogger && platforms.filter(p => p.y < player.y).length >= 2) break;
-    const last = platforms[platforms.length - 1];
-    if(last.index >= nextCustomChunkAt){
-      const chunk = getCustomLevelChunk(last.index + 1);
-      if(chunk && chunk.length > 0){
-        // offset chunk Y to connect to last platform
-        const dy = last.y - PLATFORM_GAP - chunk[0].y;
-        chunk.forEach(p => { p.y += dy; p.origY += dy; });
-        platforms.push(...chunk);
-        nextCustomChunkAt = platforms[platforms.length-1].index + 100 + Math.floor(Math.random() * 150);
-        // check if repeatable
-        const enabled = savedLevels.filter(l => l.enabled && l.repeatable);
-        if(enabled.length > 0) nextCustomChunkAt = platforms[platforms.length-1].index + 50 + Math.floor(Math.random() * 80);
-        continue;
-      } else { nextCustomChunkAt += 200; }
+
+let loopCount = 0;
+while (platforms.filter(p => p.y < player.y).length < minAbove && platforms.length < 200) {
+  loopCount++;
+  const aboveCount = platforms.filter(p => p.y < player.y).length;
+  
+  const last = platforms[platforms.length - 1];
+  
+  let chunkAdded = false;
+  if(last.index >= nextCustomChunkAt){
+    const chunk = getCustomLevelChunk(last.index + 1);
+    if(chunk && chunk.length > 0){
+      console.log(`[GEN] Custom chunk found! ${chunk.length} platforms`);
+      const dy = last.y - PLATFORM_GAP - chunk[0].y;
+      chunk.forEach(p => { p.y += dy; p.origY += dy; });
+      platforms.push(...chunk);
+      
+      nextCustomChunkAt = platforms[platforms.length-1].index + 100 + Math.floor(Math.random() * 150);
+      const enabled = savedLevels.filter(l => l.enabled && l.repeatable);
+      if(enabled.length > 0) {
+        nextCustomChunkAt = platforms[platforms.length-1].index + 50 + Math.floor(Math.random() * 80);
+        
+      }
+      chunkAdded = true;
+    } else { 
+      
+      nextCustomChunkAt += 200; 
     }
+  }
+  if (!chunkAdded) {
     const np = makePlatform(last.y - PLATFORM_GAP, last.index + 1, last.x, last.w);
     platforms.push(np);
+    
   }
+}
+
+// After the while loop, add this to track when you're near platform 190
+if (platformCount > 180 && platformCount < 200) {
+}
   // Keep platforms within view PLUS 50 platforms worth of history below player
   // so lava and platforms stay visible when falling back down
   // In this world: smaller Y = higher up, larger Y = lower (below player)
@@ -2302,14 +2634,14 @@ function drawPlatform(p, sx, sy){
   if(p.pulled){gCtx.strokeStyle='#ffe066';gCtx.lineWidth=2;gCtx.beginPath();gCtx.roundRect(sx+1,sy+1,p.w-2,p.h-2,5);gCtx.stroke();}
   gCtx.fillStyle='rgba(255,255,255,0.16)'; gCtx.beginPath(); gCtx.roundRect(sx+3,sy+3,p.w-6,4,2); gCtx.fill();
   if(p.isGap){
-  const below = platforms.find(q => q.index === p.index - 1);
-  if(below){
-    const bsx = below.x - camera.x;
-    const bsy = below.y - camera.y;
-    gCtx.fillStyle='rgba(255,255,100,0.5)';gCtx.font='9px Arial';gCtx.textAlign='center';
-    gCtx.fillText('⬆ GAP',bsx+below.w/2,bsy-5);
+    const below = platforms.find(q => q.index === p.index - 1);
+    if(below){
+      const bsx = below.x - camera.x;
+      const bsy = below.y - camera.y;
+      gCtx.fillStyle='rgba(255,255,100,0.5)';gCtx.font='9px Arial';gCtx.textAlign='center';
+      gCtx.fillText('⬆ GAP',bsx+below.w/2,bsy-5);
+    }
   }
-}
   if(p.color==='green' && p.hasCoin){
     const bob = Math.sin(Date.now()*0.005+p.x)*3;
     gCtx.fillStyle='#FFD700';gCtx.beginPath();gCtx.arc(sx+p.w/2,sy-12+bob,9,0,Math.PI*2);gCtx.fill();
@@ -2320,6 +2652,53 @@ function drawPlatform(p, sx, sy){
     gCtx.fillStyle='rgba(255,80,255,0.35)';
     for(let i=0;i<3;i++){gCtx.beginPath();gCtx.arc(sx+p.w*0.2+i*p.w*0.3,sy+PLATFORM_H/2,5,0,Math.PI*2);gCtx.fill();}
     gCtx.font='10px Arial';gCtx.textAlign='center';gCtx.fillText('💀',sx+p.w/2,sy+13);
+  }
+  if(p.color === 'ice'){
+    gCtx.fillStyle = 'rgba(255,255,255,0.5)';
+    gCtx.font = '12px Arial';
+    gCtx.textAlign = 'center';
+    gCtx.fillText('❄️', sx + p.w / 2, sy + p.h / 2);
+  }
+
+  // ---------- VINE DRAWING ----------
+  if(p.isGap && p.vine && p.vine.active){
+    // Determine vine anchor point (world coordinates then camera-relative)
+    let vineWorldX = p.x;
+    if(p.vine.position === 'center') vineWorldX = p.x + p.w/2;
+    else if(p.vine.position === 'right') vineWorldX = p.x + p.w - 5;
+    else vineWorldX = p.x + 5; // left
+    const vineWorldY = p.y + p.h;
+    const sxVine = vineWorldX - camera.x;
+    const syVine = vineWorldY - camera.y;
+    
+    gCtx.save();
+    gCtx.beginPath();
+    gCtx.moveTo(sxVine, syVine);
+    if(p.vine.launched){
+      // Swing animation
+      if(p.vine.swingAngle < 180){
+        p.vine.swingAngle += (p.vine.swingSpeed || 8);
+      }
+      const rad = p.vine.swingAngle * Math.PI / 180;
+      const cpX = sxVine + Math.sin(rad) * 20;
+      const cpY = syVine + Math.cos(rad) * 30;
+      gCtx.quadraticCurveTo(cpX, cpY, sxVine + Math.sin(rad*2)*15, syVine + 50);
+    } else {
+      // Idle sway
+      const sway = Math.sin(Date.now() * 0.005) * 3;
+      const cpX = sxVine + sway;
+      const cpY = syVine + 25;
+      gCtx.quadraticCurveTo(cpX, cpY, sxVine + sway * 0.5, syVine + 40);
+    }
+    gCtx.strokeStyle = '#5d3a1a';
+    gCtx.lineWidth = 3;
+    gCtx.stroke();
+    // Leaves
+    gCtx.fillStyle = '#2e7d32';
+    gCtx.beginPath();
+    gCtx.ellipse(sxVine, syVine + 10, 4, 6, 0, 0, Math.PI*2);
+    gCtx.fill();
+    gCtx.restore();
   }
 }
 
@@ -2385,7 +2764,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
       const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
     }
     // Reset all power-ups
-    jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; booksOwned = 0; bigHead = false; lavaShips = 0; lavaShipActive = false; lavaShipSurgeThreshold = 15;
+    jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; booksOwned = 0; bigHead = false; lavaShips = 0; lavaShipActive = false; lavaShipSurgeThreshold = 25;
     if(currentUser){
       currentUser.ud.jumpBoosts = 0;
       currentUser.ud.parachutes = 0;
@@ -2476,19 +2855,30 @@ function doRPS(){
   else if((pl===0&&cp===2)||(pl===1&&cp===0)||(pl===2&&cp===1)) result='win';
   else result='lose';
   const resEl=document.getElementById('rpsResult');
-  if(result==='win'||result==='draw'){
-    // Pull coins from piggy back into wallet
-    const pig=getPiggyBank();
-    coins=pig;
-    setPiggyBank(0);
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
-    rpsWonCoins=coins;
-    resEl.textContent=result==='win'?'🎉 You WIN! Coins returned!':'🤝 Draw! Coins returned!';
-    resEl.style.color=result==='win'?'#44ff88':'#ffe066';
-    // Update both displays
-    const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
-    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=0;
-  } else {
+if(result==='win'||result==='draw'){
+  const pig = getPiggyBank();
+  // Move coins from piggy to wallet immediately (no animation yet)
+  coins = pig;
+  setPiggyBank(0);
+  if(currentUser) currentUser.ud.coins = coins;
+  dbSave();
+  rpsWonCoins = coins;
+
+  resEl.textContent = result==='win' ? '🎉 You WIN! Coins returned!' : '🤝 Draw! Coins returned!';
+  resEl.style.color = '#44ff88';
+
+  // Go to start screen and animate there
+  goToMenu();
+  setTimeout(() => {
+    animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', pig, () => {
+      const gcEl = document.getElementById('goCoins');
+      if(gcEl) gcEl.textContent = coins;
+      const gpEl = document.getElementById('goPiggy');
+      if(gpEl) gpEl.textContent = 0;
+      updatePiggyDisplay();
+    });
+  }, 400);
+} else {
     // Coins stay in piggy — nothing to move, already there from death
     resEl.textContent='😬 CPU wins! Coins stay in Piggy Bank.';resEl.style.color='#ff6666';
     piggyAttemptUnlocked=true;
@@ -2507,17 +2897,20 @@ let mathScore=0,mathTotal=3,mathQ=null;
 const MATH_OPS=['+','-','×'];
 function startMathGame(){mathScore=0;piggyAttemptUsed=true;hideMiniPanels();document.getElementById('mathGamePanel').style.display='block';nextMathQ();}
 function nextMathQ(){
-  if(mathScore>=mathTotal){
-    const pig=getPiggyBank();
-    const won=pig;
-    coins+=won;setPiggyBank(0);
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
-    document.getElementById('mathResult').textContent='🎉 Correct x3! You win '+won+' coins from piggy bank!';
-    document.getElementById('mathResult').style.color='#44ff88';
-    document.getElementById('mathSubmit').disabled=true;
-    document.getElementById('mathProgress').textContent='';
-    return;
-  }
+if(mathScore>=mathTotal){
+  const pig = getPiggyBank();
+  coins += pig;
+  setPiggyBank(0);
+  if(currentUser) currentUser.ud.coins = coins;
+  dbSave();
+
+  // Go to start screen and animate
+  showScreen('startScreen');
+  setTimeout(() => {
+    animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', pig, () => updatePiggyDisplay());
+  }, 400);
+  return;
+}
   const op=MATH_OPS[Math.floor(Math.random()*MATH_OPS.length)];
   const a=Math.floor(Math.random()*12)+1,b=Math.floor(Math.random()*12)+1;
   let ans;
@@ -2548,47 +2941,65 @@ document.getElementById('mathInput').addEventListener('keydown',e=>{if(e.key==='
 // ═══ GAME END ═══
 let diedInVersus = false; // tracks whether last death was mid-versus-game
 
-function gameEnd(fromPurple){
-  if(versusMode){endVersus(false,fromPurple?'Burned on purple!':'You burned!');return;}
-  gameRunning=false;cancelAnimationFrame(animId);saveScore();
+function gameEnd(fromPurple) {
+  if (versusMode) {
+    endVersus(false, fromPurple ? 'Burned on purple!' : 'You burned!');
+    return;
+  }
+  gameRunning = false;
+  cancelAnimationFrame(animId);
+  saveScore();
   lastGameWon = false;
 
-  // Move coins to piggy and reset power-ups FIRST so both displays are consistent
-  handleCoinsAndPowerUps('die');
+  // --- DEDUCT 30 COINS (death penalty) ---
+  const penalty = 30;
+  let deducted = Math.min(penalty, coins);
+  if (deducted > 0) {
+    coins -= deducted;
+    if (currentUser) currentUser.ud.coins = coins;
+    showNotif(`💸 You lost ${deducted} coins!`);
+    document.getElementById('penaltyMsg').innerHTML = `💸 Penalty: -${deducted} coins (death penalty)`;
+  } else {
+    document.getElementById('penaltyMsg').innerHTML = '';
+  }
 
-  document.getElementById('purpleWarning').style.opacity='0';
-  document.getElementById('goTitle').textContent=fromPurple?'💀 YOU DIED! (Purple got you)':'💀 YOU DIED!';
-  document.getElementById('goScore').textContent='Platform '+platformCount+' — Level '+level;
-  document.getElementById('penaltyMsg').textContent='';
+  // Move remaining coins to piggy and reset power-ups
+  handleCoinsAndPowerUps('die');   // this will also set coins = 0
 
-  // coins is now 0; piggy holds everything
+  // Update UI
+  document.getElementById('purpleWarning').style.opacity = '0';
+  document.getElementById('goTitle').textContent = fromPurple ? '💀 YOU DIED! (Purple got you)' : '💀 YOU DIED!';
+  document.getElementById('goScore').textContent = 'Platform ' + platformCount + ' — Level ' + level;
+  // (do NOT override penaltyMsg again – it's already set)
+
+  // Coins are now 0; piggy holds everything
   const gcEl = document.getElementById('goCoins');
-  if(gcEl) gcEl.textContent = 0;
-
+  if (gcEl) gcEl.textContent = 0;
   const piggyAmt = getPiggyBank();
   const gpEl = document.getElementById('goPiggy');
-  if(gpEl) gpEl.textContent = piggyAmt;
-  if(gpEl) gpEl.parentElement.style.display = '';
+  if (gpEl) gpEl.textContent = piggyAmt;
+  if (gpEl) gpEl.parentElement.style.display = '';
 
-  // RPS and Ad buttons gate on piggy amount, not wallet (wallet is always 0 now)
+  // RPS and Ad buttons
   const adBtn = document.getElementById('goAdBtn');
-  if(adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+  if (adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
   const rpsBtn = document.getElementById('rpsBtn');
-  if(rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+  if (rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
 
-  // Show Rematch (versus) or Play Again (solo) — mutually exclusive
+  // Show Rematch (versus) or Play Again (solo)
   const rematchBtn = document.getElementById('goRematchBtn');
   const playAgainBtn = document.getElementById('restartBtn');
-  if(diedInVersus){
-    if(rematchBtn) rematchBtn.style.display = 'inline-block';
-    if(playAgainBtn) playAgainBtn.style.display = 'none';
+  if (diedInVersus) {
+    if (rematchBtn) rematchBtn.style.display = 'inline-block';
+    if (playAgainBtn) playAgainBtn.style.display = 'none';
   } else {
-    if(rematchBtn) rematchBtn.style.display = 'none';
-    if(playAgainBtn) playAgainBtn.style.display = 'inline-block';
+    if (rematchBtn) rematchBtn.style.display = 'none';
+    if (playAgainBtn) playAgainBtn.style.display = 'inline-block';
   }
 
   document.getElementById('gameOver').classList.add('show');
 }
+
 // Floor Is Lava v36
 function gameWin() {
   gameRunning = false;
@@ -2602,23 +3013,45 @@ function gameWin() {
   updateHUD();
 
   document.getElementById('goTitle').textContent = '🏆 YOU WIN!';
-  document.getElementById('goScore').textContent = 'All ' + endPlatform + ' platforms! Level ' + level;
+  document.getElementById('goScore').textContent =
+    'All ' + endPlatform + ' platforms! ';
 
   const gcEl = document.getElementById('goCoins');
-  if(gcEl) gcEl.textContent = coins;
+  if (gcEl) gcEl.textContent = coins;
 
   // Hide the piggy display — player keeps their coins
   const gpEl = document.getElementById('goPiggy');
-  if(gpEl) gpEl.parentElement.style.display = 'none';
+  if (gpEl && gpEl.parentElement) gpEl.parentElement.style.display = 'none';
 
   // Hide RPS and Ad buttons — player won, they keep everything
   const adBtn2 = document.getElementById('goAdBtn');
-  if(adBtn2) adBtn2.style.display = 'none';
-  const rpsBtn2 = document.getElementById('rpsBtn');
-  if(rpsBtn2) rpsBtn2.style.display = 'none';
+  if (adBtn2) adBtn2.style.display = 'none';
 
-  document.getElementById('penaltyMsg').textContent = '🎉 Coins & power-ups saved! Play Again to continue.';
-  document.getElementById('gameOver').classList.add('show');
+  const rpsBtn2 = document.getElementById('rpsBtn');
+  if (rpsBtn2) rpsBtn2.style.display = 'none';
+
+  // ✅ Message adapts to mode
+  document.getElementById('penaltyMsg').textContent = versusMode
+    ? '🏆 Victory! Continue your Versus run.'
+    : '🎉 Coins & power-ups saved! Play Again to continue.';
+
+  const gameOverEl = document.getElementById('gameOver');
+  gameOverEl.classList.add('show');
+
+  // ✅ FORCE final button state AFTER everything else
+  requestAnimationFrame(() => {
+    const restartBtn = document.getElementById('restartBtn');
+    const rematchBtn = document.getElementById('goRematchBtn');
+
+    if (versusMode) {
+      if (restartBtn) restartBtn.style.display = 'none';
+      if (rematchBtn) rematchBtn.style.display = 'block';
+    } else {
+      if (restartBtn) restartBtn.style.display = 'block';
+      if (rematchBtn) rematchBtn.style.display = 'none';
+    }
+  });
+
 }
 // Track whether the last game ended in a win so restartGame can carry state over
 
@@ -2672,7 +3105,7 @@ function sellAllPowerUps() {
   bigHead = false;
   lavaShips = 0;
   lavaShipActive = false;
-  lavaShipSurgeThreshold = 15;
+  lavaShipSurgeThreshold = 25;
 
   // 5. Update user profile data and save to localStorage/Database
   if (currentUser) {
@@ -2800,7 +3233,15 @@ function editCustomLevel(i){
 }
 function toggleLevelEnabled(i){savedLevels[i].enabled=!savedLevels[i].enabled;levelsSave();renderCustomLevelsList();}
 function toggleLevelRepeatable(i){savedLevels[i].repeatable=!savedLevels[i].repeatable;levelsSave();renderCustomLevelsList();}
-function playCustomLevel(i){customPlayPlatforms=savedLevels[i].platforms.map((p,j)=>({...p,index:j}));setMode('play');startGame();}
+function playCustomLevel(i){
+  customPlayPlatforms = savedLevels[i].platforms.map((p, j) => ({
+    ...p,
+    index: j,
+    iceUsed: false
+  }));
+  setMode('play');
+  startGame();
+}
 function deleteLevel(i){if(confirm('Delete "'+savedLevels[i].name+'"?')){savedLevels.splice(i,1);levelsSave();renderCustomLevelsList();}}
 function exportSingleLevel(i){
   const data=JSON.stringify(savedLevels[i]);
@@ -3145,15 +3586,24 @@ function saveEditorLevel(){
   const name=document.getElementById('edLevelName').value.trim()||('Level '+(savedLevels.length+1));
   if(!edPlatforms.length){alert('Add platforms first!');return;}
   const sorted=[...edPlatforms].sort((a,b)=>b.y-a.y).map((p,i)=>({...p,index:i}));
-  // If a level with this name already exists, overwrite it
   const existing = savedLevels.findIndex(l => l.name === name);
   if(existing >= 0){
     savedLevels[existing].platforms = sorted;
-    levelsSave(); showNotif('Level "'+name+'" updated! ✏️');
+    levelsSave();
+    showEdSaveToast(name + ' — Updated! ✏️');
   } else {
     savedLevels.push({name,platforms:sorted,enabled:false,repeatable:false});
-    levelsSave(); showNotif('Level "'+name+'" saved!');
+    levelsSave();
+    showEdSaveToast(name + ' — Saved! ✅');
   }
+}
+function showEdSaveToast(msg){
+  const t = document.getElementById('edSaveToast');
+  if(!t) return;
+  t.textContent = '💾 ' + msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
 }
 function editorLoad(){
   if(!edPlatforms.length){alert('Add platforms first!');return;}
@@ -3591,14 +4041,16 @@ let charConfig = {
   torchXf:   0.18,  // torch X fraction of hw
   torchYf:   0.38,  // torch Y fraction of bodyH
   torchRf:   0.17,  // torch radius fraction of hw
+  shirtColor: '#4a9eff' // shirt color
 };
 
-function defaultCharConfig(){
+function defaultCharConfig() {
   return {
-    ph:80, faceWf:1.00, faceHf:0.88, faceR:0.12, faceOffY:0,
-    bodyWf:0.90, bodyHf:0.53, bodyR:4,
-    neckWf:0.60, neckPx:1,
-    torchXf:0.18, torchYf:0.38, torchRf:0.17,
+    ph: 80, faceWf: 1.00, faceHf: 0.88, faceR: 0.12, faceOffY: 0,
+    bodyWf: 0.90, bodyHf: 0.53, bodyR: 4,
+    neckWf: 0.60, neckPx: 1,
+    torchXf: 0.18, torchYf: 0.38, torchRf: 0.17,
+    shirtColor: '#4a9eff'   // 👈 add here too
   };
 }
 
@@ -3629,7 +4081,7 @@ function drawCharacterFromConfig(ctx, cx, cy, hw, cfg, bat, jumping, bigH){
   const cornerR  = Math.min(faceW, faceH) * cfg.faceR;
 
   // ── Body ──
-  ctx.fillStyle = '#4a9eff';
+  ctx.fillStyle = cfg.shirtColor || '#4a9eff';
   const br = Math.min(cfg.bodyR, bodyH / 2, bodyW / 2);
   if(br > 0){
     ctx.beginPath(); ctx.roundRect(bodyLeft, bodyTop, bodyW, bodyH, br); ctx.fill();
@@ -3640,8 +4092,8 @@ function drawCharacterFromConfig(ctx, cx, cy, hw, cfg, bat, jumping, bigH){
   // ── Neck strip ──
   if(cfg.neckWf > 0){
     const neckH = Math.max(1, bodyTop - chinBot + cfg.neckPx);
-    ctx.fillStyle = '#4a9eff';
-    ctx.fillRect(neckLeft, chinBot, neckW, neckH + 1);
+	ctx.fillStyle = cfg.shirtColor || '#4a9eff';
+	ctx.fillRect(neckLeft, chinBot, neckW, neckH + 1);
   }
 
   // ── Torch ──
@@ -3736,7 +4188,7 @@ function drawCharacterNightMode(ctx, cx, cy, hw, cfg, jumping){
 //   120  → drains in 2 minutes    (harder)
 //    60  → drains in 1 minute     (very hard)
 //
-const TORCH_TOTAL_SECONDS = 630; // ← CHANGE THIS NUMBER
+const TORCH_TOTAL_SECONDS = 730; // ← CHANGE THIS NUMBER
 // ─────────────────────────────────────────────────────────────────────
 const TORCH_DRAIN_RATE = 100 / (TORCH_TOTAL_SECONDS * 60); // do not edit this line
 let torchBattery = 100; // 0–100
@@ -3815,6 +4267,7 @@ function defaultSettings(){
     hudSide: 'left',
     hideResetBtn: false,
     charConfig: defaultCharConfig(),
+	showTutorial: true
   };
 }
 
@@ -3827,7 +4280,20 @@ function loadSettings(){
     try{ s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); }catch(e){ s = null; }
   }
   s = Object.assign(defaultSettings(), s || {});
+
   applySettings(s);
+
+  // --- TUTORIAL VISIBILITY (per‑user / guest) ---
+  if (currentUser && currentUser.ud.hideTutorial !== undefined) {
+    showTutorial = !currentUser.ud.hideTutorial;
+  } else if (!currentUser && localStorage.getItem('guest_hide_tutorial') === '1') {
+    showTutorial = false;
+  } else {
+    // fallback to the loaded settings value (default true)
+    showTutorial = s.showTutorial ?? true;
+  }
+  syncToggle('sShowTutorialToggle', showTutorial);
+  updateDemoVisibility();
 }
 
 function saveSettings(){
@@ -3849,6 +4315,7 @@ function captureSettings(){
     hudSide,
     hideResetBtn,
     charConfig: {...charConfig},
+	showTutorial: showTutorial 
   };
 }
 
@@ -3913,6 +4380,13 @@ function applySettings(s){
   // Character config
   charConfig = Object.assign(defaultCharConfig(), s.charConfig || {});
   syncCharSliders();
+
+  // --- TUTORIAL VISIBILITY (from settings) ---
+  if (s.showTutorial !== undefined) {
+    showTutorial = s.showTutorial;
+    syncToggle('sShowTutorialToggle', showTutorial);
+    updateDemoVisibility();
+  }
 }
 
 function syncToggle(id, on){
@@ -3960,6 +4434,44 @@ function applyHideReset(){
   if(rb) rb.style.display = hideResetBtn ? 'none' : '';
 }
 
+let showTutorial = true; // default
+
+function toggleShowTutorial() {
+  showTutorial = !showTutorial;
+  syncToggle('sShowTutorialToggle', showTutorial);
+  saveSettings();
+  updateDemoVisibility();
+}
+
+function updateDemoVisibility() {
+  const demoContainer = document.getElementById('demoContainer');
+  if (!demoContainer) return;
+  if (showTutorial && currentUser && !currentUser.ud.hideTutorial) {
+    demoContainer.style.display = 'block';
+  } else if (showTutorial && !currentUser) {
+    demoContainer.style.display = 'block';
+  } else {
+    demoContainer.style.display = 'none';
+  }
+}
+
+// Called when user clicks the X button
+function hideTutorialPermanently() {
+  if (currentUser) {
+    currentUser.ud.hideTutorial = true;
+    dbSave();
+    // Also update the settings toggle to reflect "off"
+    showTutorial = false;
+    syncToggle('sShowTutorialToggle', false);
+  } else {
+    // Guest: store in localStorage
+    localStorage.setItem('guest_hide_tutorial', '1');
+    showTutorial = false;
+    syncToggle('sShowTutorialToggle', false);
+  }
+  updateDemoVisibility();
+}
+
 // ── Character editor (inside settings panel) ──────────────────
 let charPreviewJumping = false;
 let charPreviewT = 0;
@@ -3979,6 +4491,7 @@ const CHAR_SLIDER_MAP = [
   ['cTorchXf', 'torchXf',   v=>parseFloat(v),        v=>v.toFixed(2)],
   ['cTorchYf', 'torchYf',   v=>parseFloat(v),        v=>v.toFixed(2)],
   ['cTorchRf', 'torchRf',   v=>parseFloat(v),        v=>v.toFixed(2)],
+  ['cShirtColor', 'shirtColor', v=>v,                v=>v] ,
 ];
 
 function syncCharSliders(){
@@ -4277,6 +4790,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(zi !== -1) zoomPresetIndex = zi;
 });
 
+const closeDemoBtn = document.getElementById('closeDemoBtn');
+if (closeDemoBtn) closeDemoBtn.onclick = (e) => {
+  e.preventDefault();
+  hideTutorialPermanently();
+};
+
 // ══════════════════════════════════════════════
 // POWER DIAL
 // ══════════════════════════════════════════════
@@ -4549,38 +5068,70 @@ if(!bot){return;}
     respawnTimer=120;showNotif(bot.name+' respawned!');
   }
 }
-function endVersus(won,reason){
-  gameRunning=false;cancelAnimationFrame(animId);versusMode=false;saveScore();
+function endVersus(won, reason) {
+  gameRunning = false;
+  cancelAnimationFrame(animId);
+  versusMode = false;
+  saveScore();
   document.getElementById('versusHUD').classList.remove('show');
 
   // Track whether this was a versus death so gameOver screen shows Rematch
   diedInVersus = !won;
 
-  // Apply the same coin/power-up rules as single player:
-  // Win → keep everything. Loss → coins to piggy, power-ups reset.
-  if(won){
+  let penaltyMsgText = '';
+
+  if (won) {
     handleCoinsAndPowerUps('win');
   } else {
-    handleCoinsAndPowerUps('die');
+    // Deduct 30 coins from current wallet (lost forever, not to piggy)
+    const penalty = 30;
+    const deducted = Math.min(penalty, coins);
+    if (deducted > 0) {
+      coins -= deducted;
+      if (currentUser) currentUser.ud.coins = coins;
+      showNotif(`💸 You lost ${deducted} coins!`);
+      penaltyMsgText = `💸 Penalty: -${deducted} coins (death penalty)`;
+    } else {
+      penaltyMsgText = `💸 Penalty: 0 coins deducted`;
+    }
+    // Move remaining coins to piggy and reset power-ups
+    handleCoinsAndPowerUps('die', true);
   }
 
-  const el=document.getElementById('versusResult');el.style.display='flex';el.classList.add('show');
-  document.getElementById('vrTitle').textContent=won?'YOU WIN!':'YOU LOST!';
-  document.getElementById('vrTitle').style.color=won?'#ffe066':'#ff4444';
-  let desc=reason+'\n\n';
-  bots.forEach(b=>{desc+=b.name+': platform '+b.platIndex+(b.eliminated?' ☠️':' running')+'\n';});
-  desc+='\nYou: platform '+platformCount;
-  document.getElementById('vrDesc').textContent=desc;
+  const el = document.getElementById('versusResult');
+  el.style.display = 'flex';
+  el.classList.add('show');
+  document.getElementById('vrTitle').textContent = won ? 'YOU WIN!' : 'YOU LOST!';
+  document.getElementById('vrTitle').style.color = won ? '#ffe066' : '#ff4444';
+  
+  // Build description: replace the old "You burned!" with the penalty message
+  let desc = '';
+  if (!won && penaltyMsgText) {
+    desc = penaltyMsgText + '\n\n';
+  } else {
+    desc = reason + '\n\n';
+  }
+  
+  bots.forEach(b => {
+    desc += b.name + ': platform ' + b.platIndex + (b.eliminated ? ' ☠️' : ' running') + '\n';
+  });
+  desc += '\nYou: platform ' + platformCount;
+  
+  document.getElementById('vrDesc').textContent = desc;
 
-  // Populate coin displays — after die path: coins=0, piggy has the amount
-  const vc=document.getElementById('vrCoins');if(vc)vc.textContent=coins;
-  const vp=document.getElementById('vrPiggy');if(vp)vp.textContent=getPiggyBank();
+  // Populate coin displays
+  const vc = document.getElementById('vrCoins');
+  if (vc) vc.textContent = coins;
+  const vp = document.getElementById('vrPiggy');
+  if (vp) vp.textContent = getPiggyBank();
 
-  // RPS only if player lost AND piggy has coins to fight for
-  const rpsRow=document.getElementById('vrRpsRow');
-  if(rpsRow) rpsRow.style.display=(!won && getPiggyBank()>0)?'flex':'none';
+  // Show RPS and Ad buttons only if player lost AND piggy bank has coins
+  const showButtons = (!won && getPiggyBank() > 0);
+  const rpsRow = document.getElementById('vrRpsRow');
+  if (rpsRow) rpsRow.style.display = showButtons ? 'flex' : 'none';
+  const adRow = document.getElementById('vrAdRow');
+  if (adRow) adRow.style.display = showButtons ? 'flex' : 'none';
 }
-
 function openVersusRPS(){
   const vr=document.getElementById('versusResult');if(vr){vr.style.display='none';vr.classList.remove('show');}
   // Reuse the standard RPS overlay — it's already in the DOM
@@ -4785,6 +5336,7 @@ let adFromGameOver=false;
 let adFromRpsLoss=false;
 let lastGameWon=false; // set true by gameWin(), cleared by restartGame()/goToMenu()/gameEnd()
 
+
 function openGameOverAd(){
   // After death, coins are 0 — they're in the piggy. This ad reclaims them from piggy.
   const pig=getPiggyBank();
@@ -4819,18 +5371,7 @@ function finishAd(){
   const amt=adCoinsAtRisk;
   adCoinsAtRisk=0;
 
-  if(adFromGameOver){
-    // From game-over Watch Ad — reclaim coins from piggy back to wallet, go to menu
-    adFromGameOver=false;
-    coins=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
-    showNotif('📺 Ad watched! Coins reclaimed!');
-    // Update the death screen displays before going to menu
-    const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
-    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=0;
-    goToMenu();
-
-  } else if(adFromRpsLoss){
+  if(adFromRpsLoss){
     // From RPS loss Watch Ad — reclaim piggy coins to wallet, go to menu
     adFromRpsLoss=false;
     coins=amt;
@@ -4852,7 +5393,18 @@ function finishAd(){
     if(currentUser){document.getElementById('bestScoreDisplay').textContent=currentUser.ud.bestScore>0?'🏆 Best: Platform '+currentUser.ud.bestScore+' (Level '+currentUser.ud.bestLevel+')':'No runs yet!';}
     setTimeout(()=>animateCoinTransfer('piggyBankDisplay','startMyCoinsBox',amt,()=>updatePiggyDisplay()),400);
 
-  } else {
+	} else if(adFromGameOver){
+	  adFromGameOver = false;
+	  coins = amt;
+	  if(currentUser) currentUser.ud.coins = coins;
+	  dbSave();
+	  showNotif('📺 Ad watched! Coins reclaimed!');
+	  // Go to start screen, then animate
+	  goToMenu();  // this shows startScreen and resets overlays
+	  setTimeout(() => {
+		animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', amt, () => updatePiggyDisplay());
+	  }, 400);
+	}  else {
     // Legacy fallback
     coins+=amt;
     if(currentUser){currentUser.ud.coins=coins;dbSave();}
@@ -4919,6 +5471,313 @@ function openRpsLossAd(){
   },1000);
 }
 
+// ----- DEMO ANIMATION (start screen interactive moves) -----
+let demoAnimFrame = null;
+let demoStateInterval = null;
+let demoCurrentState = 0;
+let demoStateStartTime = 0;
+let demoCanvas = null;
+let demoCtx = null;
+let demoActive = false;
+
+const DEMO_STATES = [
+  { name: "idle", keyHint: "✨ Idle", moveX: 0, moveY: 0, powerGlow: false, extra: null },
+  { name: "moveRight", keyHint: "➡️ Move Right (→)", moveX: 12, moveY: 0, powerGlow: false, extra: "→" },
+  { name: "moveLeft", keyHint: "⬅️ Move Left (←)", moveX: -12, moveY: 0, powerGlow: false, extra: "←" },
+  { name: "jump", keyHint: "Space = Jump", moveX: 0, moveY: -18, powerGlow: false, extra: "Space" },
+  { name: "halfJump", keyHint: "⬇️+Space = Half jump", moveX: 0, moveY: -8, powerGlow: false, extra: "⬇️+Space" },
+  { name: "power", keyHint: "1-4 use power | ⬆️=wheel", moveX: 2, moveY: -4, powerGlow: true, extra: "⭐ POWER" },
+  { name: "power", keyHint: "⬆️ = use selected power", moveX: 2, moveY: -4, powerGlow: true, extra: "⬆️" }
+];
+
+function initDemoAnimation() {
+  demoCanvas = document.getElementById("demoCanvas");
+  if (!demoCanvas) return;
+  demoCtx = demoCanvas.getContext("2d");
+  resizeDemoCanvas();
+  window.addEventListener("resize", () => { if (demoCanvas) resizeDemoCanvas(); });
+}
+
+function resizeDemoCanvas() {
+  if (!demoCanvas) return;
+  const container = demoCanvas.parentElement;
+  let targetWidth = Math.min(400, (container ? container.clientWidth - 20 : 380));
+  demoCanvas.width = targetWidth;
+  demoCanvas.height = 150;
+  if (demoActive) drawDemoFrame();
+}
+
+function startDemo() {
+  if (demoActive) stopDemo();
+  if (!demoCanvas) initDemoAnimation();
+  if (!demoCanvas) return;
+  demoActive = true;
+  demoCurrentState = 0;
+  demoStateStartTime = performance.now();
+  if (demoStateInterval) clearInterval(demoStateInterval);
+  demoStateInterval = setInterval(() => {
+    if (!demoActive) return;
+    demoCurrentState = (demoCurrentState + 1) % DEMO_STATES.length;
+    demoStateStartTime = performance.now();
+  }, 2200);
+  function drawLoop() {
+    if (!demoActive) return;
+    drawDemoFrame();
+    demoAnimFrame = requestAnimationFrame(drawLoop);
+  }
+  drawLoop();
+  drawDemoFrame();
+}
+
+function stopDemo() {
+  demoActive = false;
+  if (demoStateInterval) { clearInterval(demoStateInterval); demoStateInterval = null; }
+  if (demoAnimFrame) { cancelAnimationFrame(demoAnimFrame); demoAnimFrame = null; }
+}
+
+function drawDemoFrame() {
+  if (!demoCtx || !demoCanvas) return;
+  const w = demoCanvas.width, h = demoCanvas.height;
+  demoCtx.clearRect(0, 0, w, h);
+  // Background gradient
+  const grad = demoCtx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#0d1020");
+  grad.addColorStop(1, "#1a1a3e");
+  demoCtx.fillStyle = grad;
+  demoCtx.fillRect(0, 0, w, h);
+  
+  // Draw platform
+  const platY = h - 28;
+  const platW = w * 0.68;
+  const platX = (w - platW) / 2;
+  demoCtx.fillStyle = "#4a5fd4";
+  demoCtx.shadowBlur = 0;
+  demoCtx.beginPath(); demoCtx.roundRect(platX, platY, platW, 10, 6); demoCtx.fill();
+  demoCtx.fillStyle = "#7a9eff";
+  demoCtx.beginPath(); demoCtx.roundRect(platX+3, platY+2, platW-6, 4, 3); demoCtx.fill();
+  
+  // State timing progress (0..1)
+  let elapsed = (performance.now() - demoStateStartTime) / 2200;
+  let t = Math.min(1, Math.max(0, elapsed));
+  let state = DEMO_STATES[demoCurrentState];
+  let offsetX = 0, offsetY = 0;
+  let powerFX = false;
+  
+  if (state.name === "moveRight") {
+    let prog = t < 0.5 ? t*2 : 2 - t*2;
+    offsetX = 10 * prog;
+  } else if (state.name === "moveLeft") {
+    let prog = t < 0.5 ? t*2 : 2 - t*2;
+    offsetX = -10 * prog;
+  } else if (state.name === "jump") {
+    let arc = Math.sin(t * Math.PI);
+    offsetY = -18 * arc;
+    offsetX = 0;
+  } else if (state.name === "halfJump") {
+    let arc = Math.sin(t * Math.PI);
+    offsetY = -8 * arc;
+  } else if (state.name === "power") {
+    let wiggle = Math.sin(t * Math.PI * 2) * 2;
+    offsetX = wiggle * 0.8;
+    offsetY = -4 + Math.abs(Math.sin(t * Math.PI)) * 2;
+    powerFX = (t > 0.2 && t < 0.8);
+  }
+  
+  // --- DECLARE CHARACTER POSITION EARLY (fixes the ReferenceError) ---
+  let charCenterX = w/2 + offsetX;
+  let charCenterY = platY - 28 + offsetY;
+  
+  // Draw character (use existing drawCharacterFromConfig if available)
+  if (typeof drawCharacterFromConfig === "function") {
+    demoCtx.save();
+    drawCharacterFromConfig(demoCtx, charCenterX, charCenterY, 40, charConfig || {ph:80,faceWf:1,faceHf:0.88,faceR:0.12,faceOffY:0,bodyWf:0.9,bodyHf:0.53,bodyR:4,neckWf:0.6,neckPx:1,torchXf:0.18,torchYf:0.38,torchRf:0.17,shirtColor:'#4a9eff'}, 100, false, false);
+    demoCtx.restore();
+  } else {
+    // fallback simple character
+    demoCtx.fillStyle = "#f0c27f";
+    demoCtx.beginPath(); demoCtx.arc(charCenterX, charCenterY-10, 16, 0, Math.PI*2); demoCtx.fill();
+    demoCtx.fillStyle = "#4a9eff";
+    demoCtx.fillRect(charCenterX-12, charCenterY-2, 24, 24);
+  }
+  
+  // Power effect star/glow
+  if (powerFX) {
+    demoCtx.save();
+    demoCtx.shadowBlur = 12;
+    demoCtx.shadowColor = "#ffaa44";
+    demoCtx.fillStyle = "#FFD966";
+    for (let i=0;i<3;i++) {
+      let angle = performance.now()*0.01 + i*2;
+      let sx = charCenterX + Math.sin(angle)*12;
+      let sy = charCenterY - 18 + Math.cos(angle*0.7)*8;
+      demoCtx.beginPath(); demoCtx.arc(sx, sy, 5, 0, Math.PI*2); demoCtx.fill();
+    }
+    demoCtx.font = "bold 18px Arial";
+    demoCtx.fillStyle = "#fff066";
+    demoCtx.shadowBlur = 8;
+    demoCtx.fillText("⚡", charCenterX-6, charCenterY-22);
+    demoCtx.restore();
+  }
+  
+  // Draw key hint on canvas
+  demoCtx.font = "bold 10px 'Segoe UI'";
+  demoCtx.fillStyle = "#ffe066";
+  demoCtx.shadowBlur = 0;
+  demoCtx.fillText(state.keyHint, 8, 18);
+  
+  if (state.extra) {
+    demoCtx.font = "12px monospace";
+    demoCtx.fillStyle = "#aad4ff";
+    demoCtx.fillText(state.extra, w-32, 22);
+  }
+  
+  // Arrow indicators for controls
+  if (state.name === "moveRight") {
+    demoCtx.fillStyle = "#ffaa66";
+    demoCtx.fillText("➡️", charCenterX+18, charCenterY-10);
+  } else if (state.name === "moveLeft") {
+    demoCtx.fillStyle = "#ffaa66";
+    demoCtx.fillText("⬅️", charCenterX-28, charCenterY-10);
+  } else if (state.name === "jump") {
+    demoCtx.fillStyle = "#88ff88";
+    demoCtx.fillText("Space JUMP", charCenterX-28, charCenterY-32);
+  } else if (state.name === "halfJump") {
+    demoCtx.fillStyle = "#88ccff";
+    demoCtx.fillText("⬇️+Space", charCenterX-28, charCenterY-28);
+  } else if (state.name === "power") {
+    demoCtx.fillStyle = "#ffaa44";
+    demoCtx.fillText("1-4=use power", charCenterX+8, charCenterY-34);
+  }
+}
+
+
+// ----- INFO SCREEN MINI DEMO (reusing the same animation logic) -----
+let infoDemoActive = false;
+let infoDemoCanvas = null;
+let infoDemoCtx = null;
+let infoDemoCurrentState = 0;
+let infoDemoStateStartTime = 0;
+let infoDemoAnimFrame = null;
+let infoDemoStateInterval = null;
+
+function initInfoDemo() {
+  infoDemoCanvas = document.getElementById("infoDemoCanvas");
+  if (!infoDemoCanvas) return;
+  infoDemoCtx = infoDemoCanvas.getContext("2d");
+  resizeInfoDemoCanvas();
+  window.addEventListener("resize", () => { if (infoDemoCanvas) resizeInfoDemoCanvas(); });
+}
+
+function resizeInfoDemoCanvas() {
+  if (!infoDemoCanvas) return;
+  const container = infoDemoCanvas.parentElement;
+  let targetWidth = Math.min(300, (container ? container.clientWidth - 20 : 280));
+  infoDemoCanvas.width = targetWidth;
+  infoDemoCanvas.height = 100;
+  if (infoDemoActive) drawInfoDemoFrame();
+}
+
+function startInfoDemo() {
+  if (infoDemoActive) stopInfoDemo();
+  if (!infoDemoCanvas) initInfoDemo();
+  if (!infoDemoCanvas) return;
+  infoDemoActive = true;
+  infoDemoCurrentState = 0;
+  infoDemoStateStartTime = performance.now();
+  if (infoDemoStateInterval) clearInterval(infoDemoStateInterval);
+  infoDemoStateInterval = setInterval(() => {
+    if (!infoDemoActive) return;
+    infoDemoCurrentState = (infoDemoCurrentState + 1) % DEMO_STATES.length;
+    infoDemoStateStartTime = performance.now();
+  }, 2200);
+  function drawLoop() {
+    if (!infoDemoActive) return;
+    drawInfoDemoFrame();
+    infoDemoAnimFrame = requestAnimationFrame(drawLoop);
+  }
+  drawLoop();
+  drawInfoDemoFrame();
+}
+
+function stopInfoDemo() {
+  infoDemoActive = false;
+  if (infoDemoStateInterval) { clearInterval(infoDemoStateInterval); infoDemoStateInterval = null; }
+  if (infoDemoAnimFrame) { cancelAnimationFrame(infoDemoAnimFrame); infoDemoAnimFrame = null; }
+}
+
+function drawInfoDemoFrame() {
+  if (!infoDemoCtx || !infoDemoCanvas) return;
+  const w = infoDemoCanvas.width, h = infoDemoCanvas.height;
+  infoDemoCtx.clearRect(0, 0, w, h);
+  
+  // Background
+  infoDemoCtx.fillStyle = "#0d1020";
+  infoDemoCtx.fillRect(0, 0, w, h);
+  
+  // Small platform
+  const platY = h - 14;
+  const platW = w * 0.7;
+  const platX = (w - platW) / 2;
+  infoDemoCtx.fillStyle = "#4a5fd4";
+  infoDemoCtx.beginPath(); infoDemoCtx.roundRect(platX, platY, platW, 6, 4); infoDemoCtx.fill();
+  
+  // State timing
+  let elapsed = (performance.now() - infoDemoStateStartTime) / 2200;
+  let t = Math.min(1, Math.max(0, elapsed));
+  let state = DEMO_STATES[infoDemoCurrentState];
+  let offsetX = 0, offsetY = 0;
+  let powerFX = false;
+  
+  if (state.name === "moveRight") {
+    let prog = t < 0.5 ? t*2 : 2 - t*2;
+    offsetX = 8 * prog;
+  } else if (state.name === "moveLeft") {
+    let prog = t < 0.5 ? t*2 : 2 - t*2;
+    offsetX = -8 * prog;
+  } else if (state.name === "jump") {
+    let arc = Math.sin(t * Math.PI);
+    offsetY = -14 * arc;
+  } else if (state.name === "halfJump") {
+    let arc = Math.sin(t * Math.PI);
+    offsetY = -6 * arc;
+  } else if (state.name === "power") {
+    let wiggle = Math.sin(t * Math.PI * 2) * 1.5;
+    offsetX = wiggle;
+    offsetY = -3 + Math.abs(Math.sin(t * Math.PI)) * 2;
+    powerFX = (t > 0.2 && t < 0.8);
+  }
+  
+  let charCenterX = w/2 + offsetX;
+  let charCenterY = platY - 16 + offsetY;
+  
+  // Draw character (reuse the existing drawCharacterFromConfig)
+  if (typeof drawCharacterFromConfig === "function") {
+    infoDemoCtx.save();
+    drawCharacterFromConfig(infoDemoCtx, charCenterX, charCenterY, 28, charConfig || defaultCharConfig(), 100, false, false);
+    infoDemoCtx.restore();
+  } else {
+    // fallback
+    infoDemoCtx.fillStyle = "#f0c27f";
+    infoDemoCtx.beginPath(); infoDemoCtx.arc(charCenterX, charCenterY-6, 10, 0, Math.PI*2); infoDemoCtx.fill();
+    infoDemoCtx.fillStyle = "#4a9eff";
+    infoDemoCtx.fillRect(charCenterX-10, charCenterY, 20, 14);
+  }
+  
+  // Tiny power effect
+  if (powerFX) {
+    infoDemoCtx.fillStyle = "#FFD966";
+    infoDemoCtx.beginPath(); infoDemoCtx.arc(charCenterX+4, charCenterY-12, 3, 0, Math.PI*2); infoDemoCtx.fill();
+    infoDemoCtx.fillStyle = "#fff066";
+    infoDemoCtx.font = "bold 10px Arial";
+    infoDemoCtx.fillText("⚡", charCenterX, charCenterY-14);
+  }
+  
+  // Small text hint
+  infoDemoCtx.font = "bold 7px monospace";
+  infoDemoCtx.fillStyle = "#ffe066";
+  infoDemoCtx.fillText(state.keyHint, 4, 12);
+}
+
 // ── GAME MODE TOGGLE ──
 function toggleGameMode(){
   gameMode = gameMode === 'climber' ? 'frogger' : 'climber';
@@ -4940,7 +5799,6 @@ function toggleGameMode(){
 }
 // Set initial state on load
 function initModeToggle(){
-  // Always read gameMode and set visuals to match
   const saved = localStorage.getItem('fil_gameMode');
   if(saved === 'frogger' || saved === 'climber') gameMode = saved;
   const isClimber = gameMode === 'climber';
@@ -4955,13 +5813,877 @@ function initModeToggle(){
   if(fLabel) fLabel.style.color = isClimber ? '#555' : '#e040fb';
   if(desc) desc.textContent = isClimber ? 'See 10 platforms above you at all times' : 'Blind mode — you cannot see platforms above you!';
 }
-// Also call on DOMContentLoaded to ensure toggle shows correct state
-document.addEventListener('DOMContentLoaded', initModeToggle);
 
-dbLoad();levelsLoad();renderSavedUsers();
-initModeToggle();
+function restoreUserSession() {
+  const saved = localStorage.getItem('fil_current_user');
+  if (saved) {
+    try {
+      const { name, ud } = JSON.parse(saved);
+      if (ud.isGuest || getUser(name)) {
+        currentUser = { name, ud };
+        if (!ud.isGuest) {
+          const fresh = getUser(name);
+          if (fresh) currentUser.ud = { ...ud, ...fresh };
+        }
+        document.getElementById('welcomeUser').textContent = ud.isGuest ? 'Playing as Guest' : 'Welcome back, ' + name + '! 👋';
+        document.getElementById('bestScoreDisplay').textContent = (currentUser.ud.bestScore > 0)
+          ? '🏆 Best: Platform ' + currentUser.ud.bestScore
+          : 'No runs yet!';
+        updatePiggyDisplay();
+        loadSettings();
+        showScreen('startScreen');
+        return true;
+      }
+    } catch(e) { console.warn('Failed to restore session', e); }
+  }
+  return false;
+}
+
+window.addEventListener('beforeunload', () => {
+  if (currentUser) {
+    if (currentUser.ud.isGuest) {
+      saveGuestProgress();
+    } else {
+      saveUser(currentUser.name, currentUser.ud);
+    }
+  }
+});
+
+// ══════════════════════════════════════════════
+// ██ INITIALIZE EVERYTHING ON PAGE LOAD ██
+// ══════════════════════════════════════════════
+dbLoad();
+levelsLoad();
+renderSavedUsers();
+initModeToggle();       // sets visual toggle state
 bpPacksLoad();
 bpRenderTray();
+// Start demo on start screen after page loads
+initDemoAnimation();
+if (document.getElementById('startScreen') && document.getElementById('startScreen').classList.contains('active')) {
+  startDemo();
+}
+
+// Try to restore logged-in user (guest or registered)
+if (!restoreUserSession()) {
+  showScreen('authScreen');
+}
+</script>
+
+<!-- ========== VOLCANO RUSH STORY MODE – v49 ========== -->
+<style>
+  /* ── Story Mode · v45-consistent color palette ────────────────
+     Dark background: #1a1a3e  (matches authBox, shopPanel)
+     Border accent:   #4a5fd4  (matches settingsPanel border)
+     Yellow:          #ffe066  (matches all headings, coins)
+     Orange:          #ff9944  (matches lavaInfo, authMsg)
+     Card bg:         #0e0e22  (matches authInput background)
+  ──────────────────────────────────────────────────────────────── */
+
+  .story-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    font-family: Arial, sans-serif;
+  }
+
+  /* Matches #shopPanel / #infoPanel */
+  .story-panel {
+    background: linear-gradient(160deg, #1a1a3e, #0e0e2a);
+    border: 2px solid #4a5fd4;
+    border-radius: 16px;
+    max-width: 480px;
+    width: 90%;
+    padding: 18px 20px;
+    color: #e8e0ff;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  }
+
+  .story-panel h2 {
+    font-family: Arial Black, sans-serif;
+    font-size: 16px;
+    color: #ffe066;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  /* World map panel */
+  .map-panel {
+    width: 92%;
+    max-width: 1100px;
+    height: 80vh;
+    background: linear-gradient(160deg, #12122a, #0a0a1a);
+    border: 2px solid #4a5fd4;
+    border-radius: 16px;
+    overflow-y: auto;
+    padding: 16px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  }
+
+  .map-panel h2 {
+    font-family: Arial Black, sans-serif;
+    font-size: 16px;
+    color: #ffe066;
+    margin-bottom: 12px;
+  }
+
+  /* Matches .levelCard / .shopItem */
+  .volcano-card {
+    background: #1a1a3e;
+    border: 1.5px solid #4a5fd444;
+    border-left: 5px solid #ffe066;
+    border-radius: 11px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    transition: border-color 0.12s, background 0.12s;
+    cursor: pointer;
+    color: #e8e0ff;
+  }
+  .volcano-card:hover { background: #1e1e4a; border-left-color: #ffe066; }
+  .volcano-card.locked { opacity: 0.45; cursor: not-allowed; border-left-color: #555; filter: grayscale(0.2); }
+  .volcano-card.active { background: #1e1e4a; border-color: #7a5fd4; border-left-color: #ffe066; box-shadow: 0 0 10px #4a5fd433; }
+  .volcano-card.completed { background: #0e2a0e; border-color: #27ae6044; border-left-color: #27ae60; }
+
+  /* Reuses game button aesthetic */
+  .story-btn {
+    display: inline-block;
+    padding: 8px 20px;
+    border-radius: 9px;
+    border: none;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 3px;
+    font-family: Arial, sans-serif;
+  }
+  .story-btn.primary { background: linear-gradient(135deg,#ffe066,#f5a000); color: #4a2000; }
+  .story-btn.secondary { background: #333; color: #ccc; border: 1px solid #555; }
+  .story-btn.success { background: linear-gradient(135deg,#27ae60,#1a7a40); color: #fff; }
+  .story-btn.danger { background: transparent; color: #ff8888; border: 1.5px solid #ff4444; }
+  .story-btn.danger:hover { background: #2a0a0a; }
+
+  /* Carousel nav arrows */
+  .carousel-arrow {
+    background: #1a1a3e;
+    border: 1.5px solid #4a5fd4;
+    border-radius: 50%;
+    width: 38px; height: 38px;
+    font-size: 16px;
+    color: #aad4ff;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.12s;
+  }
+  .carousel-arrow:hover { background: #2a2a5e; color: #ffe066; }
+
+  /* End stats screen */
+  .stats-screen { text-align: center; }
+  .stats-screen .stat-line {
+    font-size: 12px; color: #ccc;
+    margin: 5px 0; padding: 6px 10px;
+    background: #0e0e22; border-radius: 8px;
+    border: 1px solid #2a2a4a;
+  }
+  .stats-screen .bonus-line { font-size: 15px; font-weight: bold; color: #ffe066; margin: 8px 0; }
+  .stats-screen .next-line { font-size: 11px; color: #ff9944; margin-top: 8px; }
+
+  /* Rescue item label */
+  .story-rescue {
+    font-size: 14px; font-weight: bold; color: #ffe066;
+    margin: 8px 0; padding: 6px 10px;
+    background: #0e0e22; border-radius: 8px; border: 1px solid #4a5fd4;
+  }
+
+  /* Summary and connection text boxes */
+  .story-summary-box {
+    background: #0e0e22; border: 1px solid #2a2a4a;
+    border-radius: 8px; padding: 8px 10px;
+    font-size: 11px; color: #ccc; line-height: 1.5; margin: 6px 0;
+  }
+  .story-connection {
+    font-size: 10px; color: #ff9944; margin: 6px 0;
+    padding: 4px 8px; border-left: 3px solid #ff9944;
+    background: #1a0a00; border-radius: 0 6px 6px 0;
+  }
+
+  #closeMapBtn {
+    background: transparent; border: 1.5px solid #ff4444;
+    color: #ff8888; border-radius: 7px; padding: 5px 14px;
+    cursor: pointer; font-size: 11px; font-family: Arial, sans-serif;
+  }
+  #closeMapBtn:hover { background: #2a0a0a; }
+
+  #statsContinueBtn {
+    background: linear-gradient(135deg,#27ae60,#1a7a40);
+    color: #fff; border: none; border-radius: 9px;
+    padding: 9px 24px; font-size: 13px; font-weight: bold;
+    cursor: pointer; margin-top: 14px; font-family: Arial, sans-serif;
+  }
+  #statsContinueBtn:hover { background: linear-gradient(135deg,#33cc70,#228844); }
+
+  /* Story mode info/reset overlay */
+  #storyInfoOverlay {
+    position: fixed;
+    top: 46px; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 10001;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    font-family: Arial, sans-serif;
+  }
+  #storyInfoOverlay.show { display: flex; }
+  #storyInfoPanel {
+    background: linear-gradient(160deg, #1a1a3e, #0e0e2a);
+    border: 2px solid #4a5fd4;
+    border-radius: 16px;
+    max-width: 440px;
+    width: 90%;
+    padding: 20px;
+    color: #e8e0ff;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+    text-align: center;
+  }
+  #storyInfoPanel h3 { color: #ffe066; font-family: Arial Black, sans-serif; font-size: 15px; margin-bottom: 10px; }
+  #storyInfoPanel p { font-size: 11px; color: #ccc; line-height: 1.6; margin-bottom: 12px; }
+  .storyInfoStat { background: #0e0e22; border: 1px solid #2a2a4a; border-radius: 8px; padding: 8px 12px; margin: 6px 0; font-size: 11px; color: #ccc; }
+  .storyInfoStat strong { color: #ffe066; }
+  #storyResetConfirmBox {
+    display: none;
+    background: #2a0a0a;
+    border: 1.5px solid #ff4444;
+    border-radius: 10px;
+    padding: 12px;
+    margin: 10px 0;
+    font-size: 11px;
+    color: #ff9999;
+  }
+</style>
+
+<div id="storyWorldMapOverlay" class="story-overlay" style="display: none;">
+  <div class="map-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+      <h2 style="font-size:14px;">🌍 VOLCANO CHRONICLES · STORY MAP</h2>
+      <div style="display:flex; gap:6px;">
+        <button onclick="openStoryInfo()" style="background:#1a1a3e; border:1.5px solid #4a5fd4; color:#aad4ff; border-radius:50%; width:32px; height:32px; font-size:14px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center;" title="Story info & reset">ℹ</button>
+        <button id="closeMapBtn" class="story-btn danger">✕ MENU</button>
+      </div>
+    </div>
+    <div id="storyMapSVG" style="margin-bottom:14px;"></div>
+    <div id="storyMapList"></div>
+  </div>
+</div>
+
+<!-- Pre-game story panel -->
+<div id="storyPreScreen" class="story-overlay" style="display: none;">
+  <div class="story-panel">
+    <h2 id="storyEpisodeTitle">🌋 Episode 1</h2>
+    <div id="storyRescueItem" class="story-rescue">🏆 Rescue: ???</div>
+    <div id="storySummary" class="story-summary-box"></div>
+    <div id="storyConnectionHint" class="story-connection"></div>
+    <div style="display:flex; flex-wrap:wrap; margin-top:14px;">
+      <button id="storyStartBtn" class="story-btn primary">▶ START RESCUE</button>
+      <button id="storyCancelBtn" class="story-btn secondary">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<!-- Start animation (rescue + eruption) -->
+<div id="startAnimOverlay" class="story-overlay" style="display: none;">
+  <canvas id="startAnimCanvas" width="600" height="300" style="width:80%; max-width:800px; background:#0d0d2b; border-radius:16px; border:2px solid #4a5fd4;"></canvas>
+  <div style="margin-top:12px; color:#ff9944; font-size:11px; font-weight:bold;">🔥 Retrieving artifact... eruption imminent! 🔥</div>
+</div>
+
+<!-- End escape animation (glider exit) -->
+<div id="escapeAnimOverlay" class="story-overlay" style="display: none;">
+  <canvas id="escapeAnimCanvas" width="700" height="400" style="width:90%; max-width:800px; background:#0d0d2b; border-radius:16px; border:2px solid #4a5fd4;"></canvas>
+</div>
+
+<!-- End Stats Screen -->
+<div id="endStatsOverlay" class="story-overlay" style="display: none;">
+  <div class="story-panel stats-screen">
+    <h2>🏁 VOLCANO ESCAPED!</h2>
+    <div id="statsPlatforms" class="stat-line">🧗 Platforms climbed: 0</div>
+    <div id="statsCoinsEarned" class="stat-line">🪙 Coins earned: 0</div>
+    <div id="statsBonus" class="bonus-line">🌟 Story bonus: +0 🪙</div>
+    <div id="statsNextUnlock" class="next-line"></div>
+    <button id="statsContinueBtn">CONTINUE → MAP</button>
+  </div>
+</div>
+  
+  <script>
+  (function() {
+    // --------------------------------------------------------------
+    // STORY MODE – reads episode data from main game's VOLCANO_EPISODES
+    // --------------------------------------------------------------
+    if (!window.VOLCANO_EPISODES) {
+      return;
+    }
+
+    let STORY_EPISODES = window.VOLCANO_EPISODES;
+    let storyProgress = { completedEpisodes: [] };
+    let currentStoryEpisode = null;
+    let animFrameId = null;
+    let storyStartCoins = 0;
+    let originalEndPlatform = 1000;
+    let originalSelectorValue = "";
+
+    // Helper to get character config safely
+    function getSafeCharConfig() {
+      if (window.charConfig && typeof window.charConfig === 'object' && window.charConfig.ph) {
+        return window.charConfig;
+      }
+      return {
+        ph: 80, faceWf: 1.00, faceHf: 0.88, faceR: 0.12, faceOffY: 0,
+        bodyWf: 0.90, bodyHf: 0.53, bodyR: 4, neckWf: 0.60, neckPx: 1,
+        torchXf: 0.18, torchYf: 0.38, torchRf: 0.17, shirtColor: '#4a9eff'
+      };
+    }
+
+    // Load / save progress
+    function loadStoryProgress() {
+      try {
+        const saved = localStorage.getItem('volcanoRushStory');
+        if (saved) {
+          const data = JSON.parse(saved);
+          storyProgress.completedEpisodes = data.completedEpisodes || [];
+        }
+        STORY_EPISODES.forEach((ep, idx) => {
+          ep.unlocked = (idx === 0) || storyProgress.completedEpisodes.includes(idx-1);
+          ep.completed = storyProgress.completedEpisodes.includes(idx);
+        });
+      } catch(e) {}
+    }
+    function saveStoryProgress() {
+      storyProgress.completedEpisodes = STORY_EPISODES.filter(ep => ep.completed).map(ep => ep.id);
+      localStorage.setItem('volcanoRushStory', JSON.stringify(storyProgress));
+    }
+
+    // Disable user level target selector during story mode
+    function disableUserTargetSelector() {
+      const sel = document.getElementById('endPlatformSel');
+      if (sel && !sel.disabled) {
+        originalSelectorValue = sel.value;
+        sel.disabled = true;
+        sel.style.opacity = '0.5';
+      }
+    }
+    function enableUserTargetSelector() {
+      const sel = document.getElementById('endPlatformSel');
+      if (sel && sel.disabled) {
+        sel.disabled = false;
+        sel.style.opacity = '1';
+        if (originalSelectorValue) sel.value = originalSelectorValue;
+      }
+    }
+
+// Override endPlatform and force it for the game
+function setStoryTargetPlatforms(target) {
+  originalEndPlatform = window.endPlatform;
+  window.endPlatform = target;
+  // Also force the hidden select and call updateEndPlatform
+  const sel = document.getElementById('endPlatformSel');
+  if (sel) {
+    originalSelectorValue = sel.value;
+    sel.value = target;
+    if (typeof updateEndPlatform === 'function') updateEndPlatform();
+    sel.disabled = true;
+    sel.style.opacity = '0.5';
+  }
+}
+
+function restoreEndPlatform() {
+  window.endPlatform = originalEndPlatform;
+  const sel = document.getElementById('endPlatformSel');
+  if (sel && originalSelectorValue) {
+    sel.value = originalSelectorValue;
+    if (typeof updateEndPlatform === 'function') updateEndPlatform();
+    sel.disabled = false;
+    sel.style.opacity = '1';
+  }
+}
+
+    // Adjust story overlays to respect the top mode-bar (keep navbar accessible)
+    function fixOverlayCSS() {
+      const style = document.createElement('style');
+      style.textContent = `.story-overlay { top: 46px !important; height: calc(100% - 46px) !important; }`;
+      document.head.appendChild(style);
+    }
+
+    // Show world map
+// ----- NEW: SVG World Map with moving pin -----
+let currentCarouselIndex = 0;  // index among unlocked episodes
+let unlockedEpisodes = [];
+
+function updateUnlockedEpisodes() {
+  unlockedEpisodes = STORY_EPISODES.filter(ep => ep.unlocked);
+  // find current index (first unlocked that is not completed? but we'll use the one selected)
+  if (currentCarouselIndex >= unlockedEpisodes.length) currentCarouselIndex = 0;
+}
+
+function drawSVGMap(ep) {
+  const container = document.getElementById('storyMapSVG');
+  if (!container) return;
+  // Pixelated world map — dots represent land masses
+  // Coordinate system: col 0-71, row 0-35 mapping to lng -180→180, lat 90→-90
+  // Encoded as a compact string: each char is a column of 35 bits (rows)
+  // Using run-length style compact dot array
+  const W = 72, H = 36;
+  // Each entry [col, row] = land pixel
+  const land = [
+    // North America
+    [5,4],[6,4],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[6,5],[7,5],[8,5],[9,5],[10,5],[11,5],[12,5],[13,5],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[8,7],[9,7],[10,7],[11,7],[12,7],[13,7],[14,7],[7,8],[8,8],[9,8],[10,8],[11,8],[12,8],[13,8],[9,9],[10,9],[11,9],[12,9],[13,9],[10,10],[11,10],[12,10],[13,10],[11,11],[12,11],[13,11],[10,12],[11,12],[12,12],[11,13],[12,13],[14,7],[15,7],[14,8],[15,8],[16,8],[14,9],[15,9],[16,9],[14,10],[15,10],[13,11],[14,11],[15,11],[14,12],[15,12],[14,13],[15,13],
+    // Greenland
+    [17,3],[18,3],[19,3],[17,4],[18,4],[19,4],[20,4],[18,5],[19,5],[20,5],
+    // South America
+    [12,14],[13,14],[14,14],[12,15],[13,15],[14,15],[15,15],[12,16],[13,16],[14,16],[15,16],[13,17],[14,17],[15,17],[14,18],[15,18],[14,19],[15,19],[14,20],[15,20],[15,21],[15,22],
+    // Europe
+    [31,6],[32,6],[33,6],[34,6],[31,7],[32,7],[33,7],[34,7],[35,7],[31,8],[32,8],[33,8],[34,8],[35,8],[36,8],[32,9],[33,9],[34,9],[35,9],[36,9],[33,10],[34,10],[35,10],[36,10],[34,11],[35,11],[36,11],
+    // Africa
+    [32,11],[33,11],[34,11],[35,11],[36,11],[32,12],[33,12],[34,12],[35,12],[36,12],[33,13],[34,13],[35,13],[36,13],[33,14],[34,14],[35,14],[36,14],[33,15],[34,15],[35,15],[34,16],[35,16],[34,17],[35,17],[34,18],[35,18],[34,19],[35,19],[34,20],[35,20],
+    // Middle East
+    [37,9],[38,9],[39,9],[37,10],[38,10],[39,10],[40,10],[37,11],[38,11],[39,11],[40,11],
+    // Central & South Asia
+    [39,8],[40,8],[41,8],[42,8],[43,8],[44,8],[45,8],[40,9],[41,9],[42,9],[43,9],[44,9],[45,9],[46,9],[41,10],[42,10],[43,10],[44,10],[45,10],[46,10],[42,11],[43,11],[44,11],[45,11],[46,11],[43,12],[44,12],[45,12],[46,12],[44,13],[45,13],
+    // Southeast Asia
+    [46,10],[47,10],[48,10],[49,10],[46,11],[47,11],[48,11],[49,11],[50,11],[47,12],[48,12],[49,12],[50,12],[49,13],[50,13],[51,13],[50,14],[51,14],[49,15],[50,15],[51,15],
+    // East Asia (China, Japan, Korea)
+    [46,8],[47,8],[48,8],[49,8],[50,8],[47,9],[48,9],[49,9],[50,9],[51,9],[48,10],[49,10],[50,10],[51,10],[52,10],[53,10],[52,9],[53,9],[54,9],[54,10],[55,10],
+    // Russia / Siberia
+    [36,5],[37,5],[38,5],[39,5],[40,5],[41,5],[42,5],[43,5],[44,5],[45,5],[46,5],[47,5],[48,5],[49,5],[50,5],[51,5],[52,5],[53,5],[54,5],[55,5],[56,5],[57,5],[35,6],[36,6],[37,6],[38,6],[39,6],[40,6],[41,6],[42,6],[43,6],[44,6],[45,6],[46,6],[47,6],[48,6],[49,6],[50,6],[51,6],[52,6],[53,6],[54,6],[55,6],[56,6],[35,7],[36,7],[37,7],[38,7],[39,7],[40,7],[41,7],[42,7],[43,7],[44,7],[45,7],[46,7],[47,7],[48,7],[49,7],[50,7],[51,7],[52,7],[53,7],[54,7],
+    // Australia
+    [52,20],[53,20],[54,20],[55,20],[56,20],[51,21],[52,21],[53,21],[54,21],[55,21],[56,21],[57,21],[51,22],[52,22],[53,22],[54,22],[55,22],[56,22],[57,22],[52,23],[53,23],[54,23],[55,23],[56,23],[53,24],[54,24],[55,24],[56,24],[54,25],[55,25],
+    // New Zealand
+    [59,24],[59,25],[59,26],
+    // Iceland
+    [26,5],[27,5],[26,6],
+    // Japan
+    [54,8],[55,8],[55,9],[56,9],[56,10],
+    // Indonesia
+    [49,16],[50,16],[51,16],[52,16],[50,17],[51,17],[52,17],[53,17],[51,18],[52,18],[53,18],
+    // Philippines
+    [52,13],[53,13],[52,14],[53,14],
+    // Madagascar
+    [38,19],[38,20],[38,21],
+    // UK/Ireland
+    [29,7],[30,7],[30,8],[29,8],
+    // Scandinavia
+    [32,5],[33,5],[34,5],[33,6],[34,6],
+    // North Africa top
+    [29,10],[30,10],[31,10],[32,10],
+  ];
+
+  const DOT = 5, GAP = 2, STEP = DOT + GAP;
+  const svgW = W * STEP, svgH = H * STEP;
+
+  const landSet = new Set(land.map(([c,r]) => `${c},${r}`));
+
+  // Project lat/lng to col/row
+  const pinCol = Math.round(((ep.lng + 180) / 360) * W);
+  const pinRow = Math.round(((90 - ep.lat) / 180) * H);
+  const pinX = pinCol * STEP + DOT/2 + 1;
+  const pinY = pinRow * STEP + DOT/2 + 1;
+
+  let dots = '';
+  for(let r = 0; r < H; r++){
+    for(let c = 0; c < W; c++){
+      const x = c * STEP + 1, y = r * STEP + 1;
+      const isLand = landSet.has(`${c},${r}`);
+      dots += `<rect x="${x}" y="${y}" width="${DOT}" height="${DOT}" rx="1.5" fill="${isLand ? '#3a7a3a' : '#1a3a5a'}" opacity="${isLand ? '0.85' : '0.5'}"/>`;
+    }
+  }
+
+  container.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <svg viewBox="0 0 ${svgW+2} ${svgH+2}" xmlns="http://www.w3.org/2000/svg"
+      style="background:#0a1828; border-radius:12px; border:1.5px solid #4a5fd4; width:100%; max-width:${svgW+2}px; display:block;">
+      ${dots}
+      <!-- Volcano pin -->
+      <g filter="url(#glow)">
+        <circle cx="${pinX}" cy="${pinY}" r="7" fill="#ff3333" stroke="#ffe066" stroke-width="2.5"/>
+        <circle cx="${pinX}" cy="${pinY}" r="3" fill="#fff"/>
+        <text x="${pinX}" y="${pinY - 10}" text-anchor="middle" font-size="7" fill="#ffe066" font-family="Arial" font-weight="bold">${ep.name.split('(')[0].trim()}</text>
+      </g>
+      <defs>
+        <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+    </svg></div>`;
+}
+
+function renderCarousel() {
+  updateUnlockedEpisodes();
+  if (unlockedEpisodes.length === 0) return;
+  const ep = unlockedEpisodes[currentCarouselIndex];
+  // Update SVG map
+  drawSVGMap(ep);
+  // Update card content
+  const container = document.getElementById('storyMapList');
+  container.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap;">
+      <button id="carouselPrev" class="carousel-arrow">◀</button>
+      <div class="volcano-card active" style="width:320px; margin:0; max-width:85vw;">
+        <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; margin-bottom:4px;">
+          <strong style="color:#ffe066; font-size:12px;">🌋 ${ep.name}</strong>
+          <span style="color:#aad4ff; font-size:10px;">🏔️ ${ep.elevation}m → ${ep.targetPlats} platforms</span>
+        </div>
+        <div style="font-size:11px; font-weight:bold; color:#ffe066; margin-bottom:3px;">🏆 ${ep.rescue}</div>
+        <div style="font-size:10px; color:#ccc; line-height:1.4; margin-bottom:3px;">📖 ${ep.summary}</div>
+        <div style="font-size:9px; color:#ff9944; border-left:3px solid #ff9944; padding-left:6px; margin-bottom:5px;">⚡ ${ep.connection}</div>
+        <div style="font-size:10px;">${ep.completed ? '<span style="color:#44ff88;">✓ COMPLETED</span>' : '<span style="color:#ffe066;">🌟 READY TO PLAY — tap to start</span>'}</div>
+      </div>
+      <button id="carouselNext" class="carousel-arrow">▶</button>
+    </div>
+  `;
+  // Add event listeners
+  document.getElementById('carouselPrev')?.addEventListener('click', () => {
+    if (unlockedEpisodes.length === 0) return;
+    currentCarouselIndex = (currentCarouselIndex - 1 + unlockedEpisodes.length) % unlockedEpisodes.length;
+    renderCarousel();
+  });
+  document.getElementById('carouselNext')?.addEventListener('click', () => {
+    if (unlockedEpisodes.length === 0) return;
+    currentCarouselIndex = (currentCarouselIndex + 1) % unlockedEpisodes.length;
+    renderCarousel();
+  });
+  // Also add a "Play" button on the card
+  const cardDiv = document.querySelector('.volcano-card');
+  if (cardDiv && !ep.completed) {
+    cardDiv.style.cursor = 'pointer';
+    cardDiv.onclick = () => {
+      closeStoryMap();
+      startStoryEpisode(ep.id);
+    };
+  }
+}
+
+// Override showStoryWorldMap
+function showStoryWorldMap() {
+  const overlay = document.getElementById('storyWorldMapOverlay');
+  // Ensure SVG container exists
+  let svgContainer = document.getElementById('storyMapSVG');
+  if (!svgContainer) {
+    const mapPanel = document.querySelector('.map-panel');
+    const mapListDiv = document.getElementById('storyMapList');
+    const svgDiv = document.createElement('div');
+    svgDiv.id = 'storyMapSVG';
+    svgDiv.style.marginBottom = '20px';
+    mapPanel.insertBefore(svgDiv, mapListDiv);
+  }
+  
+  // Update unlocked episodes list
+  updateUnlockedEpisodes();
+  
+  // Find the current episode (first unlocked and NOT completed)
+  let currentIndex = 0;
+  for (let i = 0; i < unlockedEpisodes.length; i++) {
+    if (!unlockedEpisodes[i].completed) {
+      currentIndex = i;
+      break;
+    }
+  }
+  currentCarouselIndex = currentIndex;
+  
+  renderCarousel();
+  overlay.style.display = 'flex';
+}
+    function closeStoryMap() { document.getElementById('storyWorldMapOverlay').style.display = 'none'; }
+
+    // Pre‑game story screen
+    function showStoryPreScreen(ep) {
+      document.getElementById('storyEpisodeTitle').innerHTML = `🌋 ${ep.name} · ${ep.location}`;
+      document.getElementById('storyRescueItem').innerHTML = `🏆 RESCUE: ${ep.rescue}`;
+      document.getElementById('storySummary').innerHTML = `📖 ${ep.summary}`;
+      document.getElementById('storyConnectionHint').innerHTML = `⚡ ${ep.connection} &nbsp;&nbsp; Target: ${ep.targetPlats} platforms`;
+      const overlay = document.getElementById('storyPreScreen');
+      overlay.style.display = 'flex';
+      document.getElementById('storyStartBtn').onclick = () => {
+        overlay.style.display = 'none';
+        showStartAnimation(ep);
+      };
+      document.getElementById('storyCancelBtn').onclick = () => {
+        overlay.style.display = 'none';
+        showStoryWorldMap();
+      };
+    }
+
+    // Start animation (rescue + eruption)
+    function showStartAnimation(ep) {
+      const animDiv = document.getElementById('startAnimOverlay');
+      const canvas = document.getElementById('startAnimCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = Math.min(window.innerWidth * 0.8, 700);
+      canvas.height = 300;
+      let startTime = performance.now();
+      let duration = 2800;
+      function drawStartFrame(now) {
+        const elapsed = Math.min(1, (now - startTime) / duration);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#4a2a1a';
+        ctx.fillRect(0, canvas.height-80, canvas.width, 80);
+        ctx.fillStyle = '#c2621a';
+        for(let i=0;i<8;i++) ctx.fillRect(40+i*90, canvas.height-100, 20, 60);
+        const charX = canvas.width/2, charY = canvas.height-70 - Math.sin(elapsed*Math.PI)*12;
+        const charCfg = getSafeCharConfig();
+        if (typeof drawCharacterFromConfig === 'function') {
+          ctx.save();
+          drawCharacterFromConfig(ctx, charX, charY, 40, charCfg, 100, false, false);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = '#f0c27f'; ctx.fillRect(charX-15, charY-25, 30, 40);
+        }
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#ffdd88';
+        ctx.fillText(ep.rescue.split(' ')[0], charX+18, charY-20);
+        if (elapsed > 0.5) {
+          for(let p=0;p<15;p++) {
+            ctx.fillStyle = `rgba(255, ${80+Math.random()*100}, 0, ${0.5+Math.random()*0.5})`;
+            ctx.beginPath(); ctx.arc(canvas.width/2 + (Math.random()-0.5)*80, canvas.height-100 + Math.random()*120, 4, 0, Math.PI*2); ctx.fill();
+          }
+        }
+        if (elapsed < 1) requestAnimationFrame(drawStartFrame);
+        else {
+          cancelAnimationFrame(animFrameId);
+          animDiv.style.display = 'none';
+          startStoryGameLevel(ep);
+        }
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(drawStartFrame);
+    }
+
+    // Start the actual game with volcano target
+    function startStoryGameLevel(ep) {
+      currentStoryEpisode = ep;
+      storyStartCoins = window.coins || 0;
+      setStoryTargetPlatforms(ep.targetPlats);
+      if (window.startGame) window.startGame();
+    }
+
+    // ── Hook into game win (victory) ──
+    const originalGameWin = window.gameWin;
+    window.gameWin = function() {
+      if (currentStoryEpisode && !window.versusMode) {
+        currentStoryEpisode.completed = true;
+        const nextEp = STORY_EPISODES[currentStoryEpisode.id + 1];
+        if (nextEp) nextEp.unlocked = true;
+        saveStoryProgress();
+        // Capture platform count before any screen transitions
+        const finalPlatforms = (typeof window.getPlatformCount === 'function')
+          ? window.getPlatformCount()
+          : (window.platformCount || 0);
+        showEscapeAnimation(currentStoryEpisode, finalPlatforms);
+      } else {
+        if (originalGameWin) originalGameWin();
+      }
+    };
+
+    // Escape animation (glider out) – now with finalPlatforms param
+    function showEscapeAnimation(ep, finalPlatforms) {
+      const animDiv = document.getElementById('escapeAnimOverlay');
+      const canvas = document.getElementById('escapeAnimCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = Math.min(window.innerWidth*0.8, 800);
+      canvas.height = 400;
+      let startTime = performance.now();
+      let duration = 3300;
+      function drawEscape(now) {
+        let t = Math.min(1, (now - startTime) / duration);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#832a0a';
+        ctx.fillRect(0, canvas.height-70, canvas.width, 70);
+        for(let i=0;i<12;i++) ctx.fillRect(20+i*70, canvas.height-120, 30, 70);
+        ctx.fillStyle = '#ff8811';
+        for(let i=0;i<30;i++) ctx.fillRect(20+Math.random()*canvas.width, canvas.height-130+Math.random()*100, 8, 8);
+        const glideX = canvas.width/2 + (t-0.5)*canvas.width*0.7;
+        const glideY = canvas.height-80 - t*120;
+        const charCfg = getSafeCharConfig();
+        if (typeof drawCharacterFromConfig === 'function') {
+          ctx.save();
+          drawCharacterFromConfig(ctx, glideX, glideY, 38, charCfg, 100, false, false);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = '#d6a56e'; ctx.fillRect(glideX-14, glideY-24, 28, 35);
+        }
+        ctx.font = '32px Arial';
+        ctx.fillStyle = 'white';
+        ctx.fillText('🪂', glideX+12, glideY-12);
+        if (t < 1) requestAnimationFrame(drawEscape);
+        else {
+          cancelAnimationFrame(animFrameId);
+          animDiv.style.display = 'none';
+          showEndStats(ep, finalPlatforms);
+        }
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(drawEscape);
+    }
+
+    function showEndStats(ep, finalPlatforms) {
+      if (!ep) return;
+      const target = ep.targetPlats || 0;
+      const climbed = (typeof finalPlatforms === 'number') ? finalPlatforms : 0;
+      const coinsEarned = (window.coins || 0) - storyStartCoins;
+      const bonus = Math.floor(target / 10);
+      if (bonus > 0) {
+        window.coins = (window.coins || 0) + bonus;
+        if (window.currentUser) window.currentUser.ud.coins = window.coins;
+        if (window.dbSave) window.dbSave();
+      }
+      const platformsDiv = document.getElementById('statsPlatforms');
+      if (platformsDiv) platformsDiv.textContent = `🧗 Platforms climbed: ${climbed} / ${target}`;
+      const coinsDiv = document.getElementById('statsCoinsEarned');
+      if (coinsDiv) coinsDiv.textContent = `🪙 Coins earned: ${Math.max(0, coinsEarned)} + bonus ${bonus}`;
+      const bonusDiv = document.getElementById('statsBonus');
+      if (bonusDiv) bonusDiv.textContent = `🌟 Story bonus: +${bonus} 🪙`;
+      const nextDiv = document.getElementById('statsNextUnlock');
+      const nextEp = STORY_EPISODES[ep.id + 1];
+      if (nextDiv) nextDiv.textContent = nextEp
+        ? `▶ Next volcano: ${nextEp.name} (${nextEp.elevation}m) unlocked!`
+        : `🏆 ALL VOLCANOES SAVED!`;
+      const statsOverlay = document.getElementById('endStatsOverlay');
+      if (statsOverlay) statsOverlay.style.display = 'flex';
+      const continueBtn = document.getElementById('statsContinueBtn');
+      if (continueBtn) {
+        continueBtn.onclick = () => {
+          if (statsOverlay) statsOverlay.style.display = 'none';
+          restoreEndPlatform();
+          currentStoryEpisode = null;
+          showStoryWorldMap();
+          if (window.goToMenu) window.goToMenu();
+        };
+      }
+      if (window.updateHUD) window.updateHUD();
+    }
+
+
+
+    // Hook into game death to clean up story mode
+    const originalGameEnd = window.gameEnd;
+    window.gameEnd = function(fromPurple) {
+      if (currentStoryEpisode && !window.versusMode) {
+        currentStoryEpisode = null;
+        restoreEndPlatform();
+        if (originalGameEnd) originalGameEnd(fromPurple);
+      } else {
+        if (originalGameEnd) originalGameEnd(fromPurple);
+      }
+    };
+
+    // Also restore when manually going to menu
+    const originalGoToMenu = window.goToMenu;
+    window.goToMenu = function() {
+      if (currentStoryEpisode) {
+        restoreEndPlatform();
+        currentStoryEpisode = null;
+      }
+      if (originalGoToMenu) originalGoToMenu();
+    };
+	
+// Enhance HUD during story mode – replace original level & platform displays
+const originalUpdateHUD = window.updateHUD;
+window.updateHUD = function() {
+  // Always call the original first (updates coins, lava info, etc.)
+  if (originalUpdateHUD) originalUpdateHUD();
+
+  if (currentStoryEpisode && document.getElementById('gameScreen').classList.contains('active')) {
+    const levelEl = document.getElementById('levelDisplay');
+    const platformEl = document.getElementById('platformDisplay');
+    if (levelEl) {
+      levelEl.innerHTML = `🌋 ${currentStoryEpisode.name}`;
+    }
+    if (platformEl) {
+      const currentPlats = typeof window.getPlatformCount === 'function' ? window.getPlatformCount() : 0;
+      platformEl.innerHTML = `📊 ${currentPlats} / ${currentStoryEpisode.targetPlats}`;
+    }
+  }
+  // When story mode ends, the original updateHUD will restore "Level X" and "Plt X / Y" automatically
+};
+
+    window.startStoryEpisode = function(epId) {
+      const ep = STORY_EPISODES.find(e => e.id === epId);
+      if (!ep || ep.completed) return;
+      if (!ep.unlocked) { alert("Previous episode must be completed first!"); return; }
+      showStoryPreScreen(ep);
+    };
+
+    // Add button under Versus
+    function addStoryMapButton() {
+      const existing = document.getElementById('storyMapBtn');
+      if (existing) existing.remove();
+      const versusBtn = document.querySelector('button.startBtn[onclick="startVersus()"]');
+      if (!versusBtn) return;
+      const storyBtn = document.createElement('button');
+      storyBtn.id = 'storyMapBtn';
+      storyBtn.className = 'startBtn outline';
+      storyBtn.innerHTML = '🗺️ VOLCANO CHRONICLES (Story Mode)';
+      storyBtn.onclick = () => { loadStoryProgress(); showStoryWorldMap(); };
+      versusBtn.insertAdjacentElement('afterend', storyBtn);
+    }
+
+    // ── Story Info & Reset ──
+    function openStoryInfo() {
+      // Populate stats
+      const completed = STORY_EPISODES.filter(e => e.completed).length;
+      const el = (id) => document.getElementById(id);
+      if(el('siCompletedCount')) el('siCompletedCount').textContent = completed;
+      const current = STORY_EPISODES.find(e => e.unlocked && !e.completed);
+      if(el('siCurrentVolcano')) el('siCurrentVolcano').textContent = current ? current.name : '—';
+      const nextIdx = current ? (current.id + 1) : -1;
+      const nextEp = nextIdx >= 0 ? STORY_EPISODES[nextIdx] : null;
+      if(el('siNextVolcano')) el('siNextVolcano').textContent = nextEp ? nextEp.name : 'Complete all!';
+      const box = el('storyResetConfirmBox');
+      if(box) box.style.display = 'none';
+      const overlay = el('storyInfoOverlay');
+      if(overlay) overlay.classList.add('show');
+    }
+    window.openStoryInfo = openStoryInfo;
+
+    function closeStoryInfo() {
+      const overlay = document.getElementById('storyInfoOverlay');
+      if(overlay) overlay.classList.remove('show');
+    }
+    window.closeStoryInfo = closeStoryInfo;
+
+    function requestStoryReset() {
+      const box = document.getElementById('storyResetConfirmBox');
+      if(box) box.style.display = 'block';
+    }
+    window.requestStoryReset = requestStoryReset;
+
+    function cancelStoryReset() {
+      const box = document.getElementById('storyResetConfirmBox');
+      if(box) box.style.display = 'none';
+    }
+    window.cancelStoryReset = cancelStoryReset;
+
+    function confirmStoryReset() {
+      // Clear all progress
+      STORY_EPISODES.forEach((ep, i) => {
+        ep.completed = false;
+        ep.unlocked = (i === 0);
+      });
+      storyProgress.completedEpisodes = [];
+      currentStoryEpisode = null;
+      saveStoryProgress();
+      closeStoryInfo();
+      if(typeof showNotif === 'function') showNotif('🌋 Story Mode reset! Start from Krakatoa.');
+    }
+    window.confirmStoryReset = confirmStoryReset;
+
+    // Initialize
+    fixOverlayCSS();
+    loadStoryProgress();
+    window.addEventListener('DOMContentLoaded', () => {
+      addStoryMapButton();
+      document.getElementById('closeMapBtn')?.addEventListener('click', closeStoryMap);
+    });
+  })();
 </script>
 
 <!--
@@ -4997,7 +6719,33 @@ bpRenderTray();
 ═══════════════════════════════════════════════
 -->
 
+<!-- STORY INFO / RESET OVERLAY -->
+<div id="storyInfoOverlay">
+  <div id="storyInfoPanel">
+    <h3>🌋 VOLCANO CHRONICLES</h3>
+    <p>Story Mode takes you through 51 real-world volcanoes. Each volcano's elevation in metres equals the platform target for that level. Rescue a unique artifact from each volcano before it erupts!</p>
+    <div class="storyInfoStat">📍 <strong id="siCompletedCount">0</strong> of <strong>51</strong> volcanoes completed</div>
+    <div class="storyInfoStat">🏔️ Current: <strong id="siCurrentVolcano">—</strong></div>
+    <div class="storyInfoStat">🔓 Next unlock: <strong id="siNextVolcano">—</strong></div>
+    <p style="margin-top:10px; font-size:10px; color:#ff9944;">⚠️ Resetting Story Mode will erase all progress and start from Krakatoa again.</p>
+    <div id="storyResetConfirmBox">
+      ⚠️ <strong style="color:#ff6666;">Are you sure?</strong><br>
+      All volcano progress will be permanently deleted.<br>
+      <div style="display:flex; gap:8px; justify-content:center; margin-top:10px;">
+        <button class="story-btn danger" onclick="confirmStoryReset()" style="border:1.5px solid #ff4444;">🔥 CONFIRM RESET</button>
+        <button class="story-btn secondary" onclick="cancelStoryReset()">Cancel</button>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:center; margin-top:14px; flex-wrap:wrap;">
+      <button class="story-btn secondary" id="storyReplayBtn" onclick="requestStoryReset()">🔄 Replay Story Mode</button>
+      <button class="story-btn primary" onclick="closeStoryInfo()">✕ Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- AD MODAL — outside all screens so it shows over piggyScreen too -->
+
+
 <div id="adModal">
     <div id="adPanel">
       <h2>📺 Watch Ad to Keep Coins?</h2>
