@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava v50</title>
+<title>Floor Is Lava v58</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
@@ -17,7 +17,7 @@
 <meta name="theme-color" content="#ffe066">
 <style>
 /* ═══════════════════════════════════════════════════
-   FLOOR IS LAVA v50
+   FLOOR IS LAVA v51
    PINCH ZOOM: search "PINCH_ZOOM" to find scale vars
    LAVA SPEED: search "LAVA_SPEED" to find speed vars
    PLATFORM GAP: search "PLATFORM_GAP" to adjust gaps
@@ -311,7 +311,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <body>
 <div id="root">
 <div id="modeBar">
-  <button class="modeBtn active" id="btnPlay" onclick="goToMenu()">▶ Play</button>
+  <button class="modeBtn active" id="btnPlay" onclick="closeAllStoryOverlays();goToMenu()">▶ Play</button>
   <button class="modeBtn" id="btnEditor" onclick="setMode('editor')" style="display:none;">✏️ Editor</button>
   <!-- hidden select still needed for updateEndPlatform() logic -->
   <select id="endPlatformSel" onchange="updateEndPlatform()" style="display:none;">
@@ -393,6 +393,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
         <label>Stalagmites</label>
         <div class="settingsToggle on" id="sStalToggle" onclick="toggleStalagmites();saveSettings();"></div>
       </div>
+      <div class="settingsRow">
+        <label style="line-height:1.4;">Retain Power-Ups on Menu<br><span style="font-size:9px;color:#666;font-weight:normal;">On: keep power-ups between games<br>Off: convert to coins when leaving</span></label>
+        <div class="settingsToggle" id="sRetainPowerupsToggle" onclick="toggleRetainPowerups();saveSettings();"></div>
+      </div>
     </div>
     <div class="settingsSection">
       <div class="settingsSectionTitle">⚔️ Versus CPU Difficulty</div>
@@ -417,6 +421,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div class="settingsRow">
         <label>Hide Reset Button</label>
         <div class="settingsToggle" id="sHideResetToggle" onclick="toggleHideReset();saveSettings();"></div>
+      </div>
+      <div class="settingsRow">
+        <label>Hide Play Button in Navbar</label>
+        <div class="settingsToggle" id="sHidePlayBtnToggle" onclick="toggleHidePlayBtn();saveSettings();"></div>
       </div>
     </div>
     <!-- CHARACTER EDITOR -->
@@ -763,7 +771,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button class="goBtn" id="goAdBtn" onclick="openGameOverAd()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Reclaim Piggy Coins!</button>
     </div>
     <div class="goButtons">
-      <button class="goBtn" id="restartBtn" onclick="restartGame()">▶ Play Again</button>
+      <button class="goBtn" id="restartBtn" onclick="restartGameAfterStory()">▶ Play Again</button>
       <button class="goBtn" id="goRematchBtn" onclick="diedInVersus=false;startVersus();" style="display:none;background:linear-gradient(135deg,#9c27b0,#6a1b9a);color:#fff;">⚔️ Rematch</button>
       <button class="goBtn" id="menuBtn" onclick="goToMenu()">🏠 Menu</button>
     </div>
@@ -1049,60 +1057,83 @@ function lavaSpeedForLevel(lvl) {
 }
 
 window.VOLCANO_EPISODES = [
-  { id:0, name:"Krakatoa (Anak Krakatau)", location:"Indonesia", elevation:157, targetPlats:157, lat:-6.102, lng:105.423, rescue:"🌊 Sunda Strait Relic", summary:"Amidst the restless waves, salvage a siren gem that records tsunamis.", connection:"Gem sings frequency of next volcano: Taal.", completed:false, unlocked:true },
-  { id:1, name:"Wizard Island (Crater Lake)", location:"Oregon, USA", elevation:188, targetPlats:188, lat:42.942, lng:-122.108, rescue:"🌀 Mazama Anchor", summary:"Rescue the submerged anchor from the collapsed caldera lake.", connection:"Anchor stabilizes final artifact matrix. AWAKEN VOLCANO RUSH.", completed:false, unlocked:false },
-  { id:2, name:"Taal Volcano", location:"Philippines", elevation:311, targetPlats:311, lat:14.002, lng:120.993, rescue:"🪶 Lake Crater Pearl", summary:"Dive into the acidic lake, recover a pearl that neutralises volcanic gas.", connection:"Pearl shows star chart pointing to Mt. Fuji.", completed:false, unlocked:false },
-  { id:3, name:"Santorini Caldera", location:"Greece", elevation:367, targetPlats:367, lat:36.393, lng:25.461, rescue:"🧩 Pumice Anchor", summary:"Inside the flooded caldera, retrieve the anchor that stabilises tectonic pressure readings.", connection:"Anchor core reveals map to Mt. Vesuvius’ forgotten sister – Campi Flegrei.", completed:false, unlocked:false },
-  { id:4, name:"Campi Flegrei", location:"Italy", elevation:458, targetPlats:458, lat:40.827, lng:14.139, rescue:"🔥 Phlegraean Ember", summary:"Evade hydrothermal vents to snatch an ember that pulses with geothermal rhythm.", connection:"Ember activates the Volcanic Chronometer base. Next clue: Merapi.", completed:false, unlocked:false },
-  { id:5, name:"Campi Flegrei Deep Zone", location:"Italy", elevation:458, targetPlats:458, lat:40.827, lng:14.139, rescue:"🔔 Solfatara Harmonic Bell", summary:"Inside the bradyseismic dome, retrieve bell that hums at magma frequency.", connection:"Harmonics neutralise Etna's unrest, draw final rescue: Erta Ale.", completed:false, unlocked:false },
-  { id:6, name:"Erta Ale", location:"Ethiopia", elevation:613, targetPlats:613, lat:13.600, lng:40.667, rescue:"🌋 Gate of Hell Serpent", summary:"Walk the permanent lava lake edge – rescue molten serpent artifact.", connection:"Serpent sets off chain completion → unlock secret volcano: Ol Doinyo Lengai.", completed:false, unlocked:false },
-  { id:7, name:"Cerro Negro", location:"Nicaragua", elevation:728, targetPlats:728, lat:12.505, lng:-86.702, rescue:"🖤 Black Sand Sigil", summary:"Ash-covered slab with magnetic anomalies. Decode the sigil under eclipse.", connection:"Sigil triggers chain reaction – next artifact at Cotopaxi.", completed:false, unlocked:false },
-  { id:8, name:"Lake Toba", location:"Indonesia", elevation:905, targetPlats:905, lat:2.684, lng:98.876, rescue:"🧬 Youngest Toba Tuff", summary:"Recover a silica-rich sample to understand the supereruption pattern.", connection:"Sync with Chronometer leading to Campi Flegrei's deep chamber.", completed:false, unlocked:false },
-  { id:9, name:"Soufrière Hills", location:"Montserrat", elevation:915, targetPlats:915, lat:16.720, lng:-62.180, rescue:"🏚️ Plymouth Relic", summary:"From buried city, take the clock that stopped at the moment of collapse.", connection:"Clock synchronizes with all collected items. Final volcano activation: Mount Spurr.", completed:false, unlocked:false },
-  { id:10, name:"Stromboli", location:"Italy", elevation:924, targetPlats:924, lat:38.789, lng:15.213, rescue:"🌋 Tephra Compass", summary:"Ride the rhythmic explosions and retrieve a compass that points to the next volcanic weak point.", connection:"Compass needle spins toward Santorini.", completed:false, unlocked:false },
-  { id:11, name:"Sakurajima", location:"Kyushu, Japan", elevation:1117, targetPlats:1117, lat:31.580, lng:130.650, rescue:"🎐 Showa Vent Bell", summary:"Hang from a rope above explosive vent to collect a resonant bell.", connection:"Bell's ring predicts next location: Aso.", completed:false, unlocked:false },
-  { id:12, name:"Kīlauea", location:"Hawaiʻi, USA", elevation:1247, targetPlats:1247, lat:19.407, lng:-155.283, rescue:"🌺 Pele’s Tear", summary:"Walk on active lava crust to take Pele’s Tear, a solidified droplet with mythical power.", connection:"Tear resonates with Mauna Loa’s caldera.", completed:false, unlocked:false },
-  { id:13, name:"Mount Vesuvius", location:"Italy", elevation:1281, targetPlats:1281, lat:40.822, lng:14.426, rescue:"⚱️ Ash-Covered Scroll", summary:"Deep inside Pompeii's shadow, recover a scroll that predicts the next supereruption. Decode the first glyph of the Chronometer.", connection:"Scroll reveals the Obsidian Key location – Mount Etna.", completed:false, unlocked:false },
-  { id:14, name:"Mount Pelée", location:"Martinique", elevation:1397, targetPlats:1397, lat:14.816, lng:-61.166, rescue:"⚠️ 1902 Nuée Ardente Pearl", summary:"Retrieve a petrified witness of the deadliest pyroclastic flow of 20th century.", connection:"Pearl unlocks the SUPERCHAIN mission.", completed:false, unlocked:false },
-  { id:15, name:"Mount Unzen", location:"Japan", elevation:1486, targetPlats:1486, lat:32.758, lng:130.296, rescue:"🏯 Hizen Chrono-Katana", summary:"Retrieve the volcano-forged blade that seals eruptive pressure.", connection:"Katana makes glider escape successful. Tutorial mode complete. Volcano World Map unlocked.", completed:false, unlocked:false },
-  { id:16, name:"Hekla", location:"Iceland", elevation:1488, targetPlats:1488, lat:63.992, lng:-19.666, rescue:"🏛️ Gateway Rune", summary:"Activate the runic gate inside Hekla's magma duct.", connection:"Rune powers the artifact fusion. Piton de la Fournaise beacon lit.", completed:false, unlocked:false },
-  { id:17, name:"Mount Aso", location:"Japan", elevation:1592, targetPlats:1592, lat:32.884, lng:131.104, rescue:"🐉 Kyushu Caldera Eye", summary:"Descend into the world’s largest caldera; retrieve the obsidian dragon eye.", connection:"Eye unlocks path to Rinjani.", completed:false, unlocked:false },
-  { id:18, name:"Eyjafjallajökull", location:"Iceland", elevation:1666, targetPlats:1666, lat:63.619, lng:-19.616, rescue:"❄️ Jökulhlaup Stone", summary:"Chase glacial outburst to capture a prismatic stone.", connection:"Stone assembles the Chronometer — one component left at Hekla.", completed:false, unlocked:false },
-  { id:19, name:"Cleveland", location:"Aleutian Islands, USA", elevation:1730, targetPlats:1730, lat:52.822, lng:-169.944, rescue:"🪽 Chuginadak Talisman", summary:"From the remote island volcano, rescue a talisman that protects from ashfall.", connection:"Talisman unlocks the volcano rush finale scenario.", completed:false, unlocked:false },
-  { id:20, name:"Mount Bromo", location:"East Java, Indonesia", elevation:2329, targetPlats:2329, lat:-7.942, lng:112.953, rescue:"🎭 Kasada Cosmic Mask", summary:"During the annual ceremony inside the crater, claim the mask of eruption deity.", connection:"Mask unites all 37 artifacts to stabilize the Ring of Fire. Side quest: Teide.", completed:false, unlocked:false },
-  { id:21, name:"Mount Sinabung", location:"Sumatra, Indonesia", elevation:2460, targetPlats:2460, lat:3.170, lng:98.392, rescue:"🪶 Karo Heritage Feather", summary:"Amid pyroclastic flow debris, recover an heirloom that calms magma convection.", connection:"Feather binds with Oracle Stone – next Ruapehu.", completed:false, unlocked:false },
-  { id:22, name:"Mayon", location:"Philippines", elevation:2463, targetPlats:2463, lat:13.258, lng:123.685, rescue:"📿 Perfect Cone Amulet", summary:"Scout the perfect cone’s gully to retrieve amulet used by ancient priests.", connection:"Amulet reveals the last part – the Chronometer’s dial.", completed:false, unlocked:false },
-  { id:23, name:"Mount St. Helens", location:"Washington, USA", elevation:2549, targetPlats:2549, lat:46.200, lng:-122.186, rescue:"💥 Spirit Lake Helix", summary:"Inside the blast zone, recover a twisted metal helix that absorbs volcanic shockwaves.", connection:"Helix vibration matches Nevado del Ruiz.", completed:false, unlocked:false },
-  { id:24, name:"Piton de la Fournaise", location:"Réunion, France", elevation:2632, targetPlats:2632, lat:-21.244, lng:55.708, rescue:"🔥 Solar Pyroxene", summary:"At dawn inside the active crater, catch the first light reflecting a rare mineral.", connection:"Pyroxene provides energy. Final missing link: Mount Rainier.", completed:false, unlocked:false },
-  { id:25, name:"Mount Garibaldi", location:"Canada", elevation:2678, targetPlats:2678, lat:49.850, lng:-123.000, rescue:"🪶 Squamish Rescue Amulet", summary:"Recover the sea-to-sky artifact before the caldera collapses.", connection:"Amulet triggers escape sequence: exit volcano on glider.", completed:false, unlocked:false },
-  { id:26, name:"Mount Ruapehu", location:"New Zealand", elevation:2797, targetPlats:2797, lat:-39.280, lng:175.570, rescue:"🧊 Crater Lake Chrono", summary:"Submerge into the warm acidic lake and bring out a timed quartz.", connection:"Quartz stabilizes tectonic drift → puzzle solved at Mount Nyiragongo.", completed:false, unlocked:false },
-  { id:27, name:"Yellowstone Caldera", location:"USA", elevation:2805, targetPlats:2805, lat:44.430, lng:-110.670, rescue:"🌋 Superplume Emblem", summary:"Mission: retrieve geo-seismic stabilizer before the caldera inflates too far.", connection:"Emblem warns of eruption in-coming → race to Toba.", completed:false, unlocked:false },
-  { id:28, name:"Villarrica", location:"Chile", elevation:2847, targetPlats:2847, lat:-39.420, lng:-71.930, rescue:"🌋 Rucapillán Idol", summary:"Rescue the Mapuche guardian idol stolen by seismic cracks.", connection:"Idol opens path to Mount St. Helens.", completed:false, unlocked:false },
-  { id:29, name:"Mount Tambora", location:"Indonesia", elevation:2850, targetPlats:2850, lat:-8.250, lng:118.000, rescue:"💀 1815 Chrono-Ash", summary:"Unearth a sealed time capsule from the year without summer.", connection:"Ash reveals final piece location – Eyjafjallajökull.", completed:false, unlocked:false },
-  { id:30, name:"Bezymianny", location:"Kamchatka, Russia", elevation:2882, targetPlats:2882, lat:55.978, lng:160.587, rescue:"⚡ 1956 Lateral Key", summary:"Recover the key from the infamous sector collapse.", connection:"All 45+ components converge → Chronometer prototype operational.", completed:false, unlocked:false },
-  { id:31, name:"Mount Merapi", location:"Java, Indonesia", elevation:2910, targetPlats:2910, lat:-7.540, lng:110.446, rescue:"🐉 Dragon’s Tephra", summary:"Ancient Javanese temple inside the crater. Rescue the artifact of the 'fire keeper'.", connection:"Tephra combines with ember to reveal Kraken’s caldera.", completed:false, unlocked:false },
-  { id:32, name:"Ol Doinyo Lengai", location:"Tanzania", elevation:2962, targetPlats:2962, lat:-2.764, lng:35.914, rescue:"🧂 Natrocarbonatite Star", summary:"Recover the only cooled carbonate lava fragment from the 'Mountain of God'.", connection:"Star reveals global eruption timeline. Next: Colima's hidden chamber.", completed:false, unlocked:false },
-  { id:33, name:"Mount Merbabu", location:"Indonesia", elevation:3145, targetPlats:3145, lat:-7.454, lng:110.440, rescue:"📜 Lontar Codex", summary:"Lost manuscript inside the volcanic crater that predicts volcano's heartbeat.", connection:"Codex sequence leads to Mount Sinabung recovery.", completed:false, unlocked:false },
-  { id:34, name:"Mount Etna", location:"Sicily, Italy", elevation:3357, targetPlats:3357, lat:37.751, lng:14.994, rescue:"🗝️ Obsidian Key", summary:"Descend into a lava tube guarded by pyroclastic traps. The key unlocks a sealed cinder cone.", connection:"Unlocks the entrance to Stromboli’s ‘Tephra Vault’.", completed:false, unlocked:false },
-  { id:35, name:"Mount Spurr", location:"Alaska, USA", elevation:3374, targetPlats:3374, lat:61.299, lng:-152.251, rescue:"❄️ Tephra Winter Orb", summary:"Retrieve an ash-globule that carries subarctic volcanic history.", connection:"Orb reveals final test chamber: Bezymianny.", completed:false, unlocked:false },
-  { id:36, name:"Koryaksky", location:"Russia", elevation:3456, targetPlats:3456, lat:53.321, lng:158.712, rescue:"⛰️ Avacha Petroglyph", summary:"Ancient rock art inside the crater holds the last instruction.", connection:"All artifacts assembled → The Great Eruption prediction system activates.", completed:false, unlocked:false },
-  { id:37, name:"Nyiragongo", location:"DR Congo", elevation:3470, targetPlats:3470, lat:-1.520, lng:29.250, rescue:"💎 Lava Lake Prism", summary:"Descend into the world's most fluid lava lake and extract a prism.", connection:"Prism refracts the next artifact: Mayon's Bicol Amulet.", completed:false, unlocked:false },
-  { id:38, name:"Teide", location:"Tenerife, Spain", elevation:3715, targetPlats:3715, lat:28.273, lng:-16.641, rescue:"🌵 Guanche Eruption Glyph", summary:"Inside the lava tubes of Teide, recover a glyph that predicts lateral blast.", connection:"Glyph triggers final 'volcano rush' escape sequence.", completed:false, unlocked:false },
-  { id:39, name:"Mount Rinjani", location:"Indonesia", elevation:3726, targetPlats:3726, lat:-8.412, lng:116.458, rescue:"🌙 Segara Anak Crescent", summary:"Swim the crater lake to retrieve a moon-shaped crystal forged by ancient eruption.", connection:"Crystal reflects the trail to Mt. Tambora.", completed:false, unlocked:false },
-  { id:40, name:"Fuego", location:"Guatemala", elevation:3763, targetPlats:3763, lat:14.473, lng:-90.880, rescue:"🔥 Blood of the Volcano", summary:"During a strombolian outburst, capture a piece of incandescent spatter that holds memory.", connection:"Blood sample leads to Cerro Negro’s vent.", completed:false, unlocked:false },
-  { id:41, name:"Mount Fuji", location:"Honshu, Japan", elevation:3776, targetPlats:3776, lat:35.361, lng:138.727, rescue:"🌸 Blossom of the Sleeping Giant", summary:"Inside a hidden subglacial shrine, fetch the sacred cherry branch artifact.", connection:"Branch awakens map of Pacific Ring of Fire — next stop: Kīlauea.", completed:false, unlocked:false },
-  { id:42, name:"Mount Erebus", location:"Antarctica", elevation:3794, targetPlats:3794, lat:-77.530, lng:167.170, rescue:"❄️ Phonolite Bell", summary:"On the icy slopes, extract a unique lava fragment that rings at subzero temperatures.", connection:"Final artifact: The Chronometer is fully restored.", completed:false, unlocked:false },
-  { id:43, name:"Colima", location:"Mexico", elevation:3850, targetPlats:3850, lat:19.514, lng:-103.620, rescue:"⚙️ Fuego Ancestral Gear", summary:"Deep in the scoria tunnels, retrieve an ancient volcanic gear wheel.", connection:"Gear activates Chronometer final phase → mt. Merbabu clue.", completed:false, unlocked:false },
-  { id:44, name:"Mount Cameroon", location:"Cameroon", elevation:4040, targetPlats:4040, lat:4.217, lng:9.170, rescue:"🐚 Mongo Ma Bell", summary:"Obtain the ceremonial bell of the mountain god to calm seismic shift.", connection:"Bell starts final countdown: escape all volcanos with glider.", completed:false, unlocked:false },
-  { id:45, name:"Mauna Loa", location:"Hawaiʻi, USA", elevation:4169, targetPlats:4169, lat:19.475, lng:-155.608, rescue:"🏔️ Mokuʻāweoweo Core", summary:"Retrieve a meteorite-like core from the summit pit, forged by ancient eruptions.", connection:"Core reveals a sequence to decode the magma cipher at Popocatépetl.", completed:false, unlocked:false },
-  { id:46, name:"Mauna Kea", location:"Hawaiʻi, USA", elevation:4205, targetPlats:4205, lat:19.820, lng:-155.468, rescue:"🔭 Poliʻahu Scepter", summary:"Recover the snow goddess’ scepter – last artifact needed to complete the rescue catalogue.", connection:"Scepter completes the 'Volcano Sage' quest → new game plus endings.", completed:false, unlocked:false },
-  { id:47, name:"Mount Shasta", location:"California, USA", elevation:4317, targetPlats:4317, lat:41.409, lng:-122.195, rescue:"✨ Lemurian Crystal", summary:"Legendary crystal within the volcano's spiritual chambers. Bring it to prevent global supervolcano chain.", connection:"Crystal powers the final escape glider – Volcano Rush endgame begins.", completed:false, unlocked:false },
-  { id:48, name:"Mount Rainier", location:"Washington, USA", elevation:4392, targetPlats:4392, lat:46.853, lng:-121.760, rescue:"💧 Nisqually Tear", summary:"Under ice caves, get a droplet that carries ancient volcanic memory.", connection:"Tear completes the Chronometer prototype. Warning: supervolcano Yellowstone stirs.", completed:false, unlocked:false },
-  { id:49, name:"Nevado del Ruiz", location:"Colombia", elevation:5321, targetPlats:5321, lat:4.892, lng:-75.324, rescue:"⛰️ La Cumbre Turquoise", summary:"Retrieve a hardened lava turquoise from the 1985 lahar zone.", connection:"Turquoise fits into Chronometer’s third slot – trigger: Sakurajima.", completed:false, unlocked:false },
-  { id:50, name:"Popocatépetl", location:"Mexico", elevation:5426, targetPlats:5426, lat:19.023, lng:-98.622, rescue:"🪶 Quetzalcoatl's Chalice", summary:"Climb the smoking colossus — rescue a pre-Aztec chalice full of crystallized magma.", connection:"Chalice's glyph aligns with Fuego volcano.", completed:false, unlocked:false },
-  { id:51, name:"Cotopaxi", location:"Ecuador", elevation:5897, targetPlats:5897, lat:-0.677, lng:-78.436, rescue:"🧊 Glacial Pyroclast", summary:"Ice meets fire: capture a rare frozen pyroclast inside the glacier cap.", connection:"Shows coordinates to Villarrica.", completed:false, unlocked:false },
-  { id:52, name:"Chimborazo", location:"Ecuador", elevation:6263, targetPlats:6263, lat:-1.469, lng:-78.817, rescue:"🌍 Earth's Core Echo", summary:"Retrieve a magnetic sample from the inner crater, closest point to the stars.", connection:"Echo sends signal to Mauna Kea's final sanctuary.", completed:false, unlocked:false }
+  // ── targetPlats = Math.floor(elevation / 2) ──
+  // All volcanoes are above-ground and active or historically significant
+  { id:0,  name:"Krakatoa (Anak Krakatau)", location:"Indonesia",        elevation:157,  targetPlats:78,   lat:-6.102, lng:105.423,  rescue:"🌊 Sunda Strait Relic",          summary:"Amidst the restless waves, salvage a siren gem that records tsunamis.",                                                       connection:"Gem sings frequency of next volcano: Taal.",             completed:false, unlocked:true  },
+  { id:1,  name:"Taal Volcano",             location:"Philippines",       elevation:311,  targetPlats:155,  lat:14.002, lng:120.993,  rescue:"🪶 Lake Crater Pearl",            summary:"Dive into the acidic lake and recover a pearl that neutralises volcanic gas.",                                               connection:"Pearl shows star chart pointing to Santorini.",          completed:false, unlocked:false },
+  { id:2,  name:"Santorini Caldera",        location:"Greece",            elevation:367,  targetPlats:183,  lat:36.393, lng:25.461,   rescue:"🧩 Pumice Anchor",               summary:"Inside the ancient caldera, retrieve the anchor that stabilises tectonic pressure readings.",                                connection:"Anchor core reveals map to Campi Flegrei.",             completed:false, unlocked:false },
+  { id:3,  name:"Campi Flegrei",            location:"Italy",             elevation:458,  targetPlats:229,  lat:40.827, lng:14.139,   rescue:"🔥 Phlegraean Ember",            summary:"Evade hydrothermal vents to snatch an ember that pulses with geothermal rhythm.",                                           connection:"Ember activates the Volcanic Chronometer base.",         completed:false, unlocked:false },
+  { id:4,  name:"Erta Ale",                 location:"Ethiopia",          elevation:613,  targetPlats:306,  lat:13.600, lng:40.667,   rescue:"🌋 Gate of Hell Serpent",        summary:"Walk the permanent lava lake edge — rescue the molten serpent artifact.",                                                    connection:"Serpent unlocks Ol Doinyo Lengai.",                     completed:false, unlocked:false },
+  { id:5,  name:"Cerro Negro",              location:"Nicaragua",         elevation:728,  targetPlats:364,  lat:12.505, lng:-86.702,  rescue:"🖤 Black Sand Sigil",            summary:"Ash-covered slab with magnetic anomalies. Decode the sigil under eclipse.",                                                  connection:"Sigil triggers chain reaction — next artifact at Stromboli.", completed:false, unlocked:false },
+  { id:6,  name:"Ol Doinyo Lengai",         location:"Tanzania",          elevation:2962, targetPlats:1481, lat:-2.764, lng:35.914,   rescue:"🧂 Natrocarbonatite Star",       summary:"Recover the only cooled carbonate lava fragment from the Mountain of God.",                                                  connection:"Star reveals global eruption timeline.",                 completed:false, unlocked:false },
+  { id:7,  name:"Stromboli",                location:"Italy",             elevation:924,  targetPlats:462,  lat:38.789, lng:15.213,   rescue:"🌋 Tephra Compass",              summary:"Ride the rhythmic explosions and retrieve a compass that points to the next volcanic weak point.",                           connection:"Compass needle spins toward Soufrière Hills.",          completed:false, unlocked:false },
+  { id:8,  name:"Soufrière Hills",          location:"Montserrat",        elevation:915,  targetPlats:457,  lat:16.720, lng:-62.180,  rescue:"🏚️ Plymouth Relic",             summary:"From buried city, take the clock that stopped at the moment of collapse.",                                                   connection:"Clock synchronizes all items — next: Hekla.",           completed:false, unlocked:false },
+  { id:9,  name:"Hekla",                    location:"Iceland",           elevation:1488, targetPlats:744,  lat:63.992, lng:-19.666,  rescue:"🏛️ Gateway Rune",              summary:"Activate the runic gate inside Hekla's magma duct.",                                                                       connection:"Rune powers the artifact fusion. Piton de la Fournaise beacon lit.", completed:false, unlocked:false },
+  { id:10, name:"Eyjafjallajökull",         location:"Iceland",           elevation:1666, targetPlats:833,  lat:63.619, lng:-19.616,  rescue:"❄️ Jökulhlaup Stone",          summary:"Chase the glacial outburst to capture a prismatic stone.",                                                                   connection:"Stone assembles the Chronometer — one component left at Sakurajima.", completed:false, unlocked:false },
+  { id:11, name:"Sakurajima",               location:"Japan",             elevation:1117, targetPlats:558,  lat:31.580, lng:130.650,  rescue:"🎐 Showa Vent Bell",             summary:"Hang from a rope above the explosive vent to collect a resonant bell.",                                                     connection:"Bell's ring predicts next location: Mount Aso.",         completed:false, unlocked:false },
+  { id:12, name:"Mount Aso",                location:"Japan",             elevation:1592, targetPlats:796,  lat:32.884, lng:131.104,  rescue:"🐉 Kyushu Caldera Eye",          summary:"Descend into the world's largest caldera and retrieve the obsidian dragon eye.",                                          connection:"Eye unlocks path to Kīlauea.",                          completed:false, unlocked:false },
+  { id:13, name:"Kīlauea",                  location:"Hawaiʻi, USA",      elevation:1247, targetPlats:623,  lat:19.407, lng:-155.283, rescue:"🌺 Pele's Tear",                 summary:"Walk on active lava crust to take Pele's Tear, a solidified droplet with mythical power.",                                   connection:"Tear resonates with Mauna Loa's caldera.",              completed:false, unlocked:false },
+  { id:14, name:"Mauna Loa",                location:"Hawaiʻi, USA",      elevation:4169, targetPlats:2084, lat:19.475, lng:-155.608, rescue:"🏔️ Mokuʻāweoweo Core",         summary:"Retrieve a meteorite-like core from the summit pit, forged by ancient eruptions.",                                          connection:"Core decodes the magma cipher at Popocatépetl.",        completed:false, unlocked:false },
+  { id:15, name:"Mount Vesuvius",           location:"Italy",             elevation:1281, targetPlats:640,  lat:40.822, lng:14.426,   rescue:"⚱️ Ash-Covered Scroll",          summary:"Deep inside Pompeii's shadow, recover a scroll that predicts the next supereruption.",                                       connection:"Scroll reveals the Obsidian Key — Mount Etna.",         completed:false, unlocked:false },
+  { id:16, name:"Mount Etna",               location:"Sicily, Italy",     elevation:3357, targetPlats:1678, lat:37.751, lng:14.994,   rescue:"🗝️ Obsidian Key",               summary:"Descend into a lava tube guarded by pyroclastic traps.",                                                                    connection:"Unlocks Stromboli's Tephra Vault — but that's done. Next: Nyiragongo.", completed:false, unlocked:false },
+  { id:17, name:"Nyiragongo",               location:"DR Congo",          elevation:3470, targetPlats:1735, lat:-1.520, lng:29.250,   rescue:"💎 Lava Lake Prism",             summary:"Descend into the world's most fluid lava lake and extract a prism.",                                                       connection:"Prism refracts the next artifact: Mayon's Bicol Amulet.", completed:false, unlocked:false },
+  { id:18, name:"Mayon",                    location:"Philippines",       elevation:2463, targetPlats:1231, lat:13.258, lng:123.685,  rescue:"📿 Perfect Cone Amulet",         summary:"Scout the perfect cone's gully to retrieve the amulet used by ancient priests.",                                            connection:"Amulet reveals the last part — the Chronometer's dial.", completed:false, unlocked:false },
+  { id:19, name:"Mount Fuji",               location:"Japan",             elevation:3776, targetPlats:1888, lat:35.361, lng:138.727,  rescue:"🌸 Blossom of the Sleeping Giant", summary:"Inside a hidden subglacial shrine, fetch the sacred cherry branch artifact.",                                               connection:"Branch awakens the map of the Pacific Ring of Fire.",   completed:false, unlocked:false },
+  { id:20, name:"Mount Unzen",              location:"Japan",             elevation:1486, targetPlats:743,  lat:32.758, lng:130.296,  rescue:"🏯 Hizen Chrono-Katana",         summary:"Retrieve the volcano-forged blade that seals eruptive pressure.",                                                          connection:"Katana unlocks the Ring of Fire final sequence.",       completed:false, unlocked:false },
+  { id:21, name:"Mount Bromo",              location:"East Java, Indonesia", elevation:2329, targetPlats:1164, lat:-7.942, lng:112.953, rescue:"🎭 Kasada Cosmic Mask",         summary:"During the annual ceremony inside the crater, claim the mask of the eruption deity.",                                       connection:"Mask unites all 37 artifacts to stabilize the Ring of Fire.", completed:false, unlocked:false },
+  { id:22, name:"Mount Rinjani",            location:"Indonesia",         elevation:3726, targetPlats:1863, lat:-8.412, lng:116.458,  rescue:"🌙 Segara Anak Crescent",        summary:"Swim the crater lake to retrieve a moon-shaped crystal forged by ancient eruption.",                                        connection:"Crystal reflects the trail to Tambora.",                completed:false, unlocked:false },
+  { id:23, name:"Mount Tambora",            location:"Indonesia",         elevation:2850, targetPlats:1425, lat:-8.250, lng:118.000,  rescue:"💀 1815 Chrono-Ash",             summary:"Unearth a sealed time capsule from the Year Without Summer.",                                                              connection:"Ash reveals final piece — Eyjafjallajökull.",           completed:false, unlocked:false },
+  { id:24, name:"Mount Merapi",             location:"Java, Indonesia",   elevation:2910, targetPlats:1455, lat:-7.540, lng:110.446,  rescue:"🐉 Dragon's Tephra",             summary:"Ancient Javanese temple inside the crater. Rescue the artifact of the fire keeper.",                                        connection:"Tephra combines with ember to reveal Krakatoa's secret.", completed:false, unlocked:false },
+  { id:25, name:"Mount Sinabung",           location:"Sumatra, Indonesia", elevation:2460, targetPlats:1230, lat:3.170, lng:98.392,   rescue:"🪶 Karo Heritage Feather",       summary:"Amid pyroclastic flow debris, recover an heirloom that calms magma convection.",                                           connection:"Feather binds with Oracle Stone — next Ruapehu.",       completed:false, unlocked:false },
+  { id:26, name:"Mount Ruapehu",            location:"New Zealand",       elevation:2797, targetPlats:1398, lat:-39.280, lng:175.570, rescue:"🧊 Crater Lake Chrono",          summary:"Submerge into the warm acidic lake and bring out a timed quartz.",                                                         connection:"Quartz stabilizes tectonic drift — next: Piton de la Fournaise.", completed:false, unlocked:false },
+  { id:27, name:"Piton de la Fournaise",    location:"Réunion, France",   elevation:2632, targetPlats:1316, lat:-21.244, lng:55.708,  rescue:"🔥 Solar Pyroxene",              summary:"At dawn inside the active crater, catch the first light reflecting a rare mineral.",                                        connection:"Pyroxene provides energy for the Chronometer.",         completed:false, unlocked:false },
+  { id:28, name:"Mount Cameroon",           location:"Cameroon",          elevation:4040, targetPlats:2020, lat:4.217,  lng:9.170,   rescue:"🐚 Mongo Ma Bell",               summary:"Obtain the ceremonial bell of the mountain god to calm the seismic shift.",                                                  connection:"Bell starts the final countdown.",                      completed:false, unlocked:false },
+  { id:29, name:"Mount Pelée",              location:"Martinique",        elevation:1397, targetPlats:698,  lat:14.816, lng:-61.166,  rescue:"⚠️ 1902 Nuée Ardente Pearl",    summary:"Retrieve a petrified witness of the deadliest pyroclastic flow of the 20th century.",                                       connection:"Pearl unlocks the SUPERCHAIN mission.",                 completed:false, unlocked:false },
+  { id:30, name:"Soufrière St Vincent",     location:"St Vincent",        elevation:1234, targetPlats:617,  lat:13.340, lng:-61.178,  rescue:"🌊 Caribbean Ash Vial",          summary:"Collect a vial of ash from the 2021 eruption that displaced thousands.",                                                    connection:"Ash vial resonates with Pelée's pearl.",               completed:false, unlocked:false },
+  { id:31, name:"Fuego",                    location:"Guatemala",         elevation:3763, targetPlats:1881, lat:14.473, lng:-90.880,  rescue:"🔥 Blood of the Volcano",        summary:"During a strombolian outburst, capture a piece of incandescent spatter that holds memory.",                                  connection:"Blood sample leads to Popocatépetl.",                   completed:false, unlocked:false },
+  { id:32, name:"Popocatépetl",             location:"Mexico",            elevation:5426, targetPlats:2713, lat:19.023, lng:-98.622,  rescue:"🪶 Quetzalcoatl's Chalice",      summary:"Climb the smoking colossus — rescue a pre-Aztec chalice full of crystallized magma.",                                        connection:"Chalice's glyph aligns with Colima.",                   completed:false, unlocked:false },
+  { id:33, name:"Colima",                   location:"Mexico",            elevation:3850, targetPlats:1925, lat:19.514, lng:-103.620, rescue:"⚙️ Fuego Ancestral Gear",        summary:"Deep in the scoria tunnels, retrieve an ancient volcanic gear wheel.",                                                      connection:"Gear activates Chronometer final phase.",               completed:false, unlocked:false },
+  { id:34, name:"Cotopaxi",                 location:"Ecuador",           elevation:5897, targetPlats:2948, lat:-0.677, lng:-78.436,  rescue:"🧊 Glacial Pyroclast",           summary:"Ice meets fire — capture a rare frozen pyroclast inside the glacier cap.",                                                  connection:"Pyroclast shows coordinates to Villarrica.",            completed:false, unlocked:false },
+  { id:35, name:"Villarrica",               location:"Chile",             elevation:2847, targetPlats:1423, lat:-39.420, lng:-71.930, rescue:"🌋 Rucapillán Idol",             summary:"Rescue the Mapuche guardian idol stolen by seismic cracks.",                                                               connection:"Idol opens path to Cerro Negro.",                       completed:false, unlocked:false },
+  { id:36, name:"Mount St. Helens",         location:"Washington, USA",   elevation:2549, targetPlats:1274, lat:46.200, lng:-122.186, rescue:"💥 Spirit Lake Helix",           summary:"Inside the blast zone, recover a twisted metal helix that absorbs volcanic shockwaves.",                                     connection:"Helix vibration matches Bezymianny.",                   completed:false, unlocked:false },
+  { id:37, name:"Mount Rainier",            location:"Washington, USA",   elevation:4392, targetPlats:2196, lat:46.853, lng:-121.760, rescue:"💧 Nisqually Tear",              summary:"Under ice caves, get a droplet that carries ancient volcanic memory.",                                                      connection:"Tear completes the Chronometer prototype.",             completed:false, unlocked:false },
+  { id:38, name:"Mount Shasta",             location:"California, USA",   elevation:4317, targetPlats:2158, lat:41.409, lng:-122.195, rescue:"✨ Lemurian Crystal",             summary:"Legendary crystal within the volcano's spiritual chambers.",                                                               connection:"Crystal powers the final escape glider.",               completed:false, unlocked:false },
+  { id:39, name:"Yellowstone Caldera",      location:"Wyoming, USA",      elevation:2805, targetPlats:1402, lat:44.430, lng:-110.670, rescue:"🌋 Superplume Emblem",           summary:"Retrieve the geo-seismic stabilizer before the caldera inflates too far.",                                                  connection:"Emblem warns of incoming eruption — race to Spurr.",   completed:false, unlocked:false },
+  { id:40, name:"Mount Spurr",              location:"Alaska, USA",       elevation:3374, targetPlats:1687, lat:61.299, lng:-152.251, rescue:"❄️ Tephra Winter Orb",           summary:"Retrieve an ash-globule that carries subarctic volcanic history.",                                                         connection:"Orb reveals final test chamber: Bezymianny.",           completed:false, unlocked:false },
+  { id:41, name:"Cleveland Volcano",        location:"Aleutian Islands",  elevation:1730, targetPlats:865,  lat:52.822, lng:-169.944, rescue:"🪽 Chuginadak Talisman",         summary:"From the remote island volcano, rescue a talisman that protects from ashfall.",                                            connection:"Talisman unlocks the volcano rush finale.",             completed:false, unlocked:false },
+  { id:42, name:"Bezymianny",               location:"Kamchatka, Russia", elevation:2882, targetPlats:1441, lat:55.978, lng:160.587,  rescue:"⚡ 1956 Lateral Key",            summary:"Recover the key from the infamous sector collapse.",                                                                        connection:"All components converge — Chronometer prototype operational.", completed:false, unlocked:false },
+  { id:43, name:"Koryaksky",               location:"Kamchatka, Russia", elevation:3456, targetPlats:1728, lat:53.321, lng:158.712,  rescue:"⛰️ Avacha Petroglyph",          summary:"Ancient rock art inside the crater holds the last instruction.",                                                           connection:"All artifacts assembled — The Great Eruption prediction system activates.", completed:false, unlocked:false },
+  { id:44, name:"Teide",                    location:"Tenerife, Spain",   elevation:3715, targetPlats:1857, lat:28.273, lng:-16.641,  rescue:"🌵 Guanche Eruption Glyph",      summary:"Inside the lava tubes of Teide, recover a glyph that predicts lateral blast.",                                             connection:"Glyph triggers the final volcano rush escape sequence.", completed:false, unlocked:false },
+  { id:45, name:"Mount Erebus",             location:"Antarctica",        elevation:3794, targetPlats:1897, lat:-77.530, lng:167.170, rescue:"❄️ Phonolite Bell",              summary:"On the icy slopes, extract a unique lava fragment that rings at subzero temperatures.",                                      connection:"Final artifact: The Chronometer is fully restored.",    completed:false, unlocked:false },
+  { id:46, name:"Mauna Kea",                location:"Hawaiʻi, USA",      elevation:4205, targetPlats:2102, lat:19.820, lng:-155.468, rescue:"🔭 Poliʻahu Scepter",            summary:"Recover the snow goddess's scepter — last artifact needed to complete the rescue catalogue.", connection:"Scepter completes the Volcano Sage quest.", completed:false, unlocked:false },
+  { id:47, name:"Nevado del Ruiz",          location:"Colombia",          elevation:5321, targetPlats:2660, lat:4.895,  lng:-75.322,  rescue:"⛰️ La Cumbre Turquoise",        summary:"Retrieve a hardened lava turquoise from the 1985 lahar zone.",                                                            connection:"Turquoise fits into Chronometer's third slot.",         completed:false, unlocked:false },
+  { id:48, name:"Chimborazo",               location:"Ecuador",           elevation:6263, targetPlats:3131, lat:-1.469, lng:-78.817,  rescue:"🌍 Earth's Core Echo",           summary:"Retrieve a magnetic sample from the inner crater — closest to the stars.",                                                  connection:"Echo sends signal to Mauna Kea's final sanctuary.",     completed:false, unlocked:false },
+  { id:49, name:"Mount Garibaldi",          location:"Canada",            elevation:2678, targetPlats:1339, lat:49.850, lng:-123.000, rescue:"🪶 Squamish Rescue Amulet",      summary:"Recover the sea-to-sky artifact before the caldera collapses.",                                                           connection:"Amulet triggers escape sequence: exit on glider.",      completed:false, unlocked:false },
+  { id:50, name:"Llaima",                   location:"Chile",             elevation:3125, targetPlats:1562, lat:-38.692, lng:-71.729, rescue:"🌋 Rucapillán Idol II",          summary:"A second guardian idol, twin to Villarrica's. Needed for the final binding.",                                              connection:"Twin idols combined — VOLCANO CHRONICLES COMPLETE.",    completed:false, unlocked:false }
 ];
+
+// ═══════════════════════════════════════════════════
+// ██ STORY MODE PLATFORM CONFIG ██
+// Per-episode platform generation overrides
+// Any episode can have a storyPlatformConfig object
+// Unset fields fall back to makePlatform defaults
+// ═══════════════════════════════════════════════════
+
+// Global active story platform config (set when story episode starts)
+let storyPlatformCfg = null;
+
+// Default config — mirrors the normal makePlatform probabilities
+const STORY_PLATFORM_DEFAULTS = {
+  purple:   0.05,   // 5%
+  green:    0.08,   // 8%  (coin platforms)
+  ice:      0.08,   // 8%
+  gap:      0.05,   // base gap chance (increases with level)
+  vine:     0.30,   // vine spawn chance on gap platforms
+  tipping:  null,   // null = use level-based default
+  widthBase: null,  // null = use level-based default
+};
+
+
 
 // ═══ DB ═══
 const DB_KEY = 'fil_v4';
@@ -1146,6 +1177,7 @@ function guestLogin(){
   document.getElementById('bestScoreDisplay').textContent = guestData.bestScore>0 ? '🏆 Best: Platform '+guestData.bestScore : 'No runs yet!';
   updatePiggyDisplay();
   loadSettings();
+  checkAndRestorePowerupSession();
   showScreen('startScreen');
   ud.hideTutorial = false;
 }
@@ -1299,19 +1331,33 @@ function getZoomedCanvasH(){ return gH / currentZoom; }
 function makePlatform(y, index, prevX, prevW){
   const lvl = Math.floor(index / 100) + 1;
   const t = Math.min((lvl - 1) / 20, 1);
-    let color; const r = Math.random();
-  if (r < 0.05) color = 'purple';
-  else if (r < 0.13) color = 'green';    // 8%
-  else if (r < 0.21) color = 'ice';      // 8%
-  else color = ['red','blue','yellow'][Math.floor(Math.random() * 3)];
-  // Platform width narrows with level.
-  // lvl 1: base ~0.38 (full), random adds up to 0.18 → max ~0.56 of world width
-  // lvl 10: base ~0.25, random up to 0.12
-  // lvl 20+: base ~0.13 (1/3 width), random up to 0.06 → most platforms very narrow
-  const widthT = Math.min((lvl - 1) / 18, 1); // 0 at lvl 1, 1 at lvl 19+
-  const baseW = 0.38 - widthT * 0.25;          // 0.38 → 0.13 (just above 1/3)
-  const randW = (0.18 - widthT * 0.12) * Math.random(); // random range shrinks too
-  const w = Math.max(55, WORLD_W * (baseW + randW));     // hard floor of 55px
+
+  // ── STORY MODE PLATFORM CONFIG ──
+  // If storyPlatformCfg is active, use its overrides; otherwise use normal defaults
+  const cfg = storyPlatformCfg || STORY_PLATFORM_DEFAULTS;
+
+  // Color probabilities — support both story cfg and normal defaults
+  let color;
+  const r = Math.random();
+  const pPurple = cfg.purple   != null ? cfg.purple   : 0.05;
+  const pGreen  = cfg.green    != null ? cfg.green    : 0.08;
+  const pIce    = cfg.ice      != null ? cfg.ice      : 0.08;
+  if      (r < pPurple)                color = 'purple';
+  else if (r < pPurple + pGreen)       color = 'green';
+  else if (r < pPurple + pGreen + pIce) color = 'ice';
+  else    color = ['red','blue','yellow'][Math.floor(Math.random() * 3)];
+
+  // Platform width — story mode can override widthBase or use level-based default
+  const widthT = cfg.widthBase != null
+    ? 0                                            // story overrides full width
+    : Math.min((lvl - 1) / 18, 1);
+  const baseW = cfg.widthBase != null
+    ? cfg.widthBase
+    : 0.38 - widthT * 0.25;
+  const randW = (0.18 - widthT * 0.12) * Math.random();
+  const w = Math.max(55, WORLD_W * (baseW + randW));
+
+  // X position
   let x;
   const maxOff = WORLD_W * 0.3 * t;
   if(prevX !== undefined && maxOff > 0){
@@ -1321,17 +1367,24 @@ function makePlatform(y, index, prevX, prevW){
   } else {
     x = Math.random() * (WORLD_W - w);
   }
-  const gapChance = 0.05 + t * 0.25;
+
+  // Gap chance — story mode can override base gap probability
+  const baseGap = cfg.gap != null ? cfg.gap : 0.05;
+  const gapChance = baseGap + t * 0.25;
   const isGap = Math.random() < gapChance;
   const extraGap = isGap ? PLATFORM_GAP * (1 + t * 1.5) : 0;
-  // Tipping chance scales with level
-  const tipChance = lvl <= 1 ? 0.025 : lvl <= 2 ? 0.04 : lvl >= 10 ? 0.10 : 0.04 + (lvl-2)*0.007;
-  const canTip = color !== 'purple' && !isGap && Math.random() < tipChance;
-  const tipDir = Math.random() < 0.5 ? 'left' : 'right'; // which end is the pivot
 
-  // --- VINE: randomly spawn on gap platforms (30% chance) ---
+  // Tipping chance — story mode can override or use level default
+  const tipChance = cfg.tipping != null
+    ? cfg.tipping
+    : (lvl <= 1 ? 0.025 : lvl <= 2 ? 0.04 : lvl >= 10 ? 0.10 : 0.04 + (lvl-2)*0.007);
+  const canTip = color !== 'purple' && !isGap && Math.random() < tipChance;
+  const tipDir = Math.random() < 0.5 ? 'left' : 'right';
+
+  // Vine spawn — story mode can override spawn probability
+  const vineChance = cfg.vine != null ? cfg.vine : 0.30;
   let vine = null;
-  if (isGap && Math.random() < 0.3) {
+  if (isGap && Math.random() < vineChance) {
     const positions = ['left', 'center', 'right'];
     const pos = positions[Math.floor(Math.random() * positions.length)];
     vine = { active: true, position: pos, swingAngle: 0, swingSpeed: 0, launched: false };
@@ -1346,7 +1399,7 @@ function makePlatform(y, index, prevX, prevW){
     tipShakeTimer: 0,
     tipPivotX: 0, tipPivotY: 0,
     iceUsed: false,
-    vine: vine   // <-- added vine property
+    vine: vine
   };
 }
 function getCustomLevelChunk(startIndex){
@@ -1368,12 +1421,16 @@ function getCustomLevelChunk(startIndex){
 let nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
 
 function initGame(){
-  if(lastGameWon){
-    // Carry coins and power-ups over from the just-won level — they are already in memory
-    // (handleCoinsAndPowerUps('win') saved them to ud and they're still in the live vars)
-    // Just leave coins/jumpBoosts/etc as-is; don't reload from ud (which is the same values)
-    lastGameWon = false; // reset flag for next run
-  } else if(currentUser){
+  // --- STORY MODE FIX: If in story mode, keep the existing coin amount
+  if (window.currentStoryEpisode && typeof window.storyStartCoins !== 'undefined') {
+    console.log('[STORY] Story mode active, preserving coins =', coins);
+    // DO NOT reload from user data
+  } 
+  else if (lastGameWon) {
+    // Win carryover
+    lastGameWon = false;
+  } 
+  else if (currentUser) {
     const ud = currentUser.ud;
     coins = ud.coins || 0;
     jumpBoosts = Math.min(ud.jumpBoosts || 0, 20);
@@ -1389,6 +1446,12 @@ function initGame(){
     bookUses = 0;
     lavaShips = 0;
   }
+
+  // --- Force sync window.coins (for safety)
+  window.coins = coins;
+  console.log('[FIX] initGame final coins =', coins);
+
+  // --- The rest of the existing initGame code (unchanged, follows below) ---
   level = 1; platformCount = 0; bigHead = false;
   booksOwned = 0; 
   movingPlatformAbove = null; bookPlatformPulled = false;
@@ -1414,7 +1477,7 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
     origY: p.y,
     pulled: false,
     isGap: false,
-    iceUsed: p.iceUsed !== undefined ? p.iceUsed : false  // 👈 preserve or default false
+    iceUsed: p.iceUsed !== undefined ? p.iceUsed : false
   }));
     let last = platforms[platforms.length - 1];
     while(platforms.length < 30){ const np = makePlatform(last.y - PLATFORM_GAP, last.index + 1, last.x, last.w); platforms.push(np); last = np; }
@@ -1451,6 +1514,7 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
   updateTorchHUD();
   updateHUD();
 }
+
 function updateHUD(){
   document.getElementById('coinDisplay').textContent = '🪙 ' + coins;
   document.getElementById('levelDisplay').textContent = 'Level ' + level + (parachuteActive ? ' 🪂' : '');
@@ -1880,18 +1944,23 @@ function updateTippingPlatforms(dt){
 }
 
 function checkTipKillsPlayer(p){
-  // Rough bounding box check during fall — if player overlaps the rotating platform
-  const px = player.x, py = player.y, pw = player.w, ph = player.h;
+  // Bounding-box sweep — checks points along the platform body (top AND bottom edge)
+  // during its rotation. Uses a small tolerance so the check triggers correctly when
+  // the player is standing directly on the platform as it begins to fall.
+  const MARGIN = 8;  // px tolerance — catches the "player on top" case
+  const px = player.x - MARGIN, py = player.y - MARGIN;
+  const pw = player.w + MARGIN * 2,  ph = player.h + MARGIN * 2;
   const cx = p.tipPivotX, cy = p.tipPivotY;
-  // Check a few points along the platform's current rotated position
-  const steps = 6;
-  for(let i=0; i<=steps; i++){
-    const t = i/steps;
-    const localX = p.tipDir === 'left' ? t * p.w : -t * p.w;
-    const localY = 0;
-    const wx = cx + localX * Math.cos(p.tipAngle) - localY * Math.sin(p.tipAngle);
-    const wy = cy + localX * Math.sin(p.tipAngle) + localY * Math.cos(p.tipAngle);
-    if(wx > px && wx < px+pw && wy > py && wy < py+ph) return true;
+  const steps = 8;
+  // Sample both the top edge (localY=0) and bottom edge (localY=PLATFORM_H)
+  for(const localY of [0, PLATFORM_H * 0.5, PLATFORM_H]){
+    for(let i = 0; i <= steps; i++){
+      const t = i / steps;
+      const localX = p.tipDir === 'left' ? t * p.w : -t * p.w;
+      const wx = cx + localX * Math.cos(p.tipAngle) - localY * Math.sin(p.tipAngle);
+      const wy = cy + localX * Math.sin(p.tipAngle) + localY * Math.cos(p.tipAngle);
+      if(wx > px && wx < px + pw && wy > py && wy < py + ph) return true;
+    }
   }
   return false;
 }
@@ -2229,7 +2298,10 @@ if (p.color === 'ice' && !p.iceUsed) {
 			  showNotif('🌋 Level ' + level + '! +50 coins 🪙');
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
-            if(endPlatform > 0 && platformCount >= endPlatform){gameWin(); return;}
+            if(endPlatform > 0 && platformCount >= endPlatform){
+              console.log('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform+' storyEp='+(window.currentStoryEpisode?window.currentStoryEpisode.name:'none'));
+              window.gameWin(); return;
+            }
             updateHUD();
           }
         }
@@ -2796,6 +2868,21 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
     updatePiggyDisplay();
     if(onDone) onDone();
 
+  } else if(outcome === 'menu-retain'){
+    // Keep power-ups and coins exactly as they are
+    if(currentUser){
+      currentUser.ud.coins = coins;
+      currentUser.ud.jumpBoosts = jumpBoosts;
+      currentUser.ud.parachutes = parachutes;
+      currentUser.ud.skipUses = skipUses;
+      currentUser.ud.bookUses = bookUses;
+      currentUser.ud.lavaShips = lavaShips;
+      dbSave();
+    }
+    updateHUD();
+    updatePiggyDisplay();
+    if(onDone) onDone();
+
   } else if(outcome === 'win'){
     // Keep everything — coins and power-ups carry over
     if(currentUser){
@@ -3076,6 +3163,36 @@ function restartGame(){
   doStart();
 }
 
+function restartGameAfterStory(){
+  if(window.currentStoryEpisode && !window.versusMode){
+    const ep = window.currentStoryEpisode;
+    console.log('[STORY] Restarting episode:', ep.name);
+    
+    
+    if(ep.platformConfig){
+      window.storyPlatformCfg = Object.assign({}, window.STORY_PLATFORM_DEFAULTS, ep.platformConfig);
+    } else {
+      window.storyPlatformCfg = null;
+    }
+    
+    document.getElementById('gameOver').classList.remove('show');
+    
+    if(typeof window.initGame === 'function') window.initGame();
+    if(typeof window.startGame === 'function') window.startGame();
+    
+    const variant = Math.random() < 0.5 ? 'storyPlay1' : 'storyPlay2';
+    if(typeof window.playBgMusic === 'function') window.playBgMusic(variant);
+    
+    // Capture coins after a short delay
+    setTimeout(() => {
+      window.storyStartCoins = coins;
+      console.log('[STORY] Restart - storyStartCoins =', window.storyStartCoins);
+    }, 100);
+  } else {
+    if(typeof restartGame === 'function') restartGame();
+  }
+}
+
 function sellAllPowerUps() {
   // 1. Define shop values
   const BOOST_VAL = 4;
@@ -3128,8 +3245,15 @@ function goToMenu() {
   lastGameWon = false;
   diedInVersus = false;
 
-  // Sell power-ups back to coins and keep coins (menu path)
-  handleCoinsAndPowerUps('menu');
+  // Power-ups: convert to coins (default) OR retain for next game (if setting enabled)
+  if (retainPowerups) {
+    // Save current power-up state and coins as-is; do NOT sell anything
+    saveCurrentPowerupState();
+    handleCoinsAndPowerUps('menu-retain');
+  } else {
+    // Default: sell power-ups → coins
+    handleCoinsAndPowerUps('menu');
+  }
 
   // Save progress
   saveScore();
@@ -3930,10 +4054,18 @@ function setMode(m){
 
 // ═══ BACKGROUND MUSIC ═══
 const BG_MUSIC = {
-  menu:        'Menu.mp3',
-  multiplayer: 'Frogger.mp3',
-  climber:     'Climber.mp3'
+  menu:           'Menu.mp3',
+  multiplayer:    'Frogger.mp3',
+  climber:        'Climber.mp3',
+  storyMap:       'WorldMap.mp3',        // Story Mode world map screen
+  storyStart:     'StoryMode-Start.mp3', // Pre-game start animation
+  storyPlay1:     'StoryMode1.mp3',      // In-game gameplay (randomly alternates v1/v2)
+  storyPlay2:     'StoryMode2.mp3',      // In-game gameplay v2
+  storyVictory:   'Victory.mp3'          // Level complete animation + end stats screen
 };
+
+// Track which story gameplay variant was last played (alternate each level)
+let storyPlayVariant = 1;
 let bgAudio = null;
 let bgMusicTrack = null;
 
@@ -3957,9 +4089,37 @@ function updateBgMusic(){
   const id = screen.id;
   if(id==='editorScreen'){ stopBgMusic(); }
   else if(id==='gameScreen'){
-    playBgMusic(versusMode ? 'multiplayer' : gameMode==='frogger' ? 'multiplayer' : 'climber');
+    if (window.currentStoryEpisode) {
+      // Story mode in-game: alternate between storyPlay1 and storyPlay2 randomly
+      const variant = (Math.random() < 0.5) ? 'storyPlay1' : 'storyPlay2';
+      playBgMusic(variant);
+    } else {
+      playBgMusic(versusMode ? 'multiplayer' : gameMode==='frogger' ? 'multiplayer' : 'climber');
+    }
   } else {
     playBgMusic('menu');
+  }
+}
+
+// Story-specific music helpers — called from the story mode IIFE
+function playStoryMapMusic()   { if(bgMusicEnabled) playBgMusic('storyMap'); }
+function playStoryStartMusic() { if(bgMusicEnabled) playBgMusic('storyStart'); }
+function playStoryVictoryMusic(){ if(bgMusicEnabled) playBgMusic('storyVictory'); }
+function stopStoryMusic()      { stopBgMusic(); }
+
+// Close every story overlay — called when the Play navbar button is pressed
+function closeAllStoryOverlays() {
+  ['storyWorldMapOverlay','storyPreScreen','startAnimOverlay',
+   'escapeAnimOverlay','endStatsOverlay','storyInfoOverlay'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // Clear any running story animation
+  if (typeof storyAnimSkipCallback === 'function') storyAnimSkipCallback = null;
+  // Clear story episode state
+  if (window.currentStoryEpisode) {
+    if (typeof restoreEndPlatform === 'function') restoreEndPlatform();
+    window.currentStoryEpisode = null;
   }
 }
 
@@ -4006,6 +4166,7 @@ function toggleMute(){
   }
   applyVolume();
   updateMuteBtn();
+  syncToggle('sMuteToggle', isMuted);  // keep the toggle visual in sync
 }
 
 function applyVolume(){
@@ -4241,9 +4402,11 @@ function updateTorchHUD(){
 let bgMusicEnabled = true;
 let bgAnimsEnabled = true;
 let stalagmitesEnabled = true;
+let retainPowerups = false;    // true = keep power-ups between games; false = convert to coins on menu
 let botDifficulty = 'easy';   // 'easy' | 'normal' | 'hard'
 let hudSide = 'left';
 let hideResetBtn = false;
+let hidePlayBtn = false;
 
 // Bot interval bases: [Roxy(slowest), Blaze(mid), Zippy(fastest)] per difficulty
 const BOT_INTERVALS = {
@@ -4266,6 +4429,8 @@ function defaultSettings(){
     botDifficulty: 'easy',
     hudSide: 'left',
     hideResetBtn: false,
+    hidePlayBtn: false,
+    retainPowerups: false,
     charConfig: defaultCharConfig(),
 	showTutorial: true
   };
@@ -4314,6 +4479,8 @@ function captureSettings(){
     botDifficulty,
     hudSide,
     hideResetBtn,
+    hidePlayBtn,
+    retainPowerups,
     charConfig: {...charConfig},
 	showTutorial: showTutorial 
   };
@@ -4365,6 +4532,9 @@ function applySettings(s){
   updateHUD();
 
   // Bot difficulty
+  retainPowerups = s.retainPowerups ?? false;
+  syncToggle('sRetainPowerupsToggle', retainPowerups);
+
   botDifficulty = s.botDifficulty ?? 'easy';
   setBotDiff(botDifficulty, true);
 
@@ -4376,6 +4546,11 @@ function applySettings(s){
   hideResetBtn = s.hideResetBtn ?? false;
   syncToggle('sHideResetToggle', hideResetBtn);
   applyHideReset();
+
+  // Hide play button in navbar
+  hidePlayBtn = s.hidePlayBtn ?? false;
+  syncToggle('sHidePlayBtnToggle', hidePlayBtn);
+  applyHidePlayBtn();
 
   // Character config
   charConfig = Object.assign(defaultCharConfig(), s.charConfig || {});
@@ -4417,6 +4592,14 @@ function toggleBgAnims(){
   syncToggle('sBgAnimToggle', bgAnimsEnabled);
 }
 
+function toggleRetainPowerups(){
+  retainPowerups = !retainPowerups;
+  syncToggle('sRetainPowerupsToggle', retainPowerups);
+  showNotif(retainPowerups
+    ? '🎒 Power-ups will be kept between games!'
+    : '💰 Power-ups will convert to coins on menu.');
+}
+
 function toggleStalagmites(){
   stalagmitesEnabled = !stalagmitesEnabled;
   syncToggle('sStalToggle', stalagmitesEnabled);
@@ -4432,6 +4615,17 @@ function toggleHideReset(){
 function applyHideReset(){
   const rb = document.getElementById('resetBtn');
   if(rb) rb.style.display = hideResetBtn ? 'none' : '';
+}
+
+function toggleHidePlayBtn(){
+  hidePlayBtn = !hidePlayBtn;
+  syncToggle('sHidePlayBtnToggle', hidePlayBtn);
+  applyHidePlayBtn();
+}
+
+function applyHidePlayBtn(){
+  const pb = document.getElementById('btnPlay');
+  if(pb) pb.style.display = hidePlayBtn ? 'none' : '';
 }
 
 let showTutorial = true; // default
@@ -5261,45 +5455,50 @@ function drawBots(){
 }
 
 function animateCoinTransfer(fromElId, toElId, amount, onDone){
-  const fromEl=document.getElementById(fromElId);
-  const toEl=document.getElementById(toElId);
-  if(!fromEl||!toEl||amount<=0){if(onDone)onDone();return;}
-  const fromR=fromEl.getBoundingClientRect();
-  const toR=toEl.getBoundingClientRect();
-  const startX=fromR.left+fromR.width/2;
-  const startY=fromR.top+fromR.height/2;
-  const endX=toR.left+toR.width/2;
-  const endY=toR.top+toR.height/2;
-  const count=Math.min(5,Math.max(3,Math.floor(amount/50)));
-  let done=0;
-  for(let i=0;i<count;i++){
-    const coin=document.createElement('div');
-    coin.textContent='🪙';
-    coin.style.cssText=`position:fixed;left:${startX}px;top:${startY}px;font-size:18px;z-index:9999;pointer-events:none;transition:none;transform:translate(-50%,-50%);`;
+  const fromEl = document.getElementById(fromElId);
+  const toEl = document.getElementById(toElId);
+  if(!fromEl || !toEl || amount <= 0){ if(onDone) onDone(); return; }
+  const fromR = fromEl.getBoundingClientRect();
+  const toR = toEl.getBoundingClientRect();
+  const startX = fromR.left + fromR.width/2;
+  const startY = fromR.top + fromR.height/2;
+  const endX = toR.left + toR.width/2;
+  const endY = toR.top + toR.height/2;
+  const count = Math.min(8, Math.max(3, Math.floor(amount/30)));
+  let done = 0;
+  for(let i = 0; i < count; i++){
+    const coin = document.createElement('div');
+    coin.textContent = '🪙';
+    coin.style.cssText = `position:fixed;left:${startX}px;top:${startY}px;font-size:20px;z-index:9999;pointer-events:none;transition:none;transform:translate(-50%,-50%);`;
     document.body.appendChild(coin);
-    const delay=i*80;
-    setTimeout(()=>{
-      const jx=(Math.random()-0.5)*30;
-      const jy=(Math.random()-0.5)*30;
-      coin.style.transition='left 0.55s cubic-bezier(.4,0,.2,1),top 0.55s cubic-bezier(.4,0,.2,1),opacity 0.15s 0.4s';
-      coin.style.left=(startX+jx)+'px';
-      coin.style.top=(startY+jy)+'px';
-      setTimeout(()=>{
-        coin.style.left=endX+'px';
-        coin.style.top=endY+'px';
-        coin.style.opacity='0';
-        setTimeout(()=>{
+    const delay = i * 70;
+    setTimeout(() => {
+      const jx = (Math.random() - 0.5) * 40;
+      const jy = (Math.random() - 0.5) * 30;
+      coin.style.transition = 'left 0.55s cubic-bezier(.4,0,.2,1),top 0.55s cubic-bezier(.4,0,.2,1),opacity 0.15s 0.4s';
+      coin.style.left = (startX + jx) + 'px';
+      coin.style.top = (startY + jy) + 'px';
+      setTimeout(() => {
+        coin.style.left = endX + 'px';
+        coin.style.top = endY + 'px';
+        coin.style.opacity = '0';
+        setTimeout(() => {
           coin.remove();
           done++;
-          if(done===count){
-            if(toEl){toEl.style.transition='transform 0.1s';toEl.style.transform='scale(1.18)';setTimeout(()=>{toEl.style.transform='scale(1)';},180);}
-            if(onDone)onDone();
+          if(done === count){
+            if(toEl){
+              toEl.style.transition = 'transform 0.1s';
+              toEl.style.transform = 'scale(1.18)';
+              setTimeout(() => { toEl.style.transform = 'scale(1)'; }, 180);
+            }
+            if(onDone) onDone();
           }
-        },600);
-      },50);
-    },delay);
+        }, 600);
+      }, 50);
+    }, delay);
   }
 }
+
 let adCoinsAtRisk=0, adTimer=null, adCountVal=5;
 let piggyAttemptUnlocked=false;
 let piggyAttemptUsed=false;
@@ -5821,6 +6020,10 @@ function restoreUserSession() {
       const { name, ud } = JSON.parse(saved);
       if (ud.isGuest || getUser(name)) {
         currentUser = { name, ud };
+        // --- FIX: Initialize the global coins variable from the saved user data ---
+        coins = ud.coins || 0;
+        window.coins = coins;
+        // --- End fix ---		
         if (!ud.isGuest) {
           const fresh = getUser(name);
           if (fresh) currentUser.ud = { ...ud, ...fresh };
@@ -5915,7 +6118,7 @@ if (!restoreUserSession()) {
   /* World map panel */
   .map-panel {
     width: 92%;
-    max-width: 1100px;
+    max-width: 860px;
     height: 80vh;
     background: linear-gradient(160deg, #12122a, #0a0a1a);
     border: 2px solid #4a5fd4;
@@ -5923,6 +6126,19 @@ if (!restoreUserSession()) {
     overflow-y: auto;
     padding: 16px;
     box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+  }
+  #storyMapSVG {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  #storyMapList {
+    flex-shrink: 0;
+    margin-top: 10px;
   }
 
   .map-panel h2 {
@@ -6076,7 +6292,8 @@ if (!restoreUserSession()) {
         <button id="closeMapBtn" class="story-btn danger">✕ MENU</button>
       </div>
     </div>
-    <div id="storyMapSVG" style="margin-bottom:14px;"></div>
+	  <div id="storyProgressBarContainer" style="margin: 0 0 14px 0;"></div>
+	 <div id="storyMapSVG" style="margin-bottom:14px;"></div>
     <div id="storyMapList"></div>
   </div>
 </div>
@@ -6097,32 +6314,149 @@ if (!restoreUserSession()) {
 
 <!-- Start animation (rescue + eruption) -->
 <div id="startAnimOverlay" class="story-overlay" style="display: none;">
-  <canvas id="startAnimCanvas" width="600" height="300" style="width:80%; max-width:800px; background:#0d0d2b; border-radius:16px; border:2px solid #4a5fd4;"></canvas>
-  <div style="margin-top:12px; color:#ff9944; font-size:11px; font-weight:bold;">🔥 Retrieving artifact... eruption imminent! 🔥</div>
+  <div style="display:flex; flex-direction:column; align-items:center; width:90%; max-width:800px;">
+    <div id="startAnimTitle" style="font-family:Arial Black,sans-serif; font-size:14px; color:#ffe066; text-align:center; margin-bottom:10px; text-shadow:0 0 12px #ff6a00;"></div>
+    <canvas id="startAnimCanvas" width="600" height="240" style="width:100%; background:#0d0d2b; border-radius:16px; border:2px solid #4a5fd4; display:block;"></canvas>
+    <div id="startAnimSubtitle" style="margin-top:10px; color:#ff9944; font-size:12px; font-weight:bold; text-align:center;">🔥 Retrieving artifact... eruption imminent! 🔥</div>
+    <div style="margin-top:6px; color:#666; font-size:10px; text-align:center;">Press Space to skip</div>
+  </div>
 </div>
 
 <!-- End escape animation (glider exit) -->
 <div id="escapeAnimOverlay" class="story-overlay" style="display: none;">
-  <canvas id="escapeAnimCanvas" width="700" height="400" style="width:90%; max-width:800px; background:#0d0d2b; border-radius:16px; border:2px solid #4a5fd4;"></canvas>
+  <div style="display:flex; flex-direction:column; align-items:center; width:95%; max-width:800px;">
+    <div id="escapeAnimTitle" style="font-family:Arial Black,sans-serif; font-size:14px; color:#ffe066; text-align:center; margin-bottom:10px; text-shadow:0 0 12px #ff6a00;"></div>
+    <canvas id="escapeAnimCanvas" width="700" height="280" style="width:100%; background:#0d0d2b; border-radius:16px; border:2px solid #4a5fd4; display:block;"></canvas>
+    <div id="escapeAnimSubtitle" style="margin-top:10px; color:#44ff88; font-size:12px; font-weight:bold; text-align:center;">🪂 ESCAPED! Volcano conquered!</div>
+    <div style="margin-top:6px; color:#666; font-size:10px; text-align:center;">Press Space to skip</div>
+  </div>
 </div>
 
-<!-- End Stats Screen -->
 <div id="endStatsOverlay" class="story-overlay" style="display: none;">
   <div class="story-panel stats-screen">
     <h2>🏁 VOLCANO ESCAPED!</h2>
     <div id="statsPlatforms" class="stat-line">🧗 Platforms climbed: 0</div>
     <div id="statsCoinsEarned" class="stat-line">🪙 Coins earned: 0</div>
+    <!-- My Coins destination box — coins animate into here -->
+    <div id="statsMyCoinsBox" style="display:flex; align-items:center; justify-content:center; gap:10px; background:#0e0e22; border:1.5px solid #ffe066; border-radius:10px; padding:10px 16px; margin:10px 0;">
+      <span style="font-size:13px; color:#aaa;">💰 MY COINS</span>
+      <span id="statsMyCoins" style="font-size:22px; font-weight:bold; color:#ffe066; min-width:40px; text-align:right;">0</span>
+    </div>
     <div id="statsBonus" class="bonus-line">🌟 Story bonus: +0 🪙</div>
     <div id="statsNextUnlock" class="next-line"></div>
-    <button id="statsContinueBtn">CONTINUE → MAP</button>
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:16px;">
+      <button id="statsContinueBtn" class="story-btn success" style="background:linear-gradient(135deg,#27ae60,#1a7a40);">🌍 CONTINUE TO MAP</button>
+      <button id="statsMenuBtn" class="story-btn secondary" style="background:#333; color:#ccc; border:1px solid #555;">🏠 MAIN MENU</button>
+    </div>
   </div>
 </div>
   
   <script>
+// ═══════════════════════════════════════════════════
+// ██ POWER-UP PERSISTENCE ACROSS SESSIONS ██
+// When "Retain Power-Ups" is ON and the player leaves
+// mid-game, we auto-save their power-up state to
+// localStorage. On next load, if the saved state is
+// less than 24h old, those powers are restored as
+// coins (so they have something to spend on start).
+// If the setting is OFF, any mid-game state is cleared.
+// ═══════════════════════════════════════════════════
+
+const POWERUP_SESSION_KEY = 'fil_powerup_session';
+
+function saveCurrentPowerupState() {
+  // Only persist if retainPowerups is ON and there's actually something to save
+  if (!retainPowerups) {
+    localStorage.removeItem(POWERUP_SESSION_KEY);
+    return;
+  }
+  const state = {
+    coins:      coins      || 0,
+    jumpBoosts: jumpBoosts || 0,
+    parachutes: parachutes || 0,
+    skipUses:   skipUses   || 0,
+    bookUses:   bookUses   || 0,
+    lavaShips:  lavaShips  || 0,
+    savedAt:    Date.now(),
+    user:       currentUser ? currentUser.name : 'guest'
+  };
+  try { localStorage.setItem(POWERUP_SESSION_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function restoreOrConvertPowerupSession() {
+  // Called on page load — check if there's a saved mid-game state
+  try {
+    const raw = localStorage.getItem(POWERUP_SESSION_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    const AGE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
+    if (!state || (Date.now() - state.savedAt) > AGE_LIMIT_MS) {
+      localStorage.removeItem(POWERUP_SESSION_KEY);
+      return;
+    }
+    // Check the saved state belongs to the current user (or guest)
+    const currentName = currentUser ? currentUser.name : 'guest';
+    if (state.user !== currentName) return;
+
+    // Convert any saved power-ups to their coin value and add to the user's wallet
+    const POWERUP_COIN_VALUES = {
+      jumpBoosts: 4,    // 20 coins / 5 boosts
+      parachutes: 50,   // per parachute
+      skipUses:   4,    // 20 coins / 5 skips
+      bookUses:   20,   // 100 coins / 5 uses
+      lavaShips:  150   // per ship
+    };
+    let bonusCoins = state.coins || 0;
+    bonusCoins += (state.jumpBoosts || 0) * POWERUP_COIN_VALUES.jumpBoosts;
+    bonusCoins += (state.parachutes || 0) * POWERUP_COIN_VALUES.parachutes;
+    bonusCoins += (state.skipUses   || 0) * POWERUP_COIN_VALUES.skipUses;
+    bonusCoins += (state.bookUses   || 0) * POWERUP_COIN_VALUES.bookUses;
+    bonusCoins += (state.lavaShips  || 0) * POWERUP_COIN_VALUES.lavaShips;
+
+    if (bonusCoins > 0) {
+      coins = (coins || 0) + bonusCoins;
+      if (currentUser) {
+        currentUser.ud.coins = coins;
+        dbSave();
+      }
+      showNotif(`🎒 Returned! Power-ups converted: +${bonusCoins} 🪙`);
+      updateHUD();
+    }
+    localStorage.removeItem(POWERUP_SESSION_KEY);
+  } catch(e) {
+    localStorage.removeItem(POWERUP_SESSION_KEY);
+  }
+}
+
+// ── Auto-save on page close / tab switch (only when game is running and retain is ON) ──
+window.addEventListener('beforeunload', () => {
+  if (gameRunning && retainPowerups) {
+    saveCurrentPowerupState();
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && gameRunning && retainPowerups) {
+    // App backgrounded on mobile — save state immediately
+    saveCurrentPowerupState();
+  }
+});
+
+// ── Restore any persisted session after login / page load ──
+// Called from within loginAs() and guestLogin() after user context is established
+function checkAndRestorePowerupSession() {
+  // Small delay to ensure HUD is ready
+  setTimeout(restoreOrConvertPowerupSession, 800);
+}
+
+
   (function() {
     // --------------------------------------------------------------
     // STORY MODE – reads episode data from main game's VOLCANO_EPISODES
     // --------------------------------------------------------------
+	// Make sure we use the SAME coins variable as the main game
+// No separate story coins variable - we use window.coins directly
+	window.storyStartCoins = 0;
     if (!window.VOLCANO_EPISODES) {
       return;
     }
@@ -6132,6 +6466,22 @@ if (!restoreUserSession()) {
     let currentStoryEpisode = null;
     let animFrameId = null;
     let storyStartCoins = 0;
+    let storyAnimSkipCallback = null;  // set by each animation; Space calls it
+
+    // Space bar skips start/escape animations
+    document.addEventListener('keydown', function(e) {
+      if (e.code === 'Space' && storyAnimSkipCallback) {
+        e.preventDefault();
+        storyAnimSkipCallback();
+      }
+    });
+    // Tap anywhere on the animation overlay also skips (mobile)
+    ['startAnimOverlay','escapeAnimOverlay'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', function() {
+        if (storyAnimSkipCallback) storyAnimSkipCallback();
+      });
+    });
     let originalEndPlatform = 1000;
     let originalSelectorValue = "";
 
@@ -6186,25 +6536,47 @@ if (!restoreUserSession()) {
 
 // Override endPlatform and force it for the game
 function setStoryTargetPlatforms(target) {
-  originalEndPlatform = window.endPlatform;
-  window.endPlatform = target;
-  // Also force the hidden select and call updateEndPlatform
+  // Save current value via getter so we get the real variable, not a stale window prop
+  if (window.getGlobalEndPlatform) {
+    originalEndPlatform = window.getGlobalEndPlatform();
+  } else {
+    originalEndPlatform = window.endPlatform;
+  }
+  console.log("[STORY] Saved originalEndPlatform =", originalEndPlatform);
+
+  // Set via setter if available, otherwise direct property
+  if (window.setGlobalEndPlatform) {
+    window.setGlobalEndPlatform(target);
+  } else {
+    window.endPlatform = target;
+  }
+
+  // Update the select for visual consistency — but DO NOT call updateEndPlatform()
+  // because that reads the select value and would immediately overwrite our target
   const sel = document.getElementById('endPlatformSel');
   if (sel) {
     originalSelectorValue = sel.value;
     sel.value = target;
-    if (typeof updateEndPlatform === 'function') updateEndPlatform();
+    // ❌ REMOVED: if (typeof updateEndPlatform === 'function') updateEndPlatform();
     sel.disabled = true;
     sel.style.opacity = '0.5';
   }
+
+  const newValue = window.getGlobalEndPlatform ? window.getGlobalEndPlatform() : window.endPlatform;
+  console.log("[STORY] Target set to", target, "main endPlatform =", newValue);
 }
 
 function restoreEndPlatform() {
-  window.endPlatform = originalEndPlatform;
+  console.log("[STORY] Restoring endPlatform to", originalEndPlatform);
+  if (window.setGlobalEndPlatform) {
+    window.setGlobalEndPlatform(originalEndPlatform);
+  } else {
+    window.endPlatform = originalEndPlatform;
+  }
   const sel = document.getElementById('endPlatformSel');
   if (sel && originalSelectorValue) {
     sel.value = originalSelectorValue;
-    if (typeof updateEndPlatform === 'function') updateEndPlatform();
+    // ❌ REMOVED: if (typeof updateEndPlatform === 'function') updateEndPlatform();
     sel.disabled = false;
     sel.style.opacity = '1';
   }
@@ -6231,89 +6603,225 @@ function updateUnlockedEpisodes() {
 function drawSVGMap(ep) {
   const container = document.getElementById('storyMapSVG');
   if (!container) return;
-  // Pixelated world map — dots represent land masses
-  // Coordinate system: col 0-71, row 0-35 mapping to lng -180→180, lat 90→-90
-  // Encoded as a compact string: each char is a column of 35 bits (rows)
-  // Using run-length style compact dot array
-  const W = 72, H = 36;
-  // Each entry [col, row] = land pixel
-  const land = [
+
+  // ── PIXEL LAND MAP ──
+  // Grid: 72 cols × 36 rows, each cell = 5°×5° of lat/lng
+  // colToLng(c) = c*5 - 180 + 2.5   (centre of cell)
+  // rowToLat(r) = 90 - r*5 - 2.5    (centre of cell)
+  // Each land entry is [col, row, ...countryCodes]
+  // Countries sharing a cell are listed together — used for pin snapping
+
+  const landData = [
     // North America
-    [5,4],[6,4],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[6,5],[7,5],[8,5],[9,5],[10,5],[11,5],[12,5],[13,5],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[8,7],[9,7],[10,7],[11,7],[12,7],[13,7],[14,7],[7,8],[8,8],[9,8],[10,8],[11,8],[12,8],[13,8],[9,9],[10,9],[11,9],[12,9],[13,9],[10,10],[11,10],[12,10],[13,10],[11,11],[12,11],[13,11],[10,12],[11,12],[12,12],[11,13],[12,13],[14,7],[15,7],[14,8],[15,8],[16,8],[14,9],[15,9],[16,9],[14,10],[15,10],[13,11],[14,11],[15,11],[14,12],[15,12],[14,13],[15,13],
+    [5,4,'CA'],[6,4,'CA'],[7,4,'CA'],[8,4,'CA'],[9,4,'CA'],[10,4,'CA'],[11,4,'CA'],[12,4,'CA'],
+    [6,5,'CA'],[7,5,'CA'],[8,5,'CA','US'],[9,5,'CA','US'],[10,5,'CA','US'],[11,5,'CA'],[12,5,'CA'],[13,5,'CA'],
+    [7,6,'CA'],[8,6,'CA','US'],[9,6,'US'],[10,6,'US'],[11,6,'CA','US'],[12,6,'CA'],[13,6,'CA'],
+    [8,7,'US'],[9,7,'US'],[10,7,'US'],[11,7,'US'],[12,7,'US'],[13,7,'US'],[14,7,'MX'],
+    [9,8,'US'],[10,8,'US'],[11,8,'US'],[12,8,'US'],[13,8,'US'],[14,8,'MX'],
+    [10,9,'US'],[11,9,'US'],[12,9,'US'],[13,9,'US'],[14,9,'MX'],
+    [11,10,'US'],[12,10,'US'],[13,10,'MX'],[14,10,'MX'],
+    [12,11,'MX'],[13,11,'MX'],[12,12,'MX'],[13,12,'MX','GT','HN'],
+    [13,13,'GT','HN','NI'],[14,13,'NI','CR'],
+    // Caribbean
+    [15,9,'CU'],[16,9,'CU'],[15,10,'HT','DO'],[16,10,'PR'],
+    [14,9,'MX'],[14,11,'MX'],
     // Greenland
-    [17,3],[18,3],[19,3],[17,4],[18,4],[19,4],[20,4],[18,5],[19,5],[20,5],
+    [17,3,'GL'],[18,3,'GL'],[19,3,'GL'],[20,3,'GL'],[17,4,'GL'],[18,4,'GL'],[19,4,'GL'],
     // South America
-    [12,14],[13,14],[14,14],[12,15],[13,15],[14,15],[15,15],[12,16],[13,16],[14,16],[15,16],[13,17],[14,17],[15,17],[14,18],[15,18],[14,19],[15,19],[14,20],[15,20],[15,21],[15,22],
+    [12,14,'CO','VE'],[13,14,'VE','GY'],[14,14,'EC','PE'],[13,15,'BR'],[14,15,'PE','BR'],
+    [12,15,'CO'],[12,16,'EC','PE'],[13,16,'BR'],[14,16,'PE','BO'],[15,16,'BR'],
+    [13,17,'BR'],[14,17,'BO','PY'],[15,17,'BR'],[13,18,'BR'],[14,18,'AR','CL'],[15,18,'BR'],
+    [13,19,'BR'],[14,19,'AR'],[14,20,'AR','CL'],[14,21,'AR','CL'],[14,22,'AR','CL'],
     // Europe
-    [31,6],[32,6],[33,6],[34,6],[31,7],[32,7],[33,7],[34,7],[35,7],[31,8],[32,8],[33,8],[34,8],[35,8],[36,8],[32,9],[33,9],[34,9],[35,9],[36,9],[33,10],[34,10],[35,10],[36,10],[34,11],[35,11],[36,11],
-    // Africa
-    [32,11],[33,11],[34,11],[35,11],[36,11],[32,12],[33,12],[34,12],[35,12],[36,12],[33,13],[34,13],[35,13],[36,13],[33,14],[34,14],[35,14],[36,14],[33,15],[34,15],[35,15],[34,16],[35,16],[34,17],[35,17],[34,18],[35,18],[34,19],[35,19],[34,20],[35,20],
-    // Middle East
-    [37,9],[38,9],[39,9],[37,10],[38,10],[39,10],[40,10],[37,11],[38,11],[39,11],[40,11],
-    // Central & South Asia
-    [39,8],[40,8],[41,8],[42,8],[43,8],[44,8],[45,8],[40,9],[41,9],[42,9],[43,9],[44,9],[45,9],[46,9],[41,10],[42,10],[43,10],[44,10],[45,10],[46,10],[42,11],[43,11],[44,11],[45,11],[46,11],[43,12],[44,12],[45,12],[46,12],[44,13],[45,13],
-    // Southeast Asia
-    [46,10],[47,10],[48,10],[49,10],[46,11],[47,11],[48,11],[49,11],[50,11],[47,12],[48,12],[49,12],[50,12],[49,13],[50,13],[51,13],[50,14],[51,14],[49,15],[50,15],[51,15],
-    // East Asia (China, Japan, Korea)
-    [46,8],[47,8],[48,8],[49,8],[50,8],[47,9],[48,9],[49,9],[50,9],[51,9],[48,10],[49,10],[50,10],[51,10],[52,10],[53,10],[52,9],[53,9],[54,9],[54,10],[55,10],
-    // Russia / Siberia
-    [36,5],[37,5],[38,5],[39,5],[40,5],[41,5],[42,5],[43,5],[44,5],[45,5],[46,5],[47,5],[48,5],[49,5],[50,5],[51,5],[52,5],[53,5],[54,5],[55,5],[56,5],[57,5],[35,6],[36,6],[37,6],[38,6],[39,6],[40,6],[41,6],[42,6],[43,6],[44,6],[45,6],[46,6],[47,6],[48,6],[49,6],[50,6],[51,6],[52,6],[53,6],[54,6],[55,6],[56,6],[35,7],[36,7],[37,7],[38,7],[39,7],[40,7],[41,7],[42,7],[43,7],[44,7],[45,7],[46,7],[47,7],[48,7],[49,7],[50,7],[51,7],[52,7],[53,7],[54,7],
-    // Australia
-    [52,20],[53,20],[54,20],[55,20],[56,20],[51,21],[52,21],[53,21],[54,21],[55,21],[56,21],[57,21],[51,22],[52,22],[53,22],[54,22],[55,22],[56,22],[57,22],[52,23],[53,23],[54,23],[55,23],[56,23],[53,24],[54,24],[55,24],[56,24],[54,25],[55,25],
-    // New Zealand
-    [59,24],[59,25],[59,26],
+    [29,7,'PT','ES'],[30,7,'ES','FR'],[31,7,'FR','DE'],[32,7,'PL','DE'],[33,7,'PL','UA'],
+    [29,8,'PT','ES'],[30,8,'FR','ES'],[31,8,'IT','FR'],[32,8,'AT','CZ'],[33,8,'SK','UA'],
+    [31,9,'IT'],[32,9,'HU','RS'],[33,9,'RO'],
+    [30,6,'GB','IE'],[31,6,'NL','BE','DE'],[32,6,'DK','DE'],[33,6,'NO','SE'],
+    [34,6,'SE','FI'],[34,7,'FI'],[33,5,'NO'],[34,5,'NO','SE','FI'],
+    // Canary Islands (Spain) — Teide
+    [27,9,'ES-IC'],
     // Iceland
-    [26,5],[27,5],[26,6],
-    // Japan
-    [54,8],[55,8],[55,9],[56,9],[56,10],
-    // Indonesia
-    [49,16],[50,16],[51,16],[52,16],[50,17],[51,17],[52,17],[53,17],[51,18],[52,18],[53,18],
-    // Philippines
-    [52,13],[53,13],[52,14],[53,14],
+    [24,5,'IS'],[25,5,'IS'],[24,6,'IS'],
+    // UK
+    [29,6,'GB'],[30,6,'GB','IE'],
+    // Africa
+    [29,10,'MA','DZ'],[30,10,'MA','DZ'],[31,10,'TN','LY'],[32,10,'LY','EG'],[33,10,'EG'],
+    [29,11,'MR','ML'],[30,11,'ML','NE'],[31,11,'LY','SD'],[32,11,'SD','ET'],[33,11,'ET','SO'],
+    [29,12,'SN','GN'],[30,12,'NI','NG'],[31,12,'CM','CF'],[32,12,'SS','ET'],[33,12,'ET','SO'],
+    [30,13,'NG','CM'],[31,13,'CAF','CD'],[32,13,'KE','TZ'],[33,13,'TZ','MZ'],
+    [29,13,'GH','CI'],[30,14,'CD','AO'],[31,14,'CD','TZ'],[32,14,'TZ','MZ'],
+    [29,14,'GA','CG'],[30,15,'AO'],[31,15,'ZM','TZ'],[32,15,'MZ'],
+    [30,16,'AO','ZM'],[31,16,'ZM','ZW'],[32,16,'MZ'],
+    [30,17,'NA','BW'],[31,17,'ZW','ZA'],[32,17,'MZ','ZA'],
+    [30,18,'ZA'],[31,18,'ZA'],[30,19,'ZA'],[31,19,'ZA'],
     // Madagascar
-    [38,19],[38,20],[38,21],
-    // UK/Ireland
-    [29,7],[30,7],[30,8],[29,8],
-    // Scandinavia
-    [32,5],[33,5],[34,5],[33,6],[34,6],
-    // North Africa top
-    [29,10],[30,10],[31,10],[32,10],
+    [34,14,'MG'],[34,15,'MG'],[34,16,'MG'],
+    // Réunion Island
+    [35,16,'RE'],
+    // Middle East
+    [35,9,'TR'],[36,9,'TR','SY'],[37,9,'SY','IQ'],[38,9,'IR'],[39,9,'AF'],[40,9,'PK'],
+    [35,10,'LB','IL'],[36,10,'JO','SA'],[37,10,'SA','IQ'],[38,10,'IR'],
+    [37,11,'SA','YE'],[38,11,'YE','OM'],[38,12,'OM'],
+    // Central & South Asia
+    [38,8,'AF','PK'],[39,8,'PK','IN'],[40,8,'IN','NP'],[41,8,'IN','NP','CN'],[42,8,'CN'],[43,8,'CN'],
+    [39,9,'IN'],[40,9,'IN'],[41,9,'IN'],[39,10,'IN'],[40,10,'IN'],[41,10,'IN'],
+    [39,11,'IN'],[40,11,'IN'],[40,12,'LK'],
+    // East Asia
+    [44,7,'CN','MN'],[45,7,'CN'],[46,7,'CN','KP'],[47,7,'KP','KR'],[47,8,'KR'],
+    [44,8,'CN'],[45,8,'CN'],[46,8,'CN'],
+    // Japan
+    [48,7,'JP'],[49,7,'JP'],[50,7,'JP'],[49,8,'JP'],[50,8,'JP'],[51,8,'JP'],
+    // SE Asia
+    [45,10,'VN','TH'],[46,10,'VN','KH'],[47,10,'PH'],[48,10,'PH'],
+    [46,11,'MY'],[47,11,'PH'],[48,11,'PH'],
+    [46,12,'ID-SUM'],[47,12,'ID-SUM'],[48,12,'ID-JAV'],[49,12,'ID-JAV'],[50,12,'ID'],
+    [49,13,'ID-SUL'],[50,13,'ID-SUL'],[51,13,'ID'],[52,13,'PG'],
+    [47,14,'ID-SUM'],[48,14,'ID'],[52,14,'PG'],
+    // Aleutian Islands (US)
+    [0,7,'US-AK'],[1,7,'US-AK'],[60,7,'US-AK'],[61,7,'US-AK'],[62,7,'US-AK'],[63,7,'US-AK'],
+    [64,7,'US-AK'],[65,7,'US-AK'],[66,7,'US-AK'],[67,7,'US-AK'],
+    // Russia & Siberia
+    [35,4,'RU'],[36,4,'RU'],[37,4,'RU'],[38,4,'RU'],[39,4,'RU'],[40,4,'RU'],[41,4,'RU'],
+    [42,4,'RU'],[43,4,'RU'],[44,4,'RU'],[45,4,'RU'],[46,4,'RU'],[47,4,'RU'],[48,4,'RU'],
+    [49,4,'RU'],[50,4,'RU'],[51,4,'RU'],[52,4,'RU'],[53,4,'RU'],[54,4,'RU'],[55,4,'RU'],
+    [56,4,'RU'],[57,4,'RU'],[58,4,'RU'],[59,4,'RU'],[60,4,'RU'],
+    [35,5,'RU'],[36,5,'RU'],[37,5,'RU'],[38,5,'RU'],[39,5,'RU'],[40,5,'RU'],[41,5,'RU'],
+    [42,5,'RU'],[43,5,'RU'],[44,5,'RU'],[45,5,'RU'],[46,5,'RU'],[47,5,'RU'],[48,5,'RU'],
+    [49,5,'RU'],[50,5,'RU'],[51,5,'RU'],[52,5,'RU'],[53,5,'RU'],[54,5,'RU'],[55,5,'RU'],
+    [56,5,'RU'],[57,5,'RU'],[58,5,'RU'],[59,5,'RU'],[60,5,'RU'],
+    [36,6,'RU'],[37,6,'RU'],[38,6,'RU'],[39,6,'RU'],[40,6,'RU'],[41,6,'RU'],[42,6,'RU'],
+    [43,6,'RU'],[44,6,'RU'],[45,6,'RU'],[46,6,'RU'],[47,6,'RU'],[48,6,'RU'],[49,6,'RU'],
+    [50,6,'RU'],[51,6,'RU'],[52,6,'RU'],[53,6,'RU'],[54,6,'RU'],[55,6,'RU'],[56,6,'RU'],
+    [57,6,'RU'],[58,6,'RU'],[59,6,'RU'],[60,6,'RU'],
+    // Kamchatka
+    [59,7,'RU-KAM'],[60,7,'RU-KAM'],[60,8,'RU-KAM'],
+    // Australia
+    [47,19,'AU'],[48,19,'AU'],[49,19,'AU'],[50,19,'AU'],[51,19,'AU'],[52,19,'AU'],
+    [46,20,'AU'],[47,20,'AU'],[48,20,'AU'],[49,20,'AU'],[50,20,'AU'],[51,20,'AU'],[52,20,'AU'],
+    [46,21,'AU'],[47,21,'AU'],[48,21,'AU'],[49,21,'AU'],[50,21,'AU'],[51,21,'AU'],[52,21,'AU'],
+    [47,22,'AU'],[48,22,'AU'],[49,22,'AU'],[50,22,'AU'],[51,22,'AU'],
+    [48,23,'AU'],[49,23,'AU'],[50,23,'AU'],
+    // New Zealand
+    [54,22,'NZ'],[55,22,'NZ'],[54,23,'NZ'],[55,23,'NZ'],[54,24,'NZ'],
+    // PNG
+    [52,14,'PG'],[53,14,'PG'],[53,15,'PG'],
+    // Antarctica (simplified)
+    [0,33,'AQ'],[10,33,'AQ'],[20,33,'AQ'],[30,33,'AQ'],[40,33,'AQ'],[50,33,'AQ'],
+    [60,33,'AQ'],[0,34,'AQ'],[20,34,'AQ'],[40,34,'AQ'],[60,34,'AQ'],
+    // Martinique / Caribbean islands
+    [15,11,'MQ'],[15,12,'VC'],[15,13,'TT'],
+    // Montserrat
+    [15,10,'MS'],
+    // St. Vincent
+    [15,12,'VC'],
   ];
 
+  // ── Build sets for quick lookup ──
+  const landSet = new Set();
+  const countryLand = {};   // code → [[col,row],...]
+  for(const entry of landData) {
+    const col = entry[0], row = entry[1];
+    landSet.add(`${col},${row}`);
+    for(let i = 2; i < entry.length; i++){
+      const code = entry[i];
+      if(!countryLand[code]) countryLand[code] = [];
+      countryLand[code].push([col, row]);
+    }
+  }
+
+  // ── Convert lat/lng → col/row ──
+  function lngToCol(lng) { return Math.round((lng + 180) / 5); }
+  function latToRow(lat) { return Math.round((90 - lat) / 5); }
+  function colToX(col, step) { return col * step + step * 0.5; }
+  function rowToY(row, step) { return row * step + step * 0.5; }
+
+  // ── Find best pin position for the episode ──
+  // Try exact cell, then nearest land cell
+  function bestPinCell(ep) {
+    const col = lngToCol(ep.lng);
+    const row = latToRow(ep.lat);
+    if(landSet.has(`${col},${row}`)) return [col, row];
+    // Search expanding radius for nearest land
+    for(let r = 1; r <= 4; r++) {
+      const candidates = [];
+      for(let dc = -r; dc <= r; dc++) {
+        for(let dr = -r; dr <= r; dr++) {
+          if(Math.abs(dc) !== r && Math.abs(dr) !== r) continue; // only edge of ring
+          const nc = col + dc, nr = row + dr;
+          if(landSet.has(`${nc},${nr}`)) candidates.push([nc, nr]);
+        }
+      }
+      if(candidates.length) {
+        // Pick the one geographically closest
+        let best = candidates[0], bestDist = Infinity;
+        for(const [c,ro] of candidates){
+          const dist = Math.abs(c-col) + Math.abs(ro-row);
+          if(dist < bestDist){ bestDist = dist; best = [c,ro]; }
+        }
+        return best;
+      }
+    }
+    return [col, row]; // fallback even if ocean
+  }
+
+  const W = 72, H = 36;
   const DOT = 5, GAP = 2, STEP = DOT + GAP;
   const svgW = W * STEP, svgH = H * STEP;
 
-  const landSet = new Set(land.map(([c,r]) => `${c},${r}`));
-
-  // Project lat/lng to col/row
-  const pinCol = Math.round(((ep.lng + 180) / 360) * W);
-  const pinRow = Math.round(((90 - ep.lat) / 180) * H);
-  const pinX = pinCol * STEP + DOT/2 + 1;
-  const pinY = pinRow * STEP + DOT/2 + 1;
-
+  // Draw dots
   let dots = '';
   for(let r = 0; r < H; r++){
     for(let c = 0; c < W; c++){
       const x = c * STEP + 1, y = r * STEP + 1;
       const isLand = landSet.has(`${c},${r}`);
-      dots += `<rect x="${x}" y="${y}" width="${DOT}" height="${DOT}" rx="1.5" fill="${isLand ? '#3a7a3a' : '#1a3a5a'}" opacity="${isLand ? '0.85' : '0.5'}"/>`;
+      dots += `<rect x="${x}" y="${y}" width="${DOT}" height="${DOT}" rx="1.5" fill="${isLand ? '#3a7a3a' : '#1a3a5a'}" opacity="${isLand ? '0.9' : '0.45'}"/>`;
     }
   }
 
-  container.innerHTML = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-    <svg viewBox="0 0 ${svgW+2} ${svgH+2}" xmlns="http://www.w3.org/2000/svg"
-      style="background:#0a1828; border-radius:12px; border:1.5px solid #4a5fd4; width:100%; max-width:${svgW+2}px; display:block;">
-      ${dots}
-      <!-- Volcano pin -->
-      <g filter="url(#glow)">
-        <circle cx="${pinX}" cy="${pinY}" r="7" fill="#ff3333" stroke="#ffe066" stroke-width="2.5"/>
-        <circle cx="${pinX}" cy="${pinY}" r="3" fill="#fff"/>
-        <text x="${pinX}" y="${pinY - 10}" text-anchor="middle" font-size="7" fill="#ffe066" font-family="Arial" font-weight="bold">${ep.name.split('(')[0].trim()}</text>
-      </g>
-      <defs>
-        <filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      </defs>
-    </svg></div>`;
+  // Pin position
+  const [pinCol, pinRow] = bestPinCell(ep);
+  const pinX = pinCol * STEP + STEP * 0.5 + 1;
+  const pinY = pinRow * STEP + STEP * 0.5 + 1;
+
+  // Name label — keep inside SVG bounds
+  const labelX = Math.max(24, Math.min(svgW - 24, pinX));
+
+  container.innerHTML = `<svg viewBox="0 0 ${svgW+2} ${svgH+2}" xmlns="http://www.w3.org/2000/svg"
+    style="background:#0a1828; border-radius:12px; border:1.5px solid #4a5fd4; width:100%; max-width:${svgW+2}px; height:auto; display:block;">
+    <defs>
+      <filter id="pinGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    ${dots}
+    <circle cx="${pinX}" cy="${pinY}" r="9" fill="#ff3333" stroke="#ffe066" stroke-width="2.5" filter="url(#pinGlow)"/>
+    <circle cx="${pinX}" cy="${pinY}" r="4" fill="#fff"/>
+    <rect x="${labelX - 28}" y="${pinY - 18}" width="56" height="11" rx="4" fill="rgba(0,0,0,0.75)"/>
+    <text x="${labelX}" y="${pinY - 10}" text-anchor="middle" font-size="7" fill="#ffe066" font-family="Arial" font-weight="bold">${ep.name.split('(')[0].trim().split(' ').slice(0,3).join(' ')}</text>
+  </svg>`;
+}
+
+function updateStoryProgressBar() {
+  const container = document.getElementById('storyProgressBarContainer');
+  if (!container) return;
+
+  const total = STORY_EPISODES.length;
+  const completed = STORY_EPISODES.filter(ep => ep.completed).length;
+  const remaining = total - completed;
+  const percent = (completed / total) * 100;
+
+  container.innerHTML = `
+    <div style="background:#1a1a3e; border-radius:10px; padding:8px 12px; border:1px solid #4a5fd4;">
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:#aaa; margin-bottom:4px;">
+        <span>🗺️ PROGRESS</span>
+        <span>${completed} / ${total} volcanoes completed</span>
+      </div>
+      <div style="background:#2a2a4a; height:8px; border-radius:5px; overflow:hidden;">
+        <div style="width:${percent}%; height:100%; background:linear-gradient(90deg,#27ae60,#44cc88); border-radius:5px;"></div>
+      </div>
+      <div style="margin-top:5px; font-size:9px; color:#ff9944; text-align:center;">
+        ${remaining > 0 ? remaining + ' volcano' + (remaining > 1 ? 'es' : '') + ' remaining' : '🏆 ALL VOLCANOES SAVED!'}
+      </div>
+    </div>
+  `;
 }
 
 function renderCarousel() {
@@ -6340,6 +6848,7 @@ function renderCarousel() {
       <button id="carouselNext" class="carousel-arrow">▶</button>
     </div>
   `;
+   updateStoryProgressBar();
   // Add event listeners
   document.getElementById('carouselPrev')?.addEventListener('click', () => {
     if (unlockedEpisodes.length === 0) return;
@@ -6364,6 +6873,27 @@ function renderCarousel() {
 
 // Override showStoryWorldMap
 function showStoryWorldMap() {
+  // --- FIX: Always pull the latest coin balance from the user profile ---
+  if (window.currentUser && window.currentUser.ud && typeof window.currentUser.ud.coins === 'number') {
+    coins = window.currentUser.ud.coins;
+    window.coins = coins;
+    console.log('[STORY] Synced coins from user:', coins);
+  }
+  if (isNaN(coins) || coins === undefined) coins = 0;
+  // Also force the UI on the start screen to update (if visible)
+  if (typeof updatePiggyDisplay === 'function') updatePiggyDisplay();
+  
+  // ... rest of your existing showStoryWorldMap code (unchanged) ...  console.log('[STORY] === SHOW WORLD MAP ===');
+  console.log('[STORY] window.coins at map open =', coins);
+  if (window.currentUser) {
+    console.log('[STORY] currentUser.ud.coins =', window.currentUser.ud.coins);
+  }
+  const startCoinSpan = document.getElementById('startMyCoinAmt');
+  if (startCoinSpan) {
+    console.log('[STORY] startMyCoinAmt text content =', startCoinSpan.innerText);
+  }
+  // ... rest of existing code
+  if(typeof playStoryMapMusic === 'function') playStoryMapMusic();
   const overlay = document.getElementById('storyWorldMapOverlay');
   // Ensure SVG container exists
   let svgContainer = document.getElementById('storyMapSVG');
@@ -6390,12 +6920,33 @@ function showStoryWorldMap() {
   currentCarouselIndex = currentIndex;
   
   renderCarousel();
+  updateStoryProgressBar();  
   overlay.style.display = 'flex';
 }
-    function closeStoryMap() { document.getElementById('storyWorldMapOverlay').style.display = 'none'; }
+function closeStoryMap() {
+  const overlay = document.getElementById('storyWorldMapOverlay');
+  overlay.style.display = 'none';
+  
+  // Also clear any story mode state and return to the main menu
+  if (typeof restoreEndPlatform === 'function') restoreEndPlatform();
+  if (window.currentStoryEpisode) {
+    window.currentStoryEpisode = null;
+  }
+  // Switch to the start screen (main menu)
+  if (typeof showScreen === 'function') {
+    showScreen('startScreen');
+  } else if (window.goToMenu) {
+    window.goToMenu();
+  }
+  // Stop story map music and resume normal menu music
+  if (typeof stopStoryMusic === 'function') stopStoryMusic();
+  if (typeof updateBgMusic === 'function') updateBgMusic();
+}
 
     // Pre‑game story screen
     function showStoryPreScreen(ep) {
+      // World Map music continues through the pre-screen panel — no switch here
+      // (WorldMap.mp3 is already playing from showStoryWorldMap)
       document.getElementById('storyEpisodeTitle').innerHTML = `🌋 ${ep.name} · ${ep.location}`;
       document.getElementById('storyRescueItem').innerHTML = `🏆 RESCUE: ${ep.rescue}`;
       document.getElementById('storySummary').innerHTML = `📖 ${ep.summary}`;
@@ -6414,6 +6965,7 @@ function showStoryWorldMap() {
 
     // Start animation (rescue + eruption)
     function showStartAnimation(ep) {
+      // WorldMap.mp3 continues playing — map → pre-screen → animation is one continuous track
       const animDiv = document.getElementById('startAnimOverlay');
       const canvas = document.getElementById('startAnimCanvas');
       const ctx = canvas.getContext('2d');
@@ -6421,7 +6973,22 @@ function showStoryWorldMap() {
       canvas.height = 300;
       let startTime = performance.now();
       let duration = 2800;
+      let skipped = false;
+
+      function finishStartAnim() {
+        if (skipped) return;
+        skipped = true;
+        storyAnimSkipCallback = null;
+        cancelAnimationFrame(animFrameId);
+        animDiv.style.display = 'none';
+        startStoryGameLevel(ep);
+      }
+
+      // Register the skip callback so Space bar can call it
+      storyAnimSkipCallback = finishStartAnim;
+
       function drawStartFrame(now) {
+        if (skipped) return;
         const elapsed = Math.min(1, (now - startTime) / duration);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#4a2a1a';
@@ -6446,45 +7013,104 @@ function showStoryWorldMap() {
             ctx.beginPath(); ctx.arc(canvas.width/2 + (Math.random()-0.5)*80, canvas.height-100 + Math.random()*120, 4, 0, Math.PI*2); ctx.fill();
           }
         }
-        if (elapsed < 1) requestAnimationFrame(drawStartFrame);
-        else {
-          cancelAnimationFrame(animFrameId);
-          animDiv.style.display = 'none';
-          startStoryGameLevel(ep);
-        }
+        if (elapsed < 1) { animFrameId = requestAnimationFrame(drawStartFrame); }
+        else { finishStartAnim(); }
       }
       animDiv.style.display = 'flex';
       animFrameId = requestAnimationFrame(drawStartFrame);
     }
 
-    // Start the actual game with volcano target
-    function startStoryGameLevel(ep) {
-      currentStoryEpisode = ep;
-      storyStartCoins = window.coins || 0;
-      setStoryTargetPlatforms(ep.targetPlats);
-      if (window.startGame) window.startGame();
+function startStoryGameLevel(ep) {
+  // --- Ensure coins has a valid number before capturing ---
+  if (isNaN(coins) || coins === undefined) {
+    coins = (window.currentUser && window.currentUser.ud && typeof window.currentUser.ud.coins === 'number') 
+            ? window.currentUser.ud.coins 
+            : 0;
+    console.log('[STORY] Fixed coins to', coins);
+  }
+  
+  console.log('[STORY] === START STORY LEVEL ===');
+  console.log('[STORY] Episode:', ep.name, 'targetPlats:', ep.targetPlats);
+  console.log('[STORY] coins BEFORE startGame:', coins);
+
+  // Capture immediately – no delay needed
+  window.storyStartCoins = coins;
+  console.log('[STORY] storyStartCoins captured =', window.storyStartCoins);
+
+  // ... rest of your existing startStoryGameLevel (unchanged) ...
+  currentStoryEpisode = ep;
+  window.currentStoryEpisode = ep;
+
+  setStoryTargetPlatforms(ep.targetPlats);
+
+  if (ep.platformConfig) {
+    window.storyPlatformCfg = Object.assign({}, window.STORY_PLATFORM_DEFAULTS, ep.platformConfig);
+  } else {
+    window.storyPlatformCfg = null;
+  }
+
+  const titleEl = document.getElementById('startAnimTitle');
+  if(titleEl) titleEl.textContent = `🌋 ${ep.name} · ${ep.location}`;
+
+  // Start the game
+  if (window.startGame) window.startGame();
+
+  // Double‑check that coins are still what we captured (in case initGame tried to override)
+  setTimeout(() => {
+    if (coins !== window.storyStartCoins) {
+      console.warn('[STORY] Coins changed after initGame! Restoring to', window.storyStartCoins);
+      coins = window.storyStartCoins;
+      if (window.currentUser) window.currentUser.ud.coins = coins;
+      if (window.dbSave) window.dbSave();
+      if (window.updateHUD) window.updateHUD();
+    }
+  }, 50);
+}
+
+// ── Hook into game win (victory) ──
+const originalGameWin = window.gameWin;
+window.gameWin = function() {
+  console.log('[STORY gameWin] called. currentStoryEpisode=', currentStoryEpisode ? currentStoryEpisode.name : 'null', 'versusMode=', window.versusMode);
+  console.log('[STORY gameWin] window.coins =', coins, 'global coins =', coins);
+  if (currentStoryEpisode && !window.versusMode) {
+    console.log('[STORY gameWin] ✅ Story win path — stopping game loop');
+
+    // ── Stop the game loop (mirrors what original gameWin does) ──
+    window.gameRunning = false;
+    if (window.animId) cancelAnimationFrame(window.animId);
+    if (typeof window.saveScore === 'function') window.saveScore();
+    window.lastGameWon = true;
+    if (typeof window.handleCoinsAndPowerUps === 'function') {
+      window.handleCoinsAndPowerUps('win');
     }
 
-    // ── Hook into game win (victory) ──
-    const originalGameWin = window.gameWin;
-    window.gameWin = function() {
-      if (currentStoryEpisode && !window.versusMode) {
-        currentStoryEpisode.completed = true;
-        const nextEp = STORY_EPISODES[currentStoryEpisode.id + 1];
-        if (nextEp) nextEp.unlocked = true;
-        saveStoryProgress();
-        // Capture platform count before any screen transitions
-        const finalPlatforms = (typeof window.getPlatformCount === 'function')
-          ? window.getPlatformCount()
-          : (window.platformCount || 0);
-        showEscapeAnimation(currentStoryEpisode, finalPlatforms);
-      } else {
-        if (originalGameWin) originalGameWin();
-      }
-    };
+    // ── Mark episode complete, unlock next ──
+    currentStoryEpisode.completed = true;
+    const nextEp = STORY_EPISODES[currentStoryEpisode.id + 1];
+    if (nextEp) nextEp.unlocked = true;
+    saveStoryProgress();
+
+    // ── Capture platform count at this exact moment ──
+    const finalPlatforms = (typeof window.getPlatformCount === 'function')
+      ? window.getPlatformCount()
+      : (window.platformCount || 0);
+    console.log('[STORY gameWin] finalPlatforms=', finalPlatforms, 'ep.targetPlats=', currentStoryEpisode.targetPlats);
+
+    showEscapeAnimation(currentStoryEpisode, finalPlatforms);
+
+  } else {
+    console.log('[STORY gameWin] ➡️ Normal win path — calling original gameWin');
+    if (originalGameWin) originalGameWin();
+  }
+};
 
     // Escape animation (glider out) – now with finalPlatforms param
     function showEscapeAnimation(ep, finalPlatforms) {
+      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      const escapeTitleEl = document.getElementById('escapeAnimTitle');
+      if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
+      const escapeSubEl = document.getElementById('escapeAnimSubtitle');
+      if(escapeSubEl) escapeSubEl.textContent = `🪂 Escaped ${ep.name}! Artifact recovered!`;
       const animDiv = document.getElementById('escapeAnimOverlay');
       const canvas = document.getElementById('escapeAnimCanvas');
       const ctx = canvas.getContext('2d');
@@ -6492,7 +7118,22 @@ function showStoryWorldMap() {
       canvas.height = 400;
       let startTime = performance.now();
       let duration = 3300;
+      let skipped = false;
+
+      function finishEscapeAnim() {
+        if (skipped) return;
+        skipped = true;
+        storyAnimSkipCallback = null;
+        cancelAnimationFrame(animFrameId);
+        animDiv.style.display = 'none';
+        showEndStats(ep, finalPlatforms);
+      }
+
+      // Register the skip callback so Space bar can call it
+      storyAnimSkipCallback = finishEscapeAnim;
+
       function drawEscape(now) {
+        if (skipped) return;
         let t = Math.min(1, (now - startTime) / duration);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#832a0a';
@@ -6513,78 +7154,152 @@ function showStoryWorldMap() {
         ctx.font = '32px Arial';
         ctx.fillStyle = 'white';
         ctx.fillText('🪂', glideX+12, glideY-12);
-        if (t < 1) requestAnimationFrame(drawEscape);
-        else {
-          cancelAnimationFrame(animFrameId);
-          animDiv.style.display = 'none';
-          showEndStats(ep, finalPlatforms);
-        }
+        if (t < 1) { animFrameId = requestAnimationFrame(drawEscape); }
+        else { finishEscapeAnim(); }
       }
       animDiv.style.display = 'flex';
       animFrameId = requestAnimationFrame(drawEscape);
     }
+	
+	
+function showEndStats(ep, finalPlatforms) {
+  console.log('[STATS] showEndStats: coins =', coins);
+  if (!ep) return;
+  const target = ep.targetPlats || 0;
+  const climbed = (typeof finalPlatforms === 'number') ? finalPlatforms : 0;
 
-    function showEndStats(ep, finalPlatforms) {
-      if (!ep) return;
-      const target = ep.targetPlats || 0;
-      const climbed = (typeof finalPlatforms === 'number') ? finalPlatforms : 0;
-      const coinsEarned = (window.coins || 0) - storyStartCoins;
-      const bonus = Math.floor(target / 10);
-      if (bonus > 0) {
-        window.coins = (window.coins || 0) + bonus;
-        if (window.currentUser) window.currentUser.ud.coins = window.coins;
-        if (window.dbSave) window.dbSave();
-      }
-      const platformsDiv = document.getElementById('statsPlatforms');
-      if (platformsDiv) platformsDiv.textContent = `🧗 Platforms climbed: ${climbed} / ${target}`;
-      const coinsDiv = document.getElementById('statsCoinsEarned');
-      if (coinsDiv) coinsDiv.textContent = `🪙 Coins earned: ${Math.max(0, coinsEarned)} + bonus ${bonus}`;
-      const bonusDiv = document.getElementById('statsBonus');
-      if (bonusDiv) bonusDiv.textContent = `🌟 Story bonus: +${bonus} 🪙`;
-      const nextDiv = document.getElementById('statsNextUnlock');
-      const nextEp = STORY_EPISODES[ep.id + 1];
-      if (nextDiv) nextDiv.textContent = nextEp
-        ? `▶ Next volcano: ${nextEp.name} (${nextEp.elevation}m) unlocked!`
-        : `🏆 ALL VOLCANOES SAVED!`;
-      const statsOverlay = document.getElementById('endStatsOverlay');
-      if (statsOverlay) statsOverlay.style.display = 'flex';
-      const continueBtn = document.getElementById('statsContinueBtn');
-      if (continueBtn) {
-        continueBtn.onclick = () => {
-          if (statsOverlay) statsOverlay.style.display = 'none';
-          restoreEndPlatform();
-          currentStoryEpisode = null;
-          showStoryWorldMap();
-          if (window.goToMenu) window.goToMenu();
-        };
+  // Actual coins at the end of the game (after spending and collecting)
+  const currentCoins = coins || 0;
+  const bonus = Math.floor(target / 10);
+  const finalTotal = currentCoins + bonus;
+
+  console.log(`[STATS] current=${currentCoins}, bonus=${bonus}, final=${finalTotal}`);
+
+  // Award bonus immediately
+  if (bonus > 0) {
+    coins = finalTotal;
+    if (window.currentUser) {
+      window.currentUser.ud.coins = coins;
+      if (window.dbSave) window.dbSave();
+    }
+    if (window.updatePiggyDisplay) window.updatePiggyDisplay();
+    if (window.updateHUD) window.updateHUD();
+  }
+
+  // Update UI elements
+  document.getElementById('statsPlatforms').textContent = `🧗 Platforms climbed: ${climbed} / ${target}`;
+  document.getElementById('statsCoinsEarned').textContent = `🪙 Current coins: ${currentCoins}`;
+  document.getElementById('statsBonus').textContent = `🌟 Story bonus: +${bonus} 🪙`;
+  const nextEp = STORY_EPISODES[ep.id + 1];
+  const nextDiv = document.getElementById('statsNextUnlock');
+  if (nextDiv) {
+    nextDiv.textContent = nextEp
+      ? `▶ Next volcano: ${nextEp.name} (${nextEp.elevation}m) unlocked!`
+      : `🏆 ALL VOLCANOES SAVED!`;
+  }
+  // Show the actual current coins (not the starting amount)
+  document.getElementById('statsMyCoins').textContent = currentCoins;
+
+  const statsOverlay = document.getElementById('endStatsOverlay');
+  statsOverlay.style.display = 'flex';
+
+  const continueBtn = document.getElementById('statsContinueBtn');
+  continueBtn.disabled = true;
+  continueBtn.style.opacity = '0.5';
+  continueBtn.onclick = null;
+
+  const menuBtn = document.getElementById('statsMenuBtn');
+  menuBtn.onclick = () => {
+    console.log('[STORY] MAIN MENU button clicked, final coins =', coins);
+    statsOverlay.style.display = 'none';
+    restoreEndPlatform();
+    currentStoryEpisode = null;
+    window.currentStoryEpisode = null;
+    if (typeof window.stopBgMusic === 'function') window.stopBgMusic();
+
+    if (typeof window.showScreen === 'function') {
+      window.showScreen('startScreen');
+    } else if (window.goToMenu) {
+      const oldRetain = window.retainPowerups;
+      window.retainPowerups = true;
+      window.goToMenu();
+      window.retainPowerups = oldRetain;
+    }
+    setTimeout(() => {
+      console.log('[STORY] After menu, startMyCoinAmt =', document.getElementById('startMyCoinAmt')?.innerText);
+    }, 200);
+  };
+
+  // ---- Animate only the bonus into the My Coins box ----
+  setTimeout(() => {
+    const bonusRow = document.getElementById('statsBonus');
+    const myCoinsBox = document.getElementById('statsMyCoinsBox');
+    const myCoinsSpan = document.getElementById('statsMyCoins');
+
+    function completeBonusAward() {
+      myCoinsSpan.textContent = coins;
+      if (myCoinsBox) {
+        myCoinsBox.style.transition = 'transform 0.12s, border-color 0.15s';
+        myCoinsBox.style.transform = 'scale(1.06)';
+        myCoinsBox.style.borderColor = '#ffe066';
+        setTimeout(() => { myCoinsBox.style.transform = 'scale(1)'; }, 200);
       }
       if (window.updateHUD) window.updateHUD();
+
+      continueBtn.disabled = false;
+      continueBtn.style.opacity = '1';
+      continueBtn.onclick = () => {
+        console.log('[STORY] CONTINUE clicked, final coins =', coins);
+        statsOverlay.style.display = 'none';
+        restoreEndPlatform();
+        currentStoryEpisode = null;
+        window.currentStoryEpisode = null;
+        if (typeof window.stopBgMusic === 'function') window.stopBgMusic();
+        if (typeof showStoryWorldMap === 'function') showStoryWorldMap();
+        if (window.updatePiggyDisplay) setTimeout(window.updatePiggyDisplay, 200);
+      };
     }
 
-
-
-    // Hook into game death to clean up story mode
-    const originalGameEnd = window.gameEnd;
-    window.gameEnd = function(fromPurple) {
-      if (currentStoryEpisode && !window.versusMode) {
-        currentStoryEpisode = null;
-        restoreEndPlatform();
-        if (originalGameEnd) originalGameEnd(fromPurple);
-      } else {
-        if (originalGameEnd) originalGameEnd(fromPurple);
-      }
-    };
-
-    // Also restore when manually going to menu
-    const originalGoToMenu = window.goToMenu;
-    window.goToMenu = function() {
-      if (currentStoryEpisode) {
-        restoreEndPlatform();
-        currentStoryEpisode = null;
-      }
-      if (originalGoToMenu) originalGoToMenu();
-    };
+    // Only animate the bonus amount (the coins earned during the run are already in the wallet)
+    if (bonus > 0 && myCoinsBox && typeof window.animateCoinTransfer === 'function') {
+      bonusRow.id = 'statsBonusAnimSrc';
+      window.animateCoinTransfer('statsBonusAnimSrc', 'statsMyCoinsBox', bonus, () => {
+        bonusRow.id = 'statsBonus';
+        completeBonusAward();
+      });
+    } else {
+      completeBonusAward();
+    }
+  }, 600);
+}
 	
+
+// ── Hook into game death to clean up story mode ──
+const originalGameEnd = window.gameEnd;
+window.gameEnd = function(fromPurple) {
+  if (currentStoryEpisode && !window.versusMode) {
+    // --- FIX: Do NOT clear the story episode on death.
+    // The episode must remain so that "Play Again" restarts the same volcano.
+    // Also do NOT restore the normal endPlatform (keep the story target).
+    // Just call the original gameEnd to handle death penalties, piggy, etc.
+    if (originalGameEnd) originalGameEnd(fromPurple);
+    // The episode stays alive; restartGameAfterStory will work.
+  } else {
+    if (originalGameEnd) originalGameEnd(fromPurple);
+  }
+};
+
+// Also restore when manually going to menu
+const originalGoToMenu = window.goToMenu;
+window.goToMenu = function() {
+  if (currentStoryEpisode) {
+    restoreEndPlatform();
+    currentStoryEpisode = null;
+    window.currentStoryEpisode = null;
+  }
+  if (originalGoToMenu) originalGoToMenu();
+};
+
 // Enhance HUD during story mode – replace original level & platform displays
 const originalUpdateHUD = window.updateHUD;
 window.updateHUD = function() {
@@ -6662,18 +7377,36 @@ window.updateHUD = function() {
     }
     window.cancelStoryReset = cancelStoryReset;
 
-    function confirmStoryReset() {
-      // Clear all progress
-      STORY_EPISODES.forEach((ep, i) => {
-        ep.completed = false;
-        ep.unlocked = (i === 0);
-      });
-      storyProgress.completedEpisodes = [];
-      currentStoryEpisode = null;
-      saveStoryProgress();
-      closeStoryInfo();
-      if(typeof showNotif === 'function') showNotif('🌋 Story Mode reset! Start from Krakatoa.');
-    }
+	function confirmStoryReset() {
+	  // Reset all episodes: mark as incomplete and unlock only the first
+	  STORY_EPISODES.forEach((ep, idx) => {
+		ep.completed = false;
+		ep.unlocked = (idx === 0);
+	  });
+	  storyProgress.completedEpisodes = [];
+	  currentStoryEpisode = null;
+	  saveStoryProgress();
+
+	  // Reset the carousel index to the first episode
+	  currentCarouselIndex = 0;
+
+	  // Close the info overlay
+	  closeStoryInfo();
+
+	  // If the world map is currently open, refresh it to show the reset state
+	  const mapOverlay = document.getElementById('storyWorldMapOverlay');
+	  if (mapOverlay && mapOverlay.style.display === 'flex') {
+		mapOverlay.style.display = 'none';
+		setTimeout(() => {
+		  showStoryWorldMap();
+		  setTimeout(() => updateStoryProgressBar(), 50); // update progress bar after map renders
+		}, 100);
+	  }
+
+	  if (typeof showNotif === 'function') {
+		showNotif('🌋 Story Mode reset! Start from Krakatoa.');
+	  }
+	}
     window.confirmStoryReset = confirmStoryReset;
 
     // Initialize
