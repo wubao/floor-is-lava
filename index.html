@@ -19,6 +19,7 @@
 <!-- Firebase SDKs (compat version for simplicity) -->
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
 
 <!-- Initialize Firebase with YOUR config -->
 <script>
@@ -1381,6 +1382,7 @@ function saveUser(u, data){
   if (currentUser && currentUser.name === u) {
     currentUser.ud = data;
     localStorage.setItem('fil_current_user', JSON.stringify({ name: u, ud: data }));
+    syncUserProfile();
   }
 }
 function allUsers(){return Object.keys(db.users);}
@@ -1449,6 +1451,14 @@ function levelsLoad(){try{const s=localStorage.getItem(LEVELS_KEY);if(s)savedLev
 function levelsSave(){try{localStorage.setItem(LEVELS_KEY,JSON.stringify(savedLevels));}catch(e){}}
 
 let currentUser = null, infoReturnScreen = 'startScreen', currentMode = 'play', endPlatform = 1000;
+
+// ═══ FIREBASE PROFILE SYNC ═══
+// Writes the current user's profile data to Firebase Realtime Database.
+// Call this after every change to currentUser.ud (coins, power-ups, settings, etc.)
+function syncUserProfile() {
+  if (!currentUser || !currentUser.uid) return;
+  firebaseDB.ref(`users/${currentUser.uid}`).update(currentUser.ud);
+}
 Object.defineProperty(window, 'endPlatform', {
   get: function() { return endPlatform; },
   set: function(val) { endPlatform = val; }
@@ -1458,18 +1468,49 @@ let customPlayPlatforms = null; // set when "Play" is hit in editor
 let isMobile = ('ontouchstart' in window);
 
 // ═══ Guest login ═══
-function guestLogin(){
-  startNotificationListener();
-  const guestData = {passHash:'', coins: parseInt(localStorage.getItem('guestCoins')||0), bestScore: parseInt(localStorage.getItem('guestBest')||0), bestLevel:1, jumpBoosts:0, parachutes:0, isGuest:true};
-  currentUser = {name:'Guest', ud: guestData};
-  localStorage.setItem('fil_current_user', JSON.stringify(currentUser));
-  document.getElementById('welcomeUser').textContent = 'Playing as Guest (stats saved locally)';
-  document.getElementById('bestScoreDisplay').textContent = guestData.bestScore>0 ? '🏆 Best: Platform '+guestData.bestScore : 'No runs yet!';
-  updatePiggyDisplay();
-  loadSettings();
-  checkAndRestorePowerupSession();
-  showScreen('startScreen');
-  ud.hideTutorial = false;
+// Guest login (anonymous)
+function guestLogin() {
+  firebase.auth().signInAnonymously()
+    .then(userCredential => {
+      const user = userCredential.user;
+      const profile = {
+        username: 'Guest_' + user.uid.slice(-6),
+        coins: 0,
+        bestScore: 0,
+        bestLevel: 1,
+        jumpBoosts: 0,
+        parachutes: 0,
+        skipUses: 0,
+        bookUses: 0,
+        lavaShips: 0,
+        piggyBank: 0,
+        settings: defaultSettings(),
+        isGuest: true
+      };
+      return firebaseDB.ref(`users/${user.uid}`).set(profile);
+    })
+    .then(() => {
+      const user = firebase.auth().currentUser;
+      return firebaseDB.ref(`users/${user.uid}`).once('value');
+    })
+    .then(snapshot => {
+      const profile = snapshot.val();
+      currentUser = {
+        name: profile.username,
+        uid: firebase.auth().currentUser.uid,
+        ud: profile
+      };
+      localStorage.setItem('fil_current_user', JSON.stringify({
+        uid: currentUser.uid,
+        name: currentUser.name,
+        ud: profile
+      }));
+      updatePiggyDisplay();
+      loadSettings();
+      startNotificationListener();
+      showScreen('startScreen');
+    })
+    .catch(error => console.error('Guest login error', error));
 }
 function saveGuestProgress(){
   if(!currentUser || !currentUser.ud.isGuest) return;
@@ -1487,21 +1528,73 @@ function switchAuthTab(t){
   document.getElementById('authMsg').textContent='';
 }
 function authMsg(m,col){const el=document.getElementById('authMsg');el.textContent=m;el.style.color=col||'#ff9944';}
-function doLogin(){
-  const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value;
-  if(!u||!p){authMsg('Fill in both fields.');return;}
-  const ud=getUser(u);if(!ud){authMsg('User not found.');return;}
-  if(ud.passHash!==hashPass(p)){authMsg('Wrong password.');return;}
-  loginAs(u,ud);
+
+// Log in
+function doLogin() {
+  const email = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  if (!email || !password) { authMsg('Fill both fields.'); return; }
+
+  firebase.auth().signInWithEmailAndPassword(email, password)
+    .then(userCredential => {
+      const user = userCredential.user;
+      return firebaseDB.ref(`users/${user.uid}`).once('value');
+    })
+    .then(snapshot => {
+      const profile = snapshot.val();
+      if (!profile) throw new Error('Profile not found');
+      currentUser = {
+        name: profile.username,
+        uid: firebase.auth().currentUser.uid,
+        ud: profile
+      };
+      // Optional: keep a copy in localStorage for quick offline access
+      localStorage.setItem('fil_current_user', JSON.stringify({
+        uid: currentUser.uid,
+        name: currentUser.name,
+        ud: profile
+      }));
+      updatePiggyDisplay();
+      loadSettings();
+      startNotificationListener();
+      showScreen('startScreen');
+    })
+    .catch(error => authMsg(error.message, '#ff6666'));
 }
-function doSignup(){
-  const u=document.getElementById('signupUser').value.trim(),p=document.getElementById('signupPass').value;
-  if(!u||!p){authMsg('Fill both fields.');return;}
-  if(u.length<2){authMsg('Username too short.');return;}
-  if(getUser(u)){authMsg('Username taken.');return;}
-  const ud={passHash:hashPass(p),coins:0,bestScore:0,bestLevel:1,jumpBoosts:0,parachutes:0,piggyBank:0};
-  saveUser(u,ud);loginAs(u,ud);
+
+// Sign up
+function doSignup() {
+  const email = document.getElementById('signupUser').value.trim();
+  const password = document.getElementById('signupPass').value;
+  if (!email || !password) { authMsg('Fill both fields.'); return; }
+
+  firebase.auth().createUserWithEmailAndPassword(email, password)
+    .then(userCredential => {
+      const user = userCredential.user;
+      // Initial profile (same structure as your old `ud`)
+      const profile = {
+        username: email.split('@')[0],
+        coins: 0,
+        bestScore: 0,
+        bestLevel: 1,
+        jumpBoosts: 0,
+        parachutes: 0,
+        skipUses: 0,
+        bookUses: 0,
+        lavaShips: 0,
+        piggyBank: 0,
+        settings: defaultSettings(),
+        createdAt: Date.now()
+      };
+      return firebaseDB.ref(`users/${user.uid}`).set(profile);
+    })
+    .then(() => {
+      authMsg('Account created! Please log in.', '#44ff88');
+      switchAuthTab('login');
+    })
+    .catch(error => authMsg(error.message, '#ff6666'));
 }
+
 function loginAs(name,ud){
   startNotificationListener();
   if(!ud.jumpBoosts)ud.jumpBoosts=0;if(!ud.parachutes)ud.parachutes=0;if(!ud.piggyBank)ud.piggyBank=0;
@@ -1523,7 +1616,7 @@ function renderSavedUsers(){
   });
 }
 function getPiggyBank(){return currentUser?(currentUser.ud.piggyBank||0):(db.piggyBank||0);}
-function setPiggyBank(v){if(currentUser)currentUser.ud.piggyBank=v;else db.piggyBank=v;dbSave();}
+function setPiggyBank(v){if(currentUser){currentUser.ud.piggyBank=v;syncUserProfile();}else db.piggyBank=v;dbSave();}
 function updatePiggyDisplay(){
   const p=getPiggyBank();
   const a=document.getElementById('piggyBankAmt');if(a)a.textContent=p;
@@ -1985,7 +2078,7 @@ function isDangerous(){
 function doReset(){
   if(!gameRunning && !paused) return;
   const danger = isDangerous(), pen = danger ? PENALTY : 0;
-  if(danger){if(!isCustomPlayMode()){coins = Math.max(0, coins - pen); if(currentUser){currentUser.ud.coins = coins; dbSave();}} showNotif('⚠️ Cheat reset! –' + pen + ' coins 💸');}
+  if(danger){if(!isCustomPlayMode()){coins = Math.max(0, coins - pen); if(currentUser){currentUser.ud.coins = coins; dbSave(); syncUserProfile();}} showNotif('⚠️ Cheat reset! –' + pen + ' coins 💸');}
   paused = false; document.getElementById('pauseOverlay').classList.remove('show');
   gameRunning = false; cancelAnimationFrame(animId); lastTime = null; initGame(); animId = requestAnimationFrame(gameLoop);
 }
@@ -2017,7 +2110,7 @@ function jump(half, boostOverride){
     }
     if(boostOverride && jumpBoosts > 0){
       force = JUMP_BOOST_FORCE; jumpBoosts--;
-      if(currentUser && !isCustomPlayMode()) { currentUser.ud.jumpBoosts = jumpBoosts; dbSave(); }
+      if(currentUser && !isCustomPlayMode()) { currentUser.ud.jumpBoosts = jumpBoosts; dbSave(); syncUserProfile(); }
       showNotif('⬆️ Boost! (' + jumpBoosts + ' left)'); updateHUD();
       if(jumpBoosts <= 0) triggerQuickBuyIfEmpty('boost');
     }
@@ -2217,7 +2310,7 @@ function checkParachute(){
     if(parachuteDeployY === null) parachuteDeployY = player.y;
     if(player.y - parachuteDeployY >= PARACHUTE_DEPLOY_PX){
       parachuteActive = true; parachutes--;
-      if(currentUser && !isCustomPlayMode()) { currentUser.ud.parachutes = parachutes; dbSave(); }
+      if(currentUser && !isCustomPlayMode()) { currentUser.ud.parachutes = parachutes; dbSave(); syncUserProfile(); }
       showNotif('🪂 Parachute auto-deployed!');
       if(parachutes <= 0) triggerQuickBuyIfEmpty('chute');
       document.getElementById('parachuteHUD').style.opacity = '1';
@@ -3712,6 +3805,7 @@ function saveScore(){
   if(platformCount > ud.bestScore){ud.bestScore=platformCount;ud.bestLevel=level;}
   if(!ud.isGuest) saveUser(currentUser.name, ud);
   else saveGuestProgress();
+  syncUserProfile();
 }
 
 // ═══ UNIFIED COINS + POWER-UPS HANDLER ═══
@@ -3726,7 +3820,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
       const pig = getPiggyBank() + lostAmt;
       setPiggyBank(pig);
       coins = 0;
-      if(currentUser){currentUser.ud.coins = 0; dbSave();}
+      if(currentUser){currentUser.ud.coins = 0; dbSave(); syncUserProfile();}
       updateHUD();
       updatePiggyDisplay();
       const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
@@ -3741,6 +3835,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
       currentUser.ud.lavaShips = 0;
       currentUser.ud.coins = 0;
       dbSave();
+      syncUserProfile();
     }
     if(animate && lostAmt > 0){
       animateCoinTransfer('goCoins','goPiggy',lostAmt,onDone);
@@ -3760,6 +3855,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
         currentUser.ud.bookUses = 0;
         currentUser.ud.lavaShips = 0;
         dbSave();
+        syncUserProfile();
       }
     }
     updateHUD();
@@ -3776,6 +3872,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
       currentUser.ud.bookUses = bookUses;
       currentUser.ud.lavaShips = lavaShips;
       dbSave();
+      syncUserProfile();
     }
     updateHUD();
     updatePiggyDisplay();
@@ -3791,6 +3888,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
       currentUser.ud.parachutes = parachutes;
       currentUser.ud.lavaShips = lavaShips;
       dbSave();
+      syncUserProfile();
     }
     updateHUD();
     if(onDone) onDone();
@@ -3845,7 +3943,7 @@ if(result==='win'||result==='draw'){
   // Move coins from piggy to wallet immediately (no animation yet)
   coins = pig;
   setPiggyBank(0);
-  if(currentUser) currentUser.ud.coins = coins;
+  if(currentUser) { currentUser.ud.coins = coins; syncUserProfile(); }
   dbSave();
   rpsWonCoins = coins;
 
@@ -3879,7 +3977,7 @@ if(mathScore>=mathTotal){
   const pig = getPiggyBank();
   coins += pig;
   setPiggyBank(0);
-  if(currentUser) currentUser.ud.coins = coins;
+  if(currentUser) { currentUser.ud.coins = coins; syncUserProfile(); }
   dbSave();
 
   // Go to start screen and animate
@@ -3969,7 +4067,7 @@ function gameEnd(fromPurple) {
     let deducted = Math.min(penalty, coins);
     if (deducted > 0) {
       coins -= deducted;
-      if (currentUser) currentUser.ud.coins = coins;
+      if (currentUser) { currentUser.ud.coins = coins; syncUserProfile(); }
       showNotif(`💸 You lost ${deducted} coins!`);
       document.getElementById('penaltyMsg').innerHTML = `💸 Penalty: -${deducted} coins (death penalty)`;
     } else {
@@ -4018,6 +4116,7 @@ if (!practiceMode) {
     saveScore();
     lastGameWon = true;
     handleCoinsAndPowerUps('win');
+    syncUserProfile();
     // ── Upload to community leaderboard ──
     if (!versusMode && currentUser) {
         const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
@@ -4197,6 +4296,7 @@ function sellAllPowerUps() {
     currentUser.ud.lavaShips = 0;
     currentUser.ud.coins = coins;
     dbSave();
+    syncUserProfile();
   }
 
   // 6. Update the UI
@@ -4284,7 +4384,7 @@ function buyItem(type){
     playSound('buy');
     updateTorchHUD();
   }
-  if(currentUser && !isCustomPlayMode()){currentUser.ud.coins=coins;dbSave();}updateHUD();
+  if(currentUser && !isCustomPlayMode()){currentUser.ud.coins=coins;dbSave();syncUserProfile();}updateHUD();
 }
 function updateEndPlatform(){endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;updateHUD();}
 
@@ -5660,7 +5760,7 @@ function loadSettings(){
 
 function saveSettings(){
   const s = captureSettings();
-  if(currentUser){ currentUser.ud.settings = s; dbSave(); }
+  if(currentUser){ currentUser.ud.settings = s; dbSave(); syncUserProfile(); }
   else { try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }catch(e){} }
 }
 
@@ -5851,6 +5951,7 @@ function hideTutorialPermanently() {
   if (currentUser) {
     currentUser.ud.hideTutorial = true;
     dbSave();
+    syncUserProfile();
     // Also update the settings toggle to reflect "off"
     showTutorial = false;
     syncToggle('sShowTutorialToggle', false);
@@ -6124,7 +6225,7 @@ function flipMemCard(card){
     if(a.dataset.emoji===b.dataset.emoji){
       setTimeout(()=>{a.classList.remove('flipped');a.classList.add('matched');b.classList.remove('flipped');b.classList.add('matched');memFlipped=[];memCanFlip=true;memMatched++;
         document.getElementById('memProgress').textContent=memMatched+'/8 pairs matched';
-        if(memMatched===8){const pig=getPiggyBank();document.getElementById('memResult').textContent='You win '+pig+' coins!';document.getElementById('memResult').style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();}setTimeout(hideMiniPanels,2200);}
+        if(memMatched===8){const pig=getPiggyBank();document.getElementById('memResult').textContent='You win '+pig+' coins!';document.getElementById('memResult').style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}setTimeout(hideMiniPanels,2200);}
       },500);
     } else {
       setTimeout(()=>{a.classList.remove('flipped');a.textContent='❓';b.classList.remove('flipped');b.textContent='❓';memFlipped=[];memCanFlip=true;},900);
@@ -6143,7 +6244,7 @@ function nextReactRound(){
     const avg=Math.round(reactScores.reduce((a,b)=>a+b,0)/reactScores.length);
     const passed=reactScores.filter(s=>s<=reactTarget).length;
     const r=document.getElementById('reactResult');
-    if(passed>=2){const pig=getPiggyBank();r.textContent='Avg '+avg+'ms — You win '+pig+' coins!';r.style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();}}
+    if(passed>=2){const pig=getPiggyBank();r.textContent='Avg '+avg+'ms — You win '+pig+' coins!';r.style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}}
     else{r.textContent='Too slow (avg '+avg+'ms). Bank stays safe.';r.style.color='#ff9944';}
     document.getElementById('reactProgress').textContent='Done!';
     setTimeout(hideMiniPanels,2500);return;
@@ -6172,7 +6273,7 @@ function startWordGame(){
   wordScore=0;document.getElementById('wordResult').textContent='';nextWordQ();
 }
 function nextWordQ(){
-  if(wordScore>=3){const pig=getPiggyBank();document.getElementById('wordResult').textContent='All correct! You win '+pig+' coins!';document.getElementById('wordResult').style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();}setTimeout(hideMiniPanels,2200);return;}
+  if(wordScore>=3){const pig=getPiggyBank();document.getElementById('wordResult').textContent='All correct! You win '+pig+' coins!';document.getElementById('wordResult').style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}setTimeout(hideMiniPanels,2200);return;}
   wordCurrent=WORDS[Math.floor(Math.random()*WORDS.length)];
   document.getElementById('wordScrambled').textContent=scramble(wordCurrent).toUpperCase();
   document.getElementById('wordInput').value='';document.getElementById('wordResult').textContent='';
@@ -6507,7 +6608,7 @@ function checkVersusWin(){
   const allOut=bots.every(b=>b.eliminated);
   if(allOut&&allBotsDeadRespawnQueue.length===0&&respawnTimer<=0){
     allBotsDeadRespawnQueue=[0,1,2];respawnTimer=120;
-    if(!isCustomPlayMode()){coins+=20;if(currentUser){currentUser.ud.coins=coins;dbSave();}}
+    if(!isCustomPlayMode()){coins+=20;if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}}
     showNotif('All opponents fell! +20 coins. Respawning...');updateHUD();
   }
 }
@@ -7464,7 +7565,7 @@ function finishAd(){
     // From RPS loss Watch Ad — reclaim piggy coins, restart same game mode
     adFromRpsLoss=false;
     coins=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
+    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
     setPiggyBank(0);
     updateHUD();
@@ -7476,7 +7577,7 @@ function finishAd(){
     // From piggy bank screen Watch Ad — go to start screen and animate
     adFromPiggy=false;
     coins+=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
+    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
     showNotif('📺 Ad watched! Claimed '+amt+' coins!');
     updateHUD();
     updatePiggyDisplay();
@@ -7487,7 +7588,7 @@ function finishAd(){
   } else if(adFromGameOver){
     adFromGameOver = false;
     coins = amt;
-    if(currentUser){ currentUser.ud.coins = coins; dbSave(); }
+    if(currentUser){ currentUser.ud.coins = coins; dbSave(); syncUserProfile(); }
     setPiggyBank(0);
     updateHUD();
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
@@ -7498,7 +7599,7 @@ function finishAd(){
   }  else {
     // Legacy fallback
     coins+=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();}
+    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
     showNotif('📺 Ad watched! Kept '+amt+' coins!');
     updateHUD();
   }
@@ -7510,7 +7611,7 @@ function skipAd(){
   // Put the at-risk coins back to piggy (they came from piggy; wallet is already 0)
   const pig=getPiggyBank()+adCoinsAtRisk;
   setPiggyBank(pig);
-  if(currentUser){currentUser.ud.coins=0;dbSave();}
+  if(currentUser){currentUser.ud.coins=0;dbSave();syncUserProfile();}
   showNotif('🐷 Coins stay in Piggy Bank');
   const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
   updateHUD();
@@ -7992,9 +8093,10 @@ async function loadCommunityScores(subMode) {
   
   for (let s of top10) {
     const likedByCurrent = s.likedBy && s.likedBy[currentUserName] === true;
-    const likeButtonHtml = likedByCurrent
-      ? `<span class="like-btn liked" data-username="${s.username}" data-mode="${subMode}" data-score="${s.platforms}">❤️ ${s.likes}</span>`
-      : `<span class="like-btn" data-username="${s.username}" data-mode="${subMode}" data-score="${s.platforms}">🤍 ${s.likes}</span>`;
+	const likeCount = (s.likes !== undefined && s.likes !== null) ? s.likes : 0;
+	const likeButtonHtml = likedByCurrent
+	  ? `<span class="like-btn liked" data-username="${s.username}" data-mode="${subMode}" data-score="${s.platforms}">❤️ ${likeCount}</span>`
+	  : `<span class="like-btn" data-username="${s.username}" data-mode="${subMode}" data-score="${s.platforms}">🤍 ${likeCount}</span>`;
     
     html += `<div class="lbRow">
       <div class="lbRank">${top10.indexOf(s)+1}</div>
@@ -8565,6 +8667,7 @@ function restoreOrConvertPowerupSession() {
       if (currentUser) {
         currentUser.ud.coins = coins;
         dbSave();
+        syncUserProfile();
       }
       showNotif(`🎒 Returned! Power-ups converted: +${bonusCoins} 🪙`);
       updateHUD();
@@ -9819,6 +9922,7 @@ function startStoryGameLevel(ep) {
       coins = window.storyStartCoins;
       if (window.currentUser) window.currentUser.ud.coins = coins;
       if (window.dbSave) window.dbSave();
+      if (typeof syncUserProfile === 'function') syncUserProfile();
       if (window.updateHUD) window.updateHUD();
     }
   }, 50);
@@ -10339,6 +10443,7 @@ function showEndStats(ep, finalPlatforms, allDone) {
     if (window.currentUser) {
       window.currentUser.ud.coins = coins;
       if (window.dbSave) window.dbSave();
+      if (typeof syncUserProfile === 'function') syncUserProfile();
     }
     if (window.updatePiggyDisplay) window.updatePiggyDisplay();
     if (window.updateHUD) window.updateHUD();
@@ -10726,7 +10831,7 @@ document.addEventListener('click', (e) => {
 
 <!-- AD MODAL — outside all screens so it shows over piggyScreen too -->
 
- 
+
 <div id="adModal">
     <div id="adPanel">
       <h2>📺 Watch Ad to Keep Coins?</h2>
