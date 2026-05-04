@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava</title>
+<title>Floor Is Lava v74</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
- 
+
 <!-- iOS Home Screen Icon -->
 <link rel="apple-touch-icon" href="icon.png">
 
@@ -283,7 +283,9 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 /* SHOP */
 #shopOverlay{display:none;position:absolute;inset:0;background:#000d;z-index:20;align-items:center;justify-content:center;overflow-y:auto;}
 #shopOverlay.open{display:flex;}
-#shopPanel{background:linear-gradient(160deg,#2a1a5e,#1a0e3c);border:2px solid #7a5fd4;border-radius:16px;padding:16px;width:min(320px,95%);color:#fff;max-height:90vh;overflow-y:auto;}
+#shopPanel{background:linear-gradient(160deg,#2a1a5e,#1a0e3c);border:2px solid #7a5fd4;border-radius:16px;padding:16px;width:min(320px,95%);color:#fff;max-height:90vh;overflow-y:auto;position:relative;}
+#shopCloseX{position:sticky;top:0;float:right;margin:-4px -4px 0 0;background:rgba(20,14,50,0.95);border:1.5px solid #7a5fd4;color:#c5b0ff;border-radius:50%;width:28px;height:28px;font-size:16px;line-height:26px;text-align:center;cursor:pointer;z-index:10;flex-shrink:0;}
+#shopCloseX:hover{background:#3a2a6e;color:#fff;}
 #shopPanel h2{text-align:center;font-size:16px;color:#ffe066;margin-bottom:3px;}
 #shopCoins{text-align:center;font-size:11px;color:#ffe066;margin-bottom:8px;}
 .shopItem{background:#fff2;border:1px solid #9b7fe844;border-radius:9px;padding:7px 10px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;gap:7px;}
@@ -682,6 +684,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <input class="authInput" id="loginPass" placeholder="Password" type="password" autocomplete="current-password"
              tabindex="2" onkeydown="if(event.key==='Enter'){doLogin();}">
       <button class="authBtn primary" onclick="doLogin()" tabindex="3">Log In</button>
+      <button class="authBtn" onclick="resetPassword()" tabindex="4" style="background:transparent;border:1px solid #4a5fd4;color:#8899dd;font-size:10px;margin-top:4px;">🔑 Forgot Password?</button>
     </div>
     <!-- SIGNUP FORM: nickname + email + password -->
     <div id="signupForm" style="display:none">
@@ -885,7 +888,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   </div>
 <!-- ── QUICK BUY POPUP ── -->
 <div id="quickBuyPopup">
-  <div id="qbHeader">
+  <div id="qbHeader" onclick="if(document.getElementById('qbBuyBtn').disabled){hideQuickBuy();openShop();}" style="cursor:pointer;">
     <span id="qbIcon">⬆️</span>
     <span id="qbLabel">BOOST JUMP</span>
     <span id="qbStatus">EMPTY</span>
@@ -928,6 +931,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <div id="itemNotif"></div>
   <div id="shopOverlay">
     <div id="shopPanel">
+      <button id="shopCloseX" onclick="closeShop()" title="Close Shop">✕</button>
       <h2>🛍️ SHOP</h2>
       <div id="shopCoins"></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">On-demand super-jump. 3 uses. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">20 🪙</button></div>
@@ -1600,12 +1604,28 @@ function switchAuthTab(t){
 }
 function authMsg(m,col){const el=document.getElementById('authMsg');el.textContent=m;el.style.color=col||'#ff9944';}
 
+// ── Firebase error code → friendly message ──
+function friendlyAuthError(error) {
+  const code = error.code || '';
+  if (code === 'auth/invalid-email')              return 'That doesn\'t look like a valid email address.';
+  if (code === 'auth/user-not-found')             return 'No account found with that email.';
+  if (code === 'auth/wrong-password')             return 'Wrong password. Try again or use Forgot Password.';
+  if (code === 'auth/invalid-login-credentials' ||
+      code === 'auth/invalid-credential')         return 'Email or password is incorrect. Try again.';
+  if (code === 'auth/too-many-requests')          return 'Too many attempts. Try again later or reset your password.';
+  if (code === 'auth/email-already-in-use')       return 'An account with that email already exists. Log in instead.';
+  if (code === 'auth/weak-password')              return 'Password must be at least 6 characters.';
+  if (code === 'auth/network-request-failed')     return 'Network error. Check your connection and try again.';
+  return error.message || 'Something went wrong. Please try again.';
+}
+
 // Log in
 function doLogin() {
   const email = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPass').value;
-  if (!email || !password) { authMsg('Fill both fields.'); return; }
+  if (!email || !password) { authMsg('Please enter your email and password.'); return; }
 
+  authMsg('Signing in...', '#ffe066');
   firebase.auth().signInWithEmailAndPassword(email, password)
     .then(userCredential => {
       const user = userCredential.user;
@@ -1619,18 +1639,33 @@ function doLogin() {
         uid: firebase.auth().currentUser.uid,
         ud: profile
       };
-      // Optional: keep a copy in localStorage for quick offline access
       localStorage.setItem('fil_current_user', JSON.stringify({
         uid: currentUser.uid,
         name: currentUser.name,
         ud: profile
       }));
+      coins      = profile.coins      || 0;
+      jumpBoosts = Math.min(profile.jumpBoosts || 0, 20);
+      parachutes = profile.parachutes || 0;
+      skipUses   = profile.skipUses   || 0;
+      bookUses   = profile.bookUses   || 0;
+      lavaShips  = profile.lavaShips  || 0;
       updatePiggyDisplay();
       loadSettings();
-      startNotificationListener();
+      if (typeof startNotificationListener === 'function') startNotificationListener();
       showScreen('startScreen');
     })
-    .catch(error => authMsg(error.message, '#ff6666'));
+    .catch(error => authMsg(friendlyAuthError(error), '#ff6666'));
+}
+
+// Forgot password
+function resetPassword() {
+  const email = document.getElementById('loginUser').value.trim();
+  if (!email) { authMsg('Enter your email address above first, then click Forgot Password.', '#ff9944'); return; }
+  authMsg('Sending reset email...', '#ffe066');
+  firebase.auth().sendPasswordResetEmail(email)
+    .then(() => { authMsg('✅ Password reset email sent! Check your inbox.', '#44ff88'); })
+    .catch(error => authMsg(friendlyAuthError(error), '#ff6666'));
 }
 
 // Sign up
@@ -1668,7 +1703,7 @@ function doSignup() {
       authMsg('Account created! Please log in.', '#44ff88');
       switchAuthTab('login');
     })
-    .catch(error => authMsg(error.message, '#ff6666'));
+    .catch(error => authMsg(friendlyAuthError(error), '#ff6666'));
 }
 
 function loginAs(name,ud){
@@ -4531,7 +4566,7 @@ function hideQuickBuy(){
 function quickBuyAction(){
   if(!_qbType) return;
   const cfg = QB_CONFIG[_qbType];
-  if(coins < cfg.cost){ showNotif('Not enough coins! 🪙'); return; }
+  if(coins < cfg.cost){ hideQuickBuy(); openShop(); return; }
 
   buyItem(cfg.buyKey);
 
