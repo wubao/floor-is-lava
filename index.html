@@ -675,25 +675,45 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div class="authTab active" id="tabLogin" onclick="switchAuthTab('login')">Log In</div>
       <div class="authTab" id="tabSignup" onclick="switchAuthTab('signup')">Sign Up</div>
     </div>
+    <!-- LOGIN FORM: email + password -->
     <div id="loginForm">
-      <input class="authInput" id="loginUser" placeholder="Username" autocomplete="off"
+      <input class="authInput" id="loginUser" placeholder="Email address" type="email" autocomplete="email"
              tabindex="1" onkeydown="if(event.key==='Enter'){document.getElementById('loginPass').focus();}">
-      <input class="authInput" id="loginPass" placeholder="Password" type="password"
+      <input class="authInput" id="loginPass" placeholder="Password" type="password" autocomplete="current-password"
              tabindex="2" onkeydown="if(event.key==='Enter'){doLogin();}">
       <button class="authBtn primary" onclick="doLogin()" tabindex="3">Log In</button>
     </div>
+    <!-- SIGNUP FORM: nickname + email + password -->
     <div id="signupForm" style="display:none">
-      <input class="authInput" id="signupUser" placeholder="Choose username" autocomplete="off"
-             tabindex="1" onkeydown="if(event.key==='Enter'){document.getElementById('signupPass').focus();}">
-      <input class="authInput" id="signupPass" placeholder="Choose password" type="password"
-             tabindex="2" onkeydown="if(event.key==='Enter'){doSignup();}">
-      <button class="authBtn primary" onclick="doSignup()" tabindex="3">Create Account</button>
+      <input class="authInput" id="signupNick" placeholder="Nickname (shown on leaderboard)" autocomplete="off"
+             tabindex="1" onkeydown="if(event.key==='Enter'){document.getElementById('signupUser').focus();}">
+      <input class="authInput" id="signupUser" placeholder="Email address" type="email" autocomplete="email"
+             tabindex="2" onkeydown="if(event.key==='Enter'){document.getElementById('signupPass').focus();}">
+      <input class="authInput" id="signupPass" placeholder="Choose password (min 6 chars)" type="password" autocomplete="new-password"
+             tabindex="3" onkeydown="if(event.key==='Enter'){doSignup();}">
+      <button class="authBtn primary" onclick="doSignup()" tabindex="4">Create Account</button>
     </div>
-    <button class="authBtn guest" onclick="guestLogin()">🎮 Play as Guest</button>
+    <button class="authBtn guest" onclick="openGuestModal()">🎮 Play as Guest</button>
     <div class="authMsg" id="authMsg"></div>
   </div>
   <div id="userListSection"><h3>— saved accounts —</h3><div id="savedUsers"></div></div>
   <div class="guestNote">Guest mode saves progress on this device only. Create an account to keep stats permanently.</div>
+</div>
+
+<!-- GUEST SETUP MODAL -->
+<div id="guestModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#1a1a3e;border:2px solid #cc6688;border-radius:14px;padding:20px 20px 16px;width:min(300px,92vw);text-align:center;">
+    <div style="font-size:18px;font-weight:bold;color:#ffb3c6;margin-bottom:4px;">🎮 Play as Guest</div>
+    <div style="font-size:10px;color:#999;margin-bottom:12px;">Choose a nickname and a 4-digit PIN so you can return to your guest progress.</div>
+    <input class="authInput" id="guestNick" placeholder="Nickname (e.g. LavaKing)" maxlength="16" autocomplete="off"
+           onkeydown="if(event.key==='Enter'){document.getElementById('guestPin').focus();}">
+    <input class="authInput" id="guestPin" placeholder="4-digit PIN (e.g. 1234)" type="number" inputmode="numeric"
+           maxlength="4" style="letter-spacing:6px;font-size:16px;"
+           onkeydown="if(event.key==='Enter'){doGuestLogin();}">
+    <div id="guestModalMsg" style="font-size:10px;color:#ff9944;min-height:14px;margin-bottom:6px;"></div>
+    <button class="authBtn primary" onclick="doGuestLogin()" style="margin-bottom:6px;">▶ Start Playing</button>
+    <button class="authBtn guest" onclick="closeGuestModal()" style="margin-top:0;">Cancel</button>
+  </div>
 </div>
 
 <!-- START -->
@@ -1468,13 +1488,56 @@ let customPlayPlatforms = null; // set when "Play" is hit in editor
 let isMobile = ('ontouchstart' in window);
 
 // ═══ Guest login ═══
-// Guest login (anonymous)
-function guestLogin() {
+function openGuestModal() {
+  document.getElementById('guestNick').value = '';
+  document.getElementById('guestPin').value = '';
+  document.getElementById('guestModalMsg').textContent = '';
+  document.getElementById('guestModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('guestNick').focus(), 50);
+}
+function closeGuestModal() {
+  document.getElementById('guestModal').style.display = 'none';
+}
+function guestModalMsg(m, col) {
+  const el = document.getElementById('guestModalMsg');
+  el.textContent = m; el.style.color = col || '#ff9944';
+}
+
+function doGuestLogin() {
+  const nick = document.getElementById('guestNick').value.trim();
+  const pin  = document.getElementById('guestPin').value.trim();
+  if (!nick) { guestModalMsg('Please enter a nickname.'); return; }
+  if (!/^\d{4}$/.test(pin)) { guestModalMsg('PIN must be exactly 4 digits.'); return; }
+
+  // Check if an existing guest session with this nick+pin exists in localStorage
+  const savedKey = 'fil_guest_' + nick.toLowerCase() + '_' + pin;
+  const existing = localStorage.getItem(savedKey);
+  if (existing) {
+    try {
+      const profile = JSON.parse(existing);
+      // Re-sign in anonymously (gets a new uid but we restore from saved profile)
+      firebase.auth().signInAnonymously().then(userCredential => {
+        const user = userCredential.user;
+        profile.username = nick;
+        profile.isGuest  = true;
+        profile.guestPin = pin;
+        return firebaseDB.ref(`users/${user.uid}`).set(profile).then(() => user);
+      }).then(user => {
+        return firebaseDB.ref(`users/${user.uid}`).once('value');
+      }).then(snapshot => {
+        finishGuestLogin(snapshot.val(), nick, pin, savedKey);
+      }).catch(e => guestModalMsg('Error: ' + e.message));
+      return;
+    } catch(e) {}
+  }
+
+  // New guest — create anonymous account
+  guestModalMsg('Setting up...', '#ffe066');
   firebase.auth().signInAnonymously()
     .then(userCredential => {
       const user = userCredential.user;
       const profile = {
-        username: 'Guest_' + user.uid.slice(-6),
+        username: nick,
         coins: 0,
         bestScore: 0,
         bestLevel: 1,
@@ -1485,38 +1548,46 @@ function guestLogin() {
         lavaShips: 0,
         piggyBank: 0,
         settings: defaultSettings(),
-        isGuest: true
+        isGuest: true,
+        guestPin: pin
       };
-      return firebaseDB.ref(`users/${user.uid}`).set(profile);
+      return firebaseDB.ref(`users/${user.uid}`).set(profile).then(() => user);
     })
-    .then(() => {
-      const user = firebase.auth().currentUser;
-      return firebaseDB.ref(`users/${user.uid}`).once('value');
-    })
+    .then(user => firebaseDB.ref(`users/${user.uid}`).once('value'))
     .then(snapshot => {
-      const profile = snapshot.val();
-      currentUser = {
-        name: profile.username,
-        uid: firebase.auth().currentUser.uid,
-        ud: profile
-      };
-      localStorage.setItem('fil_current_user', JSON.stringify({
-        uid: currentUser.uid,
-        name: currentUser.name,
-        ud: profile
-      }));
-      updatePiggyDisplay();
-      loadSettings();
-      startNotificationListener();
-      showScreen('startScreen');
+      finishGuestLogin(snapshot.val(), nick, pin, savedKey);
     })
-    .catch(error => console.error('Guest login error', error));
+    .catch(error => guestModalMsg('Error: ' + error.message));
+}
+
+function finishGuestLogin(profile, nick, pin, savedKey) {
+  closeGuestModal();
+  const uid = firebase.auth().currentUser.uid;
+  currentUser = { name: nick, uid, ud: profile };
+  // Save progress locally keyed by nick+pin so they can return
+  localStorage.setItem(savedKey, JSON.stringify(profile));
+  localStorage.setItem('fil_current_user', JSON.stringify({ uid, name: nick, ud: profile }));
+  coins      = profile.coins      || 0;
+  jumpBoosts = Math.min(profile.jumpBoosts || 0, 20);
+  parachutes = profile.parachutes || 0;
+  skipUses   = profile.skipUses   || 0;
+  bookUses   = profile.bookUses   || 0;
+  lavaShips  = profile.lavaShips  || 0;
+  updatePiggyDisplay();
+  loadSettings();
+  if (typeof startNotificationListener === 'function') startNotificationListener();
+  showScreen('startScreen');
+  document.getElementById('welcomeUser').textContent = 'Welcome, ' + nick + '! 🎮 (Guest)';
 }
 function saveGuestProgress(){
   if(!currentUser || !currentUser.ud.isGuest) return;
-  localStorage.setItem('guestCoins', currentUser.ud.coins || 0);
-  localStorage.setItem('guestBest', currentUser.ud.bestScore || 0);
   localStorage.setItem('fil_current_user', JSON.stringify(currentUser));
+  // Also update the nick+pin keyed entry so returning guests restore correctly
+  const pin = currentUser.ud.guestPin;
+  if (pin && currentUser.name) {
+    const savedKey = 'fil_guest_' + currentUser.name.toLowerCase() + '_' + pin;
+    localStorage.setItem(savedKey, JSON.stringify(currentUser.ud));
+  }
 }
 
 // ═══ Auth ═══
@@ -1564,16 +1635,21 @@ function doLogin() {
 
 // Sign up
 function doSignup() {
+  const nick  = document.getElementById('signupNick').value.trim();
   const email = document.getElementById('signupUser').value.trim();
   const password = document.getElementById('signupPass').value;
-  if (!email || !password) { authMsg('Fill both fields.'); return; }
+  if (!nick)  { authMsg('Please enter a nickname.'); return; }
+  if (!email) { authMsg('Please enter your email address.'); return; }
+  if (!password) { authMsg('Please enter a password.'); return; }
+  if (password.length < 6) { authMsg('Password must be at least 6 characters.'); return; }
 
   firebase.auth().createUserWithEmailAndPassword(email, password)
     .then(userCredential => {
       const user = userCredential.user;
-      // Initial profile (same structure as your old `ud`)
+      // Initial profile — nickname is the display name shown in-game & leaderboard
       const profile = {
-        username: email.split('@')[0],
+        username: nick,
+        email: email,
         coins: 0,
         bestScore: 0,
         bestLevel: 1,
@@ -8254,10 +8330,13 @@ function restoreUserSession() {
   const saved = localStorage.getItem('fil_current_user');
   if (saved) {
     try {
-      const { name, ud } = JSON.parse(saved);
-      if (ud.isGuest || getUser(name)) {
-        currentUser = { name, ud };
-		startNotificationListener();
+      const parsed = JSON.parse(saved);
+      const name = parsed.name, ud = parsed.ud, uid = parsed.uid;
+      if (ud && (ud.isGuest || getUser(name) || uid)) {
+        currentUser = { name, uid: uid || null, ud };
+        // Guard: startNotificationListener may not be defined yet at parse time
+        // — it will be called once defined via DOMContentLoaded fallback below
+        if (typeof startNotificationListener === 'function') startNotificationListener();
         // --- FIX: Initialize all game vars from saved user data on page load/F5 ---
         coins       = ud.coins      || 0;
         jumpBoosts  = Math.min(ud.jumpBoosts  || 0, 20);
@@ -8267,11 +8346,31 @@ function restoreUserSession() {
         lavaShips   = ud.lavaShips  || 0;
         window.coins = coins;
         // --- End fix ---		
-        if (!ud.isGuest) {
+        if (!ud.isGuest && getUser(name)) {
           const fresh = getUser(name);
           if (fresh) currentUser.ud = { ...ud, ...fresh };
         }
-        document.getElementById('welcomeUser').textContent = ud.isGuest ? 'Playing as Guest' : 'Welcome back, ' + name + '! 👋';
+        // If we have a Firebase uid, try to load latest profile from cloud
+        if (uid) {
+          firebaseDB.ref(`users/${uid}`).once('value').then(snap => {
+            const cloudProfile = snap.val();
+            if (cloudProfile) {
+              currentUser.ud = cloudProfile;
+              coins       = cloudProfile.coins      || 0;
+              jumpBoosts  = Math.min(cloudProfile.jumpBoosts || 0, 20);
+              parachutes  = cloudProfile.parachutes || 0;
+              skipUses    = cloudProfile.skipUses   || 0;
+              bookUses    = cloudProfile.bookUses   || 0;
+              lavaShips   = cloudProfile.lavaShips  || 0;
+              window.coins = coins;
+              updatePiggyDisplay();
+              loadSettings();
+            }
+          }).catch(() => {});
+        }
+        document.getElementById('welcomeUser').textContent = ud.isGuest
+          ? 'Welcome back, ' + name + '! 🎮 (Guest)'
+          : 'Welcome back, ' + name + '! 👋';
         document.getElementById('bestScoreDisplay').textContent = (currentUser.ud.bestScore > 0)
           ? '🏆 Best: Platform ' + currentUser.ud.bestScore
           : 'No runs yet!';
@@ -8315,6 +8414,11 @@ if (document.getElementById('startScreen') && document.getElementById('startScre
 // Try to restore logged-in user (guest or registered)
 if (!restoreUserSession()) {
   showScreen('authScreen');
+} else {
+  // startNotificationListener is now defined — safe to call
+  if (typeof startNotificationListener === 'function' && currentUser) {
+    startNotificationListener();
+  }
 }
 </script>
 
