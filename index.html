@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava v58</title>
+<title>Floor Is Lava v66</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
@@ -76,6 +76,21 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   border:1.5px solid #2a2a4a;border-radius:7px;background:transparent;
   color:#667;cursor:pointer;font-family:inherit;transition:all .12s;}
 .charJumpToggle.on{border-color:#4a9eff;color:#4a9eff;background:#0e1830;}
+/* Leaderboard */
+.lbTab{padding:6px 16px;border-radius:20px 20px 0 0;border:1.5px solid #2a2a4a;border-bottom:none;background:#0e0e22;color:#888;cursor:pointer;font-size:11px;font-weight:bold;font-family:Arial,sans-serif;}
+.lbTab.active{background:#1a1a3e;color:#ffe066;border-color:#4a5fd4;}
+.lbBucket{background:#1a1a3e;border:1px solid #2a2a4a;border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.lbBucketTitle{font-size:12px;font-weight:bold;color:#ffe066;margin-bottom:8px;}
+.lbRow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a1a2a;font-size:11px;}
+.lbRow:last-child{border-bottom:none;}
+.lbRank{width:22px;text-align:center;font-weight:bold;color:#aaa;flex-shrink:0;}
+.lbName{flex:1;color:#e8e0ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lbStat{color:#ffe066;font-size:10px;flex-shrink:0;}
+.lbDate{color:#555;font-size:9px;flex-shrink:0;}
+.lbEpRow{background:#12122a;border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;}
+.lbEpName{flex:1;font-size:11px;color:#e8e0ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lbEpTime{color:#44ff88;font-size:12px;font-weight:bold;flex-shrink:0;}
+.lbEmpty{text-align:center;color:#555;font-size:12px;padding:20px;}
 
 /* AUTH */
 #authScreen{background:linear-gradient(180deg,#0d0d2b,#1a0a0a);align-items:center;justify-content:center;padding:20px 16px 50px;}
@@ -147,6 +162,66 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #infoHudBtn{width:28px;height:28px;border-radius:50%;background:#1a1a3e;border:2px solid #4a80cc;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:#aad4ff;font-weight:bold;}
 #itemNotif{position:absolute;top:7px;left:50%;transform:translateX(-50%);background:#1a1a3eee;color:#ffe066;font-size:11px;font-weight:bold;padding:4px 10px;border-radius:9px;pointer-events:none;opacity:0;white-space:nowrap;z-index:15;border:1px solid #7a5fd4;max-width:260px;text-align:center;}
 #powerWheel{position:absolute;left:14px;bottom:14px;width:130px;height:130px;z-index:50;touch-action:none;display:none;-webkit-tap-highlight-color:transparent;cursor:pointer;}
+
+/* ── QUICK BUY POPUP ── */
+#quickBuyPopup{
+  position:absolute;
+  left:14px;
+  bottom:158px;  /* sits just above the 130px wheel + 14px gap */
+  width:130px;
+  z-index:60;
+  display:none;
+  flex-direction:column;
+  align-items:stretch;
+  pointer-events:auto;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 4px 24px rgba(0,0,0,0.7);
+  animation:qbSlideIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes qbSlideIn{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+#quickBuyPopup.flash{animation:qbSlideIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both, qbFlash 0.5s ease both;}
+@keyframes qbFlash{0%,100%{filter:brightness(1);}50%{filter:brightness(2.2);}}
+#qbHeader{
+  background:rgba(10,8,20,0.96);
+  padding:7px 10px 5px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+#qbIcon{font-size:22px;line-height:1;}
+#qbLabel{font-size:10px;font-weight:bold;color:#ccc;letter-spacing:0.5px;flex:1;}
+#qbStatus{
+  font-size:9px;
+  font-weight:bold;
+  letter-spacing:1px;
+  color:#ff6644;
+  animation:qbBlink 0.7s step-start infinite;
+}
+#qbStatus.bought{color:#44ff88;animation:none;}
+@keyframes qbBlink{0%,100%{opacity:1;}50%{opacity:0;}}
+#qbBuyBtn{
+  background:linear-gradient(135deg,#27ae60,#1a7a40);
+  border:none;
+  color:#fff;
+  font-size:13px;
+  font-weight:bold;
+  letter-spacing:1px;
+  padding:11px 0;
+  cursor:pointer;
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  transition:background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color:transparent;
+}
+#qbBuyBtn:active{transform:scale(0.96);}
+#qbBuyBtn.bought{background:linear-gradient(135deg,#1a7a40,#0d4a28);}
+#qbCoinCost{font-size:10px;color:#ffe066;font-weight:normal;}
+#qbCheckmark{display:none;font-size:16px;}
 #parachuteHUD{position:absolute;font-size:30px;pointer-events:none;opacity:0;z-index:12;transition:opacity 0.3s;}
 
 /* SHOP */
@@ -311,7 +386,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <body>
 <div id="root">
 <div id="modeBar">
-  <button class="modeBtn active" id="btnPlay" onclick="closeAllStoryOverlays();goToMenu()">▶ Play</button>
+  <button class="modeBtn active" id="btnPlay" onclick="closeAllStoryOverlays();goToMenu()">🏠 Menu</button>
   <button class="modeBtn" id="btnEditor" onclick="setMode('editor')" style="display:none;">✏️ Editor</button>
   <!-- hidden select still needed for updateEndPlatform() logic -->
   <select id="endPlatformSel" onchange="updateEndPlatform()" style="display:none;">
@@ -574,10 +649,45 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   </div>
   <div id="gameModeDesc" style="font-size:10px;color:#666;text-align:center;margin-bottom:6px;">See 10 platforms above you at all times</div>
   <button class="startBtn outline" onclick="showScreen('customLevelsScreen')">🗂 Custom Levels</button>
+  <button class="startBtn outline" id="leaderboardBtn" onclick="openLeaderboard()" style="border-color:#ffe066;color:#ffe066;">🪜 Leaderboard</button>
   <button class="startBtn outline" onclick="showScreen('infoScreen','start')">ℹ️ How to Play</button>
   <button class="startBtn outline" onclick="showScreen('authScreen')">👤 Switch Account</button>
   <canvas id="startLavaCanvas"></canvas>
   <div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;pointer-events:none;"><div style="color:#555;font-size:9px;line-height:1.8;"><span style="color:#666;">Game concept by</span> <span style="color:#777;">Lance Eleninovski</span><br><span style="color:#666;">Developed by</span> <span style="color:#777;">Toni Eleninovski</span></div></div>
+</div>
+
+
+<!-- ═══ LEADERBOARD SCREEN ═══ -->
+<div id="leaderboardScreen" class="screen" style="overflow-y:auto;padding:16px;">
+  <div style="max-width:640px;margin:0 auto;padding-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+      <h2 style="font-family:Arial Black,sans-serif;color:#ffe066;font-size:18px;margin:0;">🪜 LEADERBOARD</h2>
+      <button onclick="showScreen('startScreen')" style="padding:6px 16px;border-radius:10px;background:#333;color:#ccc;border:1px solid #555;cursor:pointer;font-size:12px;">✕ Close</button>
+    </div>
+    <!-- Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1.5px solid #2a2a4a;padding-bottom:8px;">
+      <button class="lbTab active" id="lbTabClimt" onclick="showLbTab('climber')">🧗 Climber</button>
+      <button class="lbTab" id="lbTabFrogg" onclick="showLbTab('frogger')">🐸 Frogger</button>
+      <button class="lbTab" id="lbTabStory" onclick="showLbTab('story')">🌋 Story</button>
+    </div>
+    <div id="lbContent"></div>
+  </div>
+</div>
+
+<!-- ═══ STORY END CREDITS OVERLAY ═══ -->
+<div id="storyEndCredits" class="story-overlay" style="display:none;overflow-y:auto;">
+  <div style="max-width:600px;width:95%;background:linear-gradient(160deg,#0d0d2b,#1a1a3e);border:2px solid #ffe066;border-radius:18px;padding:20px;margin:20px auto;">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:36px;margin-bottom:6px;">🏆</div>
+      <h2 style="font-family:Arial Black,sans-serif;color:#ffe066;font-size:20px;text-shadow:0 0 20px #ff6a00aa;margin:0;">VOLCANO CHRONICLES</h2>
+      <div style="color:#ff9944;font-size:13px;margin-top:4px;font-weight:bold;">COMPLETE — ALL 51 VOLCANOES SAVED</div>
+    </div>
+    <div id="creditsRunTimes" style="margin-bottom:16px;"></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button onclick="document.getElementById('storyEndCredits').style.display='none'; showStoryWorldMap();" style="padding:10px 24px;border-radius:12px;background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;border:none;font-weight:bold;font-size:13px;cursor:pointer;">🗺️ View Map</button>
+      <button onclick="document.getElementById('storyEndCredits').style.display='none'; openLeaderboard(); showLbTab('story');" style="padding:10px 24px;border-radius:12px;background:linear-gradient(135deg,#4a5fd4,#2a3a9a);color:#fff;border:none;font-weight:bold;font-size:13px;cursor:pointer;">🪜 View Leaderboard</button>
+    </div>
+  </div>
 </div>
 
 <!-- INFO -->
@@ -665,9 +775,24 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <div id="rightBtns">
     <div class="hudBtn" id="shopBtn" onclick="openShop()"><div style="font-size:18px">🛍️</div><div>SHOP</div></div>
     <div class="hudBtn" id="pauseBtn" onclick="togglePause()">⏸</div>
+<div id="hudTimer" style="font-size:10px;color:#aaa;padding:2px 6px;background:rgba(0,0,0,0.4);border-radius:8px;min-width:40px;text-align:center;display:flex;align-items:center;">0s</div>
     <div class="hudBtn" id="resetBtn" onclick="doReset()"><div style="font-size:14px">🔄</div><div>RESET</div></div>
     <div id="infoHudBtn" onclick="showScreen('infoScreen','game')">ℹ</div>
   </div>
+<!-- ── QUICK BUY POPUP ── -->
+<div id="quickBuyPopup">
+  <div id="qbHeader">
+    <span id="qbIcon">⬆️</span>
+    <span id="qbLabel">BOOST JUMP</span>
+    <span id="qbStatus">EMPTY</span>
+  </div>
+  <button id="qbBuyBtn" onclick="quickBuyAction()">
+    <span id="qbBuyText">BUY</span>
+    <span id="qbCoinCost">20🪙</span>
+    <span id="qbCheckmark">✓</span>
+  </button>
+</div>
+
 <div id="powerWheel">
     <svg id="wheelSvg" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">
       <!-- outer rounded square background -->
@@ -868,6 +993,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <!-- CUSTOM LEVELS -->
 <div id="customLevelsScreen" class="screen">
   <h2>🗂 CUSTOM LEVELS</h2>
+  <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;width:100%;box-sizing:border-box;">
+    <button onclick="newCustomLevel()" style="padding:7px 16px;border-radius:10px;background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;border:none;font-weight:bold;font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap;">+ New Level</button>
+    <input id="levelSearch" type="search" placeholder="🔍 Search levels..." oninput="renderCustomLevelsList()" style="flex:1;min-width:0;padding:7px 10px;border-radius:10px;border:1.5px solid #2a2a4a;background:#0e0e22;color:#e8e0ff;font-size:12px;">
+  </div>
   <div id="levelCardList"></div>
   <div class="uploadArea" onclick="document.getElementById('levelUpload').click()">
     📂 Import level (JSON file)
@@ -1047,7 +1176,7 @@ function getStalagmiteConfig(){
 }
 // ═══════════════════════════════════════════
 
-const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af', ice:'#a0f0ff'};
+const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af',ice:'#a0f0ff',swing:'#d4780a',crumble:'#8b4513'};
 const TRICK_TYPES = ['flip','backflip','tilt'];
 
 function lavaSpeedForLevel(lvl) {
@@ -1127,10 +1256,13 @@ const STORY_PLATFORM_DEFAULTS = {
   purple:   0.05,   // 5%
   green:    0.08,   // 8%  (coin platforms)
   ice:      0.08,   // 8%
+  swing:    0.04,   // 4% swinging platforms
+  crumble:  0.04,   // 4% crumbling platforms
   gap:      0.05,   // base gap chance (increases with level)
   vine:     0.30,   // vine spawn chance on gap platforms
   tipping:  null,   // null = use level-based default
   widthBase: null,  // null = use level-based default
+  maxUnreachableRatio: 25, // F5: 1 unreachable per 25 reachable platforms
 };
 
 
@@ -1155,6 +1287,63 @@ function allUsers(){return Object.keys(db.users);}
 
 // ═══ CUSTOM LEVELS ═══
 const LEVELS_KEY = 'fil_levels_v1';
+
+// ── LEADERBOARD STORAGE ──────────────────────────────────────
+const LB_KEY       = 'fil_leaderboard_v1';   // all-time leaderboard
+const STORY_RUN_KEY= 'fil_story_run_v1';      // current story run times
+
+let leaderboard = { climber: [], frogger: [], story: {} };
+let storyRunTimes = {};   // { [epId]: seconds } for the current story run
+
+function lbLoad() {
+  try { const s = localStorage.getItem(LB_KEY); if(s) leaderboard = JSON.parse(s); } catch(e) {}
+  if(!leaderboard.climber) leaderboard.climber = [];
+  if(!leaderboard.frogger) leaderboard.frogger = [];
+  if(!leaderboard.story)   leaderboard.story   = {};
+}
+function lbSave() {
+  try { localStorage.setItem(LB_KEY, JSON.stringify(leaderboard)); } catch(e) {}
+}
+function storyRunLoad() {
+  try { const s = localStorage.getItem(STORY_RUN_KEY); if(s) storyRunTimes = JSON.parse(s); } catch(e) {}
+}
+function storyRunSave() {
+  try { localStorage.setItem(STORY_RUN_KEY, JSON.stringify(storyRunTimes)); } catch(e) {}
+}
+function storyRunClear() {
+  storyRunTimes = {};
+  try { localStorage.removeItem(STORY_RUN_KEY); } catch(e) {}
+}
+
+// Submit a time to the leaderboard for a story episode.
+// Keeps top 10 times (ascending = faster is better).
+function lbSubmitStory(epId, name, seconds) {
+  if(!leaderboard.story[epId]) leaderboard.story[epId] = [];
+  const entry = { name: name || 'Anon', secs: Math.round(seconds), date: _lbDate() };
+  leaderboard.story[epId].push(entry);
+  leaderboard.story[epId].sort((a,b) => a.secs - b.secs);
+  leaderboard.story[epId] = leaderboard.story[epId].slice(0, 10);
+  lbSave();
+}
+
+// Submit a normal game score to leaderboard (platform milestone buckets).
+// Climber / Frogger: stores top 3 per milestone bucket.
+const LB_BUCKETS = [100, 250, 500, 1000, 2000, 5000];
+function lbSubmitNormal(mode, name, platforms, secs) {
+  const arr = leaderboard[mode] || (leaderboard[mode] = []);
+  const bucket = LB_BUCKETS.slice().reverse().find(b => platforms >= b) || 0;
+  if(!bucket) return; // didn't reach 100 platforms
+  const entry = { name: name || 'Anon', platforms, secs: Math.round(secs), date: _lbDate(), bucket };
+  arr.push(entry);
+  arr.sort((a,b) => b.platforms - a.platforms || a.secs - b.secs);
+  leaderboard[mode] = arr.slice(0, 100); // keep up to 100 total entries
+  lbSave();
+}
+
+function _lbDate() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
+}
 let savedLevels = []; // [{name, platforms, enabled, repeatable}]
 function levelsLoad(){try{const s=localStorage.getItem(LEVELS_KEY);if(s)savedLevels=JSON.parse(s);}catch(e){savedLevels=[];}}
 function levelsSave(){try{localStorage.setItem(LEVELS_KEY,JSON.stringify(savedLevels));}catch(e){}}
@@ -1255,7 +1444,13 @@ function showScreen(id, from){
       }
     }, 100);
   }
-  if(id==='startScreen'){initStartLava();updatePiggyDisplay();}
+  if(id==='startScreen'){
+    initStartLava();
+    updatePiggyDisplay();
+    // Deferred music retry — handles case where first call is blocked by
+    // autoplay policy (common on page load / after browser tab switch)
+    setTimeout(() => { if(bgMusicEnabled && !bgAudio) updateBgMusic(); }, 120);
+  }
   if(id==='gameScreen')resizeGame();
   if(id==='editorScreen'){resizeEditor(); bpRenderTray();}
   if(id==='customLevelsScreen')renderCustomLevelsList();
@@ -1287,8 +1482,12 @@ let movingPlatformAbove=null, bookPlatformPulled=false;
 let bookElevatorState='idle'; // 'idle' | 'descending' | 'riding' | 'ascending'
 let bookElevatorSpeed=0;
 let platforms, player, camera, lavaWorldY, lavaPixPerFrame, initialTimer, initialTimerActive;
+let _unreachCount = 0, _reachSinceUnreach = 0;  // F5: unreachable platform ratio tracking
+let _torchWarnedAt5 = false;  // quick-buy: fire once per low-battery event
 let purpleTimer=0, onPurple=false, purplePlatform=null;
 let gameRunning=false, paused=false, animId, lastTime=null;
+let levelTimerSecs = 0;   // seconds elapsed in the current level/episode
+let levelTimerStart = 0;  // performance.now() at game start
 let anim = {active:false, type:'none', angle:0, funnyFace:false, tiltDir:1, progress:0, vine: null};
 const keys={};
 let touchMoveVX=0, touchActive=false, touchStartX=0, touchStartY=0, touchIsMove=false, touchMoveX=0;
@@ -1371,8 +1570,23 @@ function makePlatform(y, index, prevX, prevW){
   // Gap chance — story mode can override base gap probability
   const baseGap = cfg.gap != null ? cfg.gap : 0.05;
   const gapChance = baseGap + t * 0.25;
-  const isGap = Math.random() < gapChance;
-  const extraGap = isGap ? PLATFORM_GAP * (1 + t * 1.5) : 0;
+  let isGap = Math.random() < gapChance;
+  let extraGap = isGap ? PLATFORM_GAP * (1 + t * 1.5) : 0;
+
+  // ── FEATURE 5: Unreachable platform ratio enforcement ──
+  const UNREACHABLE_THRESH = PLATFORM_GAP * 1.4;
+  const maxRatio = (cfg.maxUnreachableRatio != null) ? cfg.maxUnreachableRatio : 25;
+  if (extraGap > UNREACHABLE_THRESH) {
+    if (_reachSinceUnreach < maxRatio) {
+      isGap = false;
+      extraGap = 0;
+    } else {
+      _unreachCount++;
+      _reachSinceUnreach = 0;
+    }
+  } else {
+    _reachSinceUnreach++;
+  }
 
   // Tipping chance — story mode can override or use level default
   const tipChance = cfg.tipping != null
@@ -1390,6 +1604,22 @@ function makePlatform(y, index, prevX, prevW){
     vine = { active: true, position: pos, swingAngle: 0, swingSpeed: 0, launched: false };
   }
 
+  // ── SWING + CRUMBLE platform generation ──
+  const pSwing   = cfg.swing   != null ? cfg.swing   : 0.04;
+  const pCrumble = cfg.crumble != null ? cfg.crumble : 0.04;
+  let swingData = null;
+  let crumbleState = null;
+  if (!isGap && color !== 'purple') {
+    const sr = Math.random();
+    if (sr < pSwing) {
+      color = 'swing';
+      swingData = { angle: 0, vel: 0, pivotX: x + w/2, pivotY: (y - extraGap) - PLATFORM_GAP * 0.3 };
+    } else if (sr < pSwing + pCrumble) {
+      color = 'crumble';
+      crumbleState = 'idle';
+    }
+  }
+
   return {x, y: y - extraGap, w, h: PLATFORM_H, color, index, hasCoin: color==='green',
     origY: y - extraGap, pulled: false, isGap,
     tipping: canTip ? 'idle' : null,
@@ -1399,7 +1629,11 @@ function makePlatform(y, index, prevX, prevW){
     tipShakeTimer: 0,
     tipPivotX: 0, tipPivotY: 0,
     iceUsed: false,
-    vine: vine
+    vine: vine,
+    swingData,
+    crumbleState,
+    crumbleTimer: 0,
+    crumbleShakeX: 0,
   };
 }
 function getCustomLevelChunk(startIndex){
@@ -1421,16 +1655,28 @@ function getCustomLevelChunk(startIndex){
 let nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
 
 function initGame(){
-  // --- STORY MODE FIX: If in story mode, keep the existing coin amount
+  // --- STORY MODE: preserve coin amount, but always ensure power-ups are defined ---
   if (window.currentStoryEpisode && typeof window.storyStartCoins !== 'undefined') {
+    // Keep coins as-is; only load power-ups if they are currently undefined (e.g. after F5)
     console.log('[STORY] Story mode active, preserving coins =', coins);
-    // DO NOT reload from user data
-  } 
-  else if (lastGameWon) {
-    // Win carryover
+    if (currentUser) {
+      const ud = currentUser.ud;
+      if (jumpBoosts  === undefined) jumpBoosts  = Math.min(ud.jumpBoosts  || 0, 20);
+      if (parachutes  === undefined) parachutes  = ud.parachutes || 0;
+      if (skipUses    === undefined) skipUses    = ud.skipUses   || 0;
+      if (bookUses    === undefined) bookUses    = ud.bookUses   || 0;
+      if (lavaShips   === undefined) lavaShips   = ud.lavaShips  || 0;
+    } else {
+      if (jumpBoosts  === undefined) jumpBoosts  = 0;
+      if (parachutes  === undefined) parachutes  = 0;
+      if (skipUses    === undefined) skipUses    = 0;
+      if (bookUses    === undefined) bookUses    = 0;
+      if (lavaShips   === undefined) lavaShips   = 0;
+    }
+  } else if (lastGameWon) {
+    // Win carryover — power-ups already set from previous run
     lastGameWon = false;
-  } 
-  else if (currentUser) {
+  } else if (currentUser) {
     const ud = currentUser.ud;
     coins = ud.coins || 0;
     jumpBoosts = Math.min(ud.jumpBoosts || 0, 20);
@@ -1452,7 +1698,10 @@ function initGame(){
   console.log('[FIX] initGame final coins =', coins);
 
   // --- The rest of the existing initGame code (unchanged, follows below) ---
+  levelTimerSecs = 0; levelTimerStart = performance.now(); window.levelTimerSecs = 0;
   level = 1; platformCount = 0; bigHead = false;
+  _unreachCount = 0; _reachSinceUnreach = 0;  // F5 reset
+  _torchWarnedAt5 = false; hideQuickBuy();
   booksOwned = 0; 
   movingPlatformAbove = null; bookPlatformPulled = false;
   onPurple = false; purpleTimer = 0; purplePlatform = null;
@@ -1521,6 +1770,12 @@ function updateHUD(){
   document.getElementById('platformDisplay').textContent = 'Plt ' + platformCount + (endPlatform > 0 ? '/'+endPlatform : '');
   document.getElementById('lavaInfo').textContent = 'Lava: ' + (lavaPixPerFrame * 60 / PLATFORM_GAP).toFixed(1) + ' plt/s';
   document.getElementById('timerDisplay').textContent = initialTimerActive ? '⏱ ' + Math.ceil(initialTimer) + 's' : '';
+  // Live game timer in HUD
+  const hudTimerEl = document.getElementById('hudTimer');
+  if(hudTimerEl && typeof levelTimerSecs !== 'undefined' && gameRunning) {
+    const ts = Math.floor(levelTimerSecs), tm = Math.floor(ts/60), tr = ts%60;
+    hudTimerEl.textContent = tm>0 ? `${tm}m${String(tr).padStart(2,'0')}s` : `${ts}s`;
+  }
   // Lava distance in platforms
   if(typeof lavaWorldY !== 'undefined' && typeof player !== 'undefined'){
     const lavaDist = lavaWorldY - player.y;
@@ -1545,6 +1800,15 @@ function updateHUD(){
   if(cs) cs.textContent = parachutes > 0 ? '✅ ' + parachutes + ' owned (auto)' : '';
   if(shs) shs.textContent = lavaShips > 0 ? '✅ ' + lavaShips + ' ready (key 4)' : lavaShipActive ? '🚀 LAUNCHING!' : '';
   updateWheelDial();
+  // Keep Quick Buy button affordance in sync with coin balance
+  if(_qbActive){
+    const qbBtn = document.getElementById('qbBuyBtn');
+    const qbCfg = QB_CONFIG[_qbType];
+    if(qbBtn && qbCfg && !_qbBought){
+      qbBtn.disabled = coins < qbCfg.cost;
+      qbBtn.style.opacity = coins < qbCfg.cost ? '0.5' : '1';
+    }
+  }
 }
 
 // ═══ POWERS ═══
@@ -1552,6 +1816,7 @@ function activateJumpBoost(){ return jumpBoosts > 0; }
 function activateSkip(){
   if(skipUses <= 0){showNotif('No skips! Buy in shop.');return;}
   skipUses--;
+  if(skipUses <= 0) triggerQuickBuyIfEmpty('skip');
   const sa = Math.random() < 0.5 ? 1 : 2;
   const above = platforms.filter(p => p.y < player.y && p.index > player.currentPlatformIndex).sort((a,b) => b.y - a.y);
   const target = above[Math.min(sa-1, above.length-1)];
@@ -1612,6 +1877,7 @@ function jump(half, boostOverride){
       force = JUMP_BOOST_FORCE; jumpBoosts--;
       if(currentUser) currentUser.ud.jumpBoosts = jumpBoosts;
       dbSave(); showNotif('⬆️ Boost! (' + jumpBoosts + ' left)'); updateHUD();
+      if(jumpBoosts <= 0) triggerQuickBuyIfEmpty('boost');
     }
     player.vy = force; player.onGround = false;
 	if(nightMode && player.currentPlatformIndex !== undefined){
@@ -1809,6 +2075,7 @@ function checkParachute(){
       parachuteActive = true; parachutes--;
       if(currentUser) currentUser.ud.parachutes = parachutes;
       dbSave(); showNotif('🪂 Parachute auto-deployed!');
+      if(parachutes <= 0) triggerQuickBuyIfEmpty('chute');
       document.getElementById('parachuteHUD').style.opacity = '1';
       updateHUD();
     }
@@ -1887,6 +2154,156 @@ function updateAnim(dt){
       anim.angle = 0;
       anim.funnyFace = false;
     }
+  }
+}
+
+// ── UPDATE SWINGING PLATFORMS ──────────────────────────
+// Physics model:
+//  - Platform hangs from pivot on an arm of length armLen
+//  - Player standing on it slides along the tilted surface (gravity component)
+//  - When player slides off the raised end they get launched with angular momentum
+//  - Collision uses rotated surface, not flat AABB
+function updateSwingPlatforms(dt){
+  for(const p of platforms){
+    if(!p.swingData) continue;
+    const sd = p.swingData;
+    const MAX_VEL = 0.10;
+    const DECAY   = 0.988;
+    const armLen  = PLATFORM_GAP * 0.9;
+
+    const onThisSwing = player.onGround && player.currentPlatformIndex === p.index;
+
+    // ── 1. Player input accelerates/brakes swing ──
+    if(onThisSwing){
+      const px_dir = keys['ArrowRight']||keys['KeyD'] ? 1 : keys['ArrowLeft']||keys['KeyQ'] ? -1 : 0;
+      if(px_dir !== 0){
+        const sameDir = (px_dir * sd.vel >= 0);
+        sd.vel += px_dir * (sameDir ? 0.004 : -0.008) * dt;
+      }
+    }
+
+    // ── 2. Pendulum restoring force ──
+    sd.vel += -0.003 * Math.sin(sd.angle) * dt;
+    sd.vel *= Math.pow(DECAY, dt);
+    sd.vel = Math.max(-MAX_VEL, Math.min(MAX_VEL, sd.vel));
+    sd.angle += sd.vel * dt;
+
+    // ── 3. Clamp angle ──
+    const MAX_ANGLE = Math.PI * 0.40;
+    if(sd.angle >  MAX_ANGLE){ sd.angle =  MAX_ANGLE; sd.vel *= -0.25; }
+    if(sd.angle < -MAX_ANGLE){ sd.angle = -MAX_ANGLE; sd.vel *= -0.25; }
+
+    // ── 4. Recompute world position of platform center ──
+    // Platform center hangs at: pivot + (sin,cos)*armLen
+    const platCX = sd.pivotX + Math.sin(sd.angle) * armLen;
+    const platCY = sd.pivotY + Math.cos(sd.angle) * armLen;
+    p.x = platCX - p.w / 2;
+    p.y = platCY;  // top surface Y is approximated below per-pixel
+
+    // Store for collision use
+    sd.platCX = platCX;
+    sd.platCY = platCY;
+    // Platform surface tilt = sd.angle (positive = right side up, left side down)
+    // Surface normal points in direction (-sin(angle), -cos(angle)) in world space
+    // BUT we draw it with gCtx.rotate(sd.angle*0.7), so for physics use the visual tilt:
+    sd.tilt = sd.angle * 0.7;  // visual tilt used for surface projection
+
+    // ── 5. If player is on this platform, apply slope slide ──
+    if(onThisSwing){
+      // Gravity component along slope (slide toward low end)
+      // tilt>0 means right end is higher → slide left (negative vx)
+      const slopeAccel = -Math.sin(sd.tilt) * 0.4 * dt;  // slide force
+      player.vx += slopeAccel;
+
+      // Clamp slide speed to prevent runaway
+      player.vx = Math.max(-8, Math.min(8, player.vx));
+
+      // ── Position player on rotated surface ──
+      // Find player centre relative to platform centre
+      const pCX = player.x + player.w / 2;
+      const pCY = player.y + player.h;
+      // Offset from platform centre in platform-local coords
+      const localX = pCX - platCX;
+
+      // Projected Y on surface: platCY + localX * sin(tilt)
+      // (tilted surface: at localX along the board, surface is localX*sin(tilt) lower/higher)
+      const surfaceY = platCY + localX * Math.sin(sd.tilt);
+      player.y = surfaceY - player.h;
+      player.vy = 0;
+
+      // ── 6. Launch: player slides off the raised end ──
+      // "Raised end" = whichever half of platform is above the pivot line
+      // If tilt>0 (right side up): launch from right end
+      // If tilt<0 (left side up): launch from left end
+      const halfW = p.w / 2;
+      const playerLocalX = pCX - platCX;  // negative = left half, positive = right half
+
+      // Check if player has slid off either end
+      const offRight = playerLocalX > halfW + 4;
+      const offLeft  = playerLocalX < -halfW - 4;
+
+      if(offRight || offLeft){
+        // Launch: give player the tangential velocity of the platform edge
+        // Edge velocity = armLen * sd.vel (angular → linear)
+        const edgeVelMag = armLen * Math.abs(sd.vel) * 1.2;
+        // Direction: perpendicular to the arm at the angle, scaled by which end
+        const launchDir = offRight ? 1 : -1;
+
+        // Horizontal: tangential component + player slide
+        player.vx = launchDir * edgeVelMag * Math.cos(sd.angle) * 0.8;
+        // Vertical: upward if the end being launched from is the HIGH end
+        const endIsHigh = (offRight && sd.tilt > 0.05) || (offLeft && sd.tilt < -0.05);
+        if(endIsHigh){
+          // Catapult upward — more velocity = more height
+          player.vy = -edgeVelMag * Math.sin(Math.abs(sd.tilt)) * 2.5 - 3;
+        } else {
+          // Slide off the low end — small downward nudge
+          player.vy = 1.5;
+        }
+        player.onGround = false;
+        player.currentPlatformIndex = p.index; // keep for scoring
+      }
+    }
+  }
+}
+
+// ── UPDATE CRUMBLING PLATFORMS ──────────────────────────
+const CRUMBLE_WARNING_MS = 1200;
+const CRUMBLE_FALL_MS    = 500;
+function updateCrumblePlatforms(dt){
+  for(const p of platforms){
+    if(!p.crumbleState || p.crumbleState === 'gone') continue;
+    if(p.crumbleState === 'idle') continue;
+    if(p.crumbleState === 'shaking'){
+      p.crumbleTimer -= dt * 16.67;
+      p.crumbleShakeX = Math.sin(Date.now() * 0.03) * 4;
+      if(p.crumbleTimer <= 0){
+        p.crumbleState = 'crumbling';
+        p.crumbleTimer = CRUMBLE_FALL_MS;
+        p.crumbleVY = 0;
+      }
+    }
+    if(p.crumbleState === 'crumbling'){
+      p.crumbleTimer -= dt * 16.67;
+      p.crumbleVY = (p.crumbleVY || 0) + 1.2 * dt;
+      p.y += p.crumbleVY * dt;
+      p.crumbleShakeX = (Math.random() - 0.5) * 8;
+      if(p.crumbleTimer <= 0){
+        p.crumbleState = 'gone';
+        if(player.currentPlatformIndex === p.index){
+          player.onGround = false;
+          player.vy = 2;
+        }
+      }
+    }
+  }
+}
+
+function triggerCrumble(p){
+  if(p.crumbleState === 'idle'){
+    p.crumbleState = 'shaking';
+    p.crumbleTimer = CRUMBLE_WARNING_MS;
+    p.crumbleShakeX = 0;
   }
 }
 
@@ -1976,6 +2393,7 @@ function updateStalagmites(dt){
   for(const p of platforms){
     if(p.tipping && p.tipping !== 'idle') continue;
     if(p.isGap) continue;
+    if(p.crumbleState === 'gone') continue;  // skip disintegrated crumble platforms
     const distToLava = lavaWorldY - p.y; // positive = lava is below platform
     if(distToLava >= 0 && distToLava <= triggerZone){
       const hasStal = stalagmites.some(s => s.platIndex === p.index);
@@ -2121,6 +2539,7 @@ function activateLavaShip(){
   closeShop();
   showNotif('🚀 LAVA SHIP LAUNCH! 🌋→🚀');
   updateHUD();
+  if(lavaShips <= 0) triggerQuickBuyIfEmpty('ship');
 }
 
 function drawLavaShip(){
@@ -2213,6 +2632,8 @@ function gameLoop(ts){
   if(!gameRunning || paused) return;
   const dt = lastTime ? Math.min((ts - lastTime) / 16.67, 3) : 1;
   lastTime = ts;
+  levelTimerSecs = (ts - levelTimerStart) / 1000;  // live timer
+  window.levelTimerSecs = levelTimerSecs;  // expose to story script (separate scope)
   if(initialTimerActive){initialTimer -= dt * (16.67/1000); if(initialTimer <= 0){initialTimer = 0; initialTimerActive = false;} updateHUD();}
 
   const MOVE_SPEED = 4.8;
@@ -2265,6 +2686,35 @@ function gameLoop(ts){
   for(const p of platforms){
     // Skip platforms that are no longer in their original horizontal position
     if(p.tipping && p.tipping !== 'idle') continue;
+
+    // ── SWING PLATFORM: custom surface collision ──
+    if(p.swingData && p.swingData.platCX !== undefined){
+      const sd = p.swingData;
+      if(!player.onGround || player.currentPlatformIndex !== p.index){
+        // Test if player is falling onto the rotated surface
+        const pCX = player.x + player.w / 2;
+        const pBY = player.y + player.h;
+        const localX = pCX - sd.platCX;
+        // Only consider if horizontally within the platform half-width (+ small buffer)
+        if(Math.abs(localX) < p.w / 2 + 8){
+          const surfaceY = sd.platCY + localX * Math.sin(sd.tilt || 0);
+          // Landing: player bottom was above surface last frame, now at or below
+          if(player.vy >= 0 && pBY >= surfaceY - 2 && pBY < surfaceY + Math.abs(player.vy)*dt + 10){
+            // Land on swing platform
+            player.y = surfaceY - player.h;
+            player.vy = 0;
+            player.onGround = true;
+            player.currentPlatformIndex = p.index;
+            if(nightMode) nightVisiblePlatforms.add(p.index);
+            parachuteActive = false; parachuteDeployY = null;
+            document.getElementById('parachuteHUD').style.opacity = '0';
+            if(onPurple){onPurple=false;purpleTimer=0;purplePlatform=null;document.getElementById('purpleWarning').style.opacity='0';}
+          }
+        }
+      }
+      continue; // swing platform handles its own positional update
+    }
+
     if(player.vy >= 0 && player.y + player.h > p.y && player.y + player.h < p.y + p.h + Math.abs(player.vy)*dt + 7){
       // check horizontal — simple AABB, no wrap
       if(player.x + player.w > p.x + 5 && player.x < p.x + p.w - 5){
@@ -2273,10 +2723,14 @@ function gameLoop(ts){
           parachuteActive = false; document.getElementById('parachuteHUD').style.opacity = '0';
           if(!onPurple || purplePlatform !== p){onPurple=true;purpleTimer=PURPLE_DEATH_MS;purplePlatform=p;showNotif('⚠️ JUMP OFF QUICKLY!');playSound('death');document.getElementById('purpleWarning').style.opacity='1';}
         } else {
+          // Skip crumbled-away platforms
+          if(p.crumbleState === 'gone') continue;
           player.y = p.y - player.h; player.vy = 0; player.onGround = true; if(nightMode) nightVisiblePlatforms.add(p.index);
           parachuteActive = false; parachuteDeployY = null;
           document.getElementById('parachuteHUD').style.opacity = '0';
           if(onPurple){onPurple=false;purpleTimer=0;purplePlatform=null;document.getElementById('purpleWarning').style.opacity='0';}
+          // Trigger crumble platform countdown on landing
+          if(p.crumbleState==='idle') triggerCrumble(p);
           if(p.color==='green' && p.hasCoin){p.hasCoin=false;coins+=20;playSound('coin');showNotif('+20 coins! 🪙');updateHUD();}
 // Ice platform: lowers lava by 2 platform gaps
 if (p.color === 'ice' && !p.iceUsed) {
@@ -2322,11 +2776,22 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
     const vineWorldY = p.y + p.h;
     const playerCenterX = player.x + player.w/2;
     const playerCenterY = player.y + player.h/2;
-    const dx = playerCenterX - vineWorldX;
-    const dy = playerCenterY - vineWorldY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    
-    if (dist < 20) { // collision radius
+    // ── Vine collision: check player bounding box vs the full vine rope ──
+    // Vine hangs from vineWorldY downward ~70px. Any overlap with player body grabs it.
+    const VINE_LEN = 70;       // pixels the vine hangs down
+    const VINE_W   = 14;       // horizontal grab width each side of vine X
+    const playerLeft   = player.x;
+    const playerRight  = player.x + player.w;
+    const playerTop    = player.y;
+    const playerBottom = player.y + player.h;
+    const vineTop    = vineWorldY;
+    const vineBottom = vineWorldY + VINE_LEN;
+    const vineLeft   = vineWorldX - VINE_W;
+    const vineRight  = vineWorldX + VINE_W;
+
+    const hitsVine = playerRight > vineLeft && playerLeft < vineRight &&
+                     playerBottom > vineTop  && playerTop  < vineBottom;
+    if (hitsVine) { // broad box overlap with vine rope
       // Start vine swing animation
       p.vine.active = false;  // prevent re-trigger
       p.vine.launched = true;
@@ -2342,7 +2807,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
         anchorY: vineWorldY,
         startY: player.y,
         targetLaunchY: player.y - (15 * PLATFORM_GAP), // 15 platforms up
-        swingDuration: 600,   // ms
+        swingDuration: 1400,  // ms — slowed for satisfying arc (was 600)
         launchDuration: 400,  // ms
         swingStartTime: performance.now(),
         launched: false
@@ -2399,6 +2864,8 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
 
   if(!initialTimerActive) lavaWorldY -= lavaPixPerFrame * dt;
   updateTippingPlatforms(dt);
+  updateSwingPlatforms(dt);
+  updateCrumblePlatforms(dt);
   
   
   // ── BOOK ELEVATOR ──
@@ -2620,26 +3087,61 @@ function drawGame(){
 
   // platforms — drawn once, no wrapping
   for(const p of platforms){
-    const sx = p.x - camera.x;
+    if(p.crumbleState === 'gone') continue;  // skip fully crumbled
+
+    // ── SWINGING PLATFORM: cull using physics centre, draw immediately ──
+    if(p.swingData){
+      const scx = (p.swingData.platCX !== undefined ? p.swingData.platCX : p.x + p.w/2) - camera.x;
+      const scy = (p.swingData.platCY !== undefined ? p.swingData.platCY : p.y) - camera.y;
+      if(scy < zH + 80 && scy > -80 && scx > -p.w && scx < zW + p.w){
+        if(!nightMode || nightVisiblePlatforms.has(p.index)) drawSwingPlatform(p);
+      }
+      continue;
+    }
+
+    const sx = (p.x + (p.crumbleShakeX||0)) - camera.x;
     const sy = p.y - camera.y;
     if(sy > zH + 20 || sy < -60) continue;
     if(sx > zW + 60 || sx + p.w < -60) continue;
     if(nightMode && !nightVisiblePlatforms.has(p.index)) continue;
+
+    // ── CRUMBLING PLATFORM (active shaking/falling) ──
+    if(p.crumbleState && p.crumbleState !== 'idle'){
+      const alpha = p.crumbleState === 'crumbling' ? Math.max(0.1, p.crumbleTimer / 500) : 1;
+      gCtx.save();
+      gCtx.globalAlpha = alpha;
+      const fc = COLORS['crumble'];
+      gCtx.fillStyle = fc;
+      gCtx.beginPath(); gCtx.roundRect(sx, sy, p.w, p.h, 6); gCtx.fill();
+      // Crack lines
+      gCtx.strokeStyle = '#fff3'; gCtx.lineWidth = 1.5;
+      for(let _c=0;_c<3;_c++){const cx=sx+p.w*(0.25+_c*0.25);gCtx.beginPath();gCtx.moveTo(cx,sy);gCtx.lineTo(cx+(Math.random()-0.5)*8,sy+p.h);gCtx.stroke();}
+      if(p.crumbleState === 'crumbling'){
+        for(let d=0;d<4;d++){gCtx.fillStyle='rgba(180,120,60,'+(0.4+Math.random()*0.3)+')';gCtx.beginPath();gCtx.arc(sx+Math.random()*p.w,sy+Math.random()*p.h,2+Math.random()*3,0,Math.PI*2);gCtx.fill();}
+      }
+      gCtx.restore();
+      continue;
+    }
+
     if(p.tipping === 'falling' || p.tipping === 'landed'){
       drawTippingPlatform(p);
     } else {
       drawPlatform(p, sx, sy);
-      // Shake effect — offset x slightly
+      // Shake effect for tipping
       if(p.tipping === 'shaking'){
         const shakeX = sx + (Math.sin(Date.now() * 0.04) * 3);
-        // redraw shifted version on top
         const fc = COLORS[p.color]||'#888';
         gCtx.fillStyle=fc; gCtx.beginPath(); gCtx.roundRect(shakeX, sy, p.w, p.h, 6); gCtx.fill();
-        // shake indicator: red glow on the falling end
         const glowX = p.tipDir==='left' ? shakeX + p.w - 8 : shakeX;
         gCtx.fillStyle='rgba(255,80,0,0.5)'; gCtx.fillRect(glowX, sy, 8, p.h);
       }
- }
+      // Crumble idle indicator — subtle crack marks to warn player
+      if(p.crumbleState === 'idle'){
+        gCtx.strokeStyle='rgba(255,180,80,0.45)'; gCtx.lineWidth=1.5;
+        gCtx.beginPath(); gCtx.moveTo(sx+p.w*0.3, sy+2); gCtx.lineTo(sx+p.w*0.4, sy+p.h-2); gCtx.stroke();
+        gCtx.beginPath(); gCtx.moveTo(sx+p.w*0.7, sy+2); gCtx.lineTo(sx+p.w*0.6, sy+p.h-2); gCtx.stroke();
+      }
+    }
   }
 
 
@@ -2660,6 +3162,78 @@ function drawTippingPlatform(p){
   gCtx.beginPath(); gCtx.arc(p.tipDir==='left'?0:p.w, p.h/2, 4, 0, Math.PI*2); gCtx.fill();
   gCtx.restore();
 }
+
+function drawSwingPlatform(p){
+  const sd = p.swingData;
+  if(!sd) return;
+  // Use stored platCX/platCY from physics update (rotated centre)
+  const platCX = (sd.platCX !== undefined ? sd.platCX : p.x + p.w/2) - camera.x;
+  const platCY = (sd.platCY !== undefined ? sd.platCY : p.y) - camera.y;
+  const pivotSX = sd.pivotX - camera.x;
+  const pivotSY = sd.pivotY - camera.y;
+  const tilt = sd.tilt || 0;
+
+  // ── Chain / rope from pivot ──
+  gCtx.save();
+  gCtx.strokeStyle = '#7a4820';
+  gCtx.lineWidth = 3;
+  gCtx.setLineDash([5,4]);
+  gCtx.beginPath();
+  gCtx.moveTo(pivotSX, pivotSY);
+  gCtx.lineTo(platCX, platCY);
+  gCtx.stroke();
+  gCtx.setLineDash([]);
+  // Pivot anchor bolt
+  gCtx.fillStyle = '#4a2008';
+  gCtx.beginPath(); gCtx.arc(pivotSX, pivotSY, 6, 0, Math.PI*2); gCtx.fill();
+  gCtx.fillStyle = '#c0803a';
+  gCtx.beginPath(); gCtx.arc(pivotSX, pivotSY, 3, 0, Math.PI*2); gCtx.fill();
+  gCtx.restore();
+
+  // ── Platform body: drawn centred on platCX/platCY, rotated by tilt ──
+  gCtx.save();
+  gCtx.translate(platCX, platCY);
+  gCtx.rotate(tilt);
+
+  // Shadow/depth
+  gCtx.fillStyle = 'rgba(0,0,0,0.3)';
+  gCtx.beginPath(); gCtx.roundRect(-p.w/2+2, 3, p.w, p.h, 6); gCtx.fill();
+
+  // Main body
+  gCtx.fillStyle = COLORS['swing'];
+  gCtx.beginPath(); gCtx.roundRect(-p.w/2, 0, p.w, p.h, 6); gCtx.fill();
+
+  // Wood grain highlight
+  gCtx.fillStyle = 'rgba(255,210,120,0.22)';
+  gCtx.beginPath(); gCtx.roundRect(-p.w/2+4, 3, p.w-8, 5, 2); gCtx.fill();
+
+  // Raised-end glow: show which end is up (launch end)
+  if(Math.abs(tilt) > 0.08){
+    const hiX = tilt > 0 ? p.w/2 - 20 : -p.w/2;  // right up vs left up
+    gCtx.fillStyle = 'rgba(255,230,80,0.35)';
+    gCtx.beginPath(); gCtx.roundRect(hiX, 0, 20, p.h, 4); gCtx.fill();
+    // Arrow pointing up on the raised end
+    const arrowX = tilt > 0 ? p.w/2 - 10 : -p.w/2 + 10;
+    gCtx.fillStyle = 'rgba(255,255,100,0.8)';
+    gCtx.beginPath();
+    gCtx.moveTo(arrowX, -8);
+    gCtx.lineTo(arrowX - 5, -2);
+    gCtx.lineTo(arrowX + 5, -2);
+    gCtx.closePath();
+    gCtx.fill();
+  }
+
+  // Velocity bar (swing speed indicator)
+  if(Math.abs(sd.vel) > 0.004){
+    const velW = Math.min(p.w * 0.65, (Math.abs(sd.vel)/0.10) * p.w * 0.65);
+    gCtx.fillStyle = sd.vel > 0 ? 'rgba(255,160,30,0.55)' : 'rgba(100,200,255,0.55)';
+    const barX = sd.vel > 0 ? -p.w/2 : p.w/2 - velW;
+    gCtx.fillRect(barX, p.h - 4, velW, 4);
+  }
+
+  gCtx.restore();
+}
+
 
   // Draw dark "void" panels beyond world edges
   const leftEdgeScreen = (0 - camera.x);
@@ -2811,6 +3385,11 @@ function drawLavaG(lavaScreenY){
 function saveScore(){
   if(!currentUser) return;
   const ud = currentUser.ud;
+  // Submit to leaderboard (normal modes)
+  if (!window.currentStoryEpisode && !window.versusMode) {
+    const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
+    lbSubmitNormal(mode, currentUser.name, platformCount, levelTimerSecs);
+  }
   // Don't persist coins — they go to piggy on death (see loseCoinsToPiggy)
   // Only save best score and power-ups
   if(platformCount > ud.bestScore){ud.bestScore=platformCount;ud.bestLevel=level;}
@@ -2954,17 +3533,10 @@ if(result==='win'||result==='draw'){
   resEl.textContent = result==='win' ? '🎉 You WIN! Coins returned!' : '🤝 Draw! Coins returned!';
   resEl.style.color = '#44ff88';
 
-  // Go to start screen and animate there
-  goToMenu();
+  // Short delay then restart the same game mode (story or normal)
   setTimeout(() => {
-    animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', pig, () => {
-      const gcEl = document.getElementById('goCoins');
-      if(gcEl) gcEl.textContent = coins;
-      const gpEl = document.getElementById('goPiggy');
-      if(gpEl) gpEl.textContent = 0;
-      updatePiggyDisplay();
-    });
-  }, 400);
+    restartGameAfterCoinRecovery();
+  }, 800);
 } else {
     // Coins stay in piggy — nothing to move, already there from death
     resEl.textContent='😬 CPU wins! Coins stay in Piggy Bank.';resEl.style.color='#ff6666';
@@ -3193,6 +3765,38 @@ function restartGameAfterStory(){
   }
 }
 
+// ── After winning RPS or watching Ad, restart the SAME game mode ──
+// Story mode: relaunch the episode. Normal: restart a new game.
+function restartGameAfterCoinRecovery() {
+  document.getElementById('gameOver').classList.remove('show');
+  document.getElementById('rpsOverlay').classList.remove('show');
+  const gpEl = document.getElementById('goPiggy');
+  if(gpEl) gpEl.parentElement.style.display = '';
+
+  if (window.currentStoryEpisode && !window.versusMode) {
+    // ── Story mode: re-launch the same episode ──
+    const ep = window.currentStoryEpisode;
+    console.log('[RPS/Ad WIN] Restarting story episode:', ep.name);
+    if (ep.platformConfig) {
+      window.storyPlatformCfg = Object.assign({}, window.STORY_PLATFORM_DEFAULTS, ep.platformConfig);
+    } else {
+      window.storyPlatformCfg = null;
+    }
+    if (typeof window.startGame === 'function') window.startGame();
+    const variant = Math.random() < 0.5 ? 'storyPlay1' : 'storyPlay2';
+    if (typeof window.playBgMusic === 'function') window.playBgMusic(variant);
+    setTimeout(() => {
+      window.storyStartCoins = coins;
+      console.log('[RPS/Ad WIN] storyStartCoins =', coins);
+    }, 100);
+  } else {
+    // ── Normal mode: restart a fresh game ──
+    lastTime = null;
+    initGame();
+    animId = requestAnimationFrame(gameLoop);
+  }
+}
+
 function sellAllPowerUps() {
   // 1. Define shop values
   const BOOST_VAL = 4;
@@ -3286,9 +3890,9 @@ function closeShop(){
   if(paused){paused=false;lastTime=null;animId=requestAnimationFrame(gameLoop);}
 }
 function buyItem(type){
-  if(type==='jump'&&coins>=20&&jumpBoosts<20){coins-=20;jumpBoosts=Math.min(jumpBoosts+5,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('🚀 Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
-  else if(type==='skip'&&coins>=20){coins-=20;const b=booksOwned>0?5*booksOwned:5;skipUses+=b;showNotif('⬆️ +'+b+' skips (key 2)');playSound('buy');}
-  else if(type==='chute'&&coins>=50){coins-=50;parachutes++;if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+' owned)');playSound('buy');}
+  if(type==='jump'&&coins>=20&&(jumpBoosts||0)<20){coins-=20;jumpBoosts=Math.min((jumpBoosts||0)+5,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('🚀 Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
+  else if(type==='skip'&&coins>=20){coins-=20;const b=(booksOwned||0)>0?5*(booksOwned||0):5;skipUses=(skipUses||0)+b;showNotif('⬆️ +'+b+' skips (key 2)');playSound('buy');}
+  else if(type==='chute'&&coins>=50){coins-=50;parachutes=(parachutes||0)+1;if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+' owned)');playSound('buy');}
   else if(type==='book'&&coins>=100){coins-=100;booksOwned++;bigHead=true;bookUses+=5;showNotif('📖 Big head! Key 4 or wheel.');playSound('buy');}
   else if(type==='ship'&&coins>=150){coins-=150;lavaShips++;if(currentUser) currentUser.ud.lavaShips = lavaShips;showNotif('🚀 Lava Ship ready!');playSound('buy');
 }
@@ -3304,14 +3908,159 @@ function buyItem(type){
   if(currentUser)currentUser.ud.coins=coins;dbSave();updateHUD();
 }
 function updateEndPlatform(){endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;updateHUD();}
+
+// ══════════════════════════════════════════════════════════════
+// QUICK BUY POPUP — appears above the power wheel when a power-up
+// hits 0 (or torch hits 5%), lets player buy with a single tap
+// ══════════════════════════════════════════════════════════════
+const QB_CONFIG = {
+  boost:   { icon:'⬆️',  label:'BOOST JUMP',  cost:20,  buyKey:'jump',     emptyText:'EMPTY'   },
+  skip:    { icon:'💫',  label:'PLATFORM SKIP',cost:20,  buyKey:'skip',     emptyText:'EMPTY'   },
+  chute:   { icon:'🪂',  label:'PARACHUTE',   cost:50,  buyKey:'chute',    emptyText:'EMPTY'   },
+  ship:    { icon:'🚀',  label:'LAVA SHIP',   cost:150, buyKey:'ship',     emptyText:'EMPTY'   },
+  battery: { icon:'🔦',  label:'TORCH BATTERY',cost:50, buyKey:'battery',  emptyText:'DRAINED' },
+};
+
+let _qbActive = false;       // is popup showing?
+let _qbType   = null;        // which power-up
+let _qbTimer  = null;        // auto-hide timeout
+let _qbBought = false;       // did player just buy?
+
+function showQuickBuy(type){
+  const cfg = QB_CONFIG[type];
+  if(!cfg) return;
+  // Don't show if not enough coins (show anyway — let them see it but btn disabled)
+  _qbType = type;
+  _qbBought = false;
+
+  const popup  = document.getElementById('quickBuyPopup');
+  const icon   = document.getElementById('qbIcon');
+  const label  = document.getElementById('qbLabel');
+  const status = document.getElementById('qbStatus');
+  const btn    = document.getElementById('qbBuyBtn');
+  const btxt   = document.getElementById('qbBuyText');
+  const cost   = document.getElementById('qbCoinCost');
+  const check  = document.getElementById('qbCheckmark');
+
+  icon.textContent   = cfg.icon;
+  label.textContent  = cfg.label;
+  status.textContent = cfg.emptyText;
+  status.className   = '';   // restart blink
+  btxt.textContent   = 'BUY';
+  cost.textContent   = cfg.cost + '🪙';
+  check.style.display= 'none';
+  btn.className      = '';
+  btn.disabled       = coins < cfg.cost;
+  btn.style.opacity  = coins < cfg.cost ? '0.5' : '1';
+
+  // Show & flash
+  popup.style.display = 'flex';
+  popup.classList.remove('flash');
+  void popup.offsetWidth;   // force reflow to restart animation
+  popup.classList.add('flash');
+
+  _qbActive = true;
+
+  // Auto-hide after 5.5s (0.5s flash + 5s visible)
+  clearTimeout(_qbTimer);
+  _qbTimer = setTimeout(hideQuickBuy, 5500);
+}
+
+function hideQuickBuy(){
+  _qbActive = false;
+  const popup = document.getElementById('quickBuyPopup');
+  if(popup) popup.style.display = 'none';
+  clearTimeout(_qbTimer);
+}
+
+function quickBuyAction(){
+  if(!_qbType) return;
+  const cfg = QB_CONFIG[_qbType];
+  if(coins < cfg.cost){ showNotif('Not enough coins! 🪙'); return; }
+
+  buyItem(cfg.buyKey);
+
+  // Show tick feedback
+  const status = document.getElementById('qbStatus');
+  const btn    = document.getElementById('qbBuyBtn');
+  const btxt   = document.getElementById('qbBuyText');
+  const check  = document.getElementById('qbCheckmark');
+
+  status.textContent = 'BOUGHT';
+  status.className   = 'bought';
+  btn.className      = 'bought';
+  btxt.textContent   = '';
+  check.style.display= 'inline';
+
+  _qbBought = true;
+  updateHUD();
+
+  // Allow repeated buys (e.g. boost jumps) — reset after 1s so they can tap again
+  clearTimeout(_qbTimer);
+  _qbTimer = setTimeout(()=>{
+    // If item can still be bought (boost can stack), reset to BUY state
+    const stillWanted = canQuickBuyMore(_qbType);
+    if(stillWanted && _qbActive){
+      const status2 = document.getElementById('qbStatus');
+      const btn2    = document.getElementById('qbBuyBtn');
+      const btxt2   = document.getElementById('qbBuyText');
+      const check2  = document.getElementById('qbCheckmark');
+      const cost2   = document.getElementById('qbCoinCost');
+      if(status2) status2.textContent = QB_CONFIG[_qbType]?.emptyText || 'EMPTY', status2.className = '';
+      if(btxt2)   btxt2.textContent = 'BUY';
+      if(check2)  check2.style.display = 'none';
+      if(btn2)    btn2.className = '', btn2.disabled = coins < cfg.cost, btn2.style.opacity = coins < cfg.cost ? '0.5' : '1';
+      if(cost2)   cost2.textContent = cfg.cost + '🪙';
+      // Auto-hide after another 4s
+      clearTimeout(_qbTimer);
+      _qbTimer = setTimeout(hideQuickBuy, 4000);
+    } else {
+      hideQuickBuy();
+    }
+  }, 1000);
+}
+
+// Can the player buy more of this type? (boost can stack up to 20, others can always buy more)
+function canQuickBuyMore(type){
+  if(type === 'boost') return jumpBoosts < 20;
+  return true;  // skip, chute, ship, battery always rebuyable
+}
+
+// ── Trigger Quick Buy when a power-up hits 0 ──
+function triggerQuickBuyIfEmpty(type){
+  // Only show during active gameplay, not in shop/menu
+  const gs = document.getElementById('gameScreen');
+  if(!gs || !gs.classList.contains('active')) return;
+  if(!document.getElementById('powerWheel') ||
+     document.getElementById('powerWheel').style.display === 'none') return;
+  showQuickBuy(type);
+}
 let notifTimer;
 function showNotif(msg){const el=document.getElementById('itemNotif');el.textContent=msg;el.style.opacity='1';clearTimeout(notifTimer);notifTimer=setTimeout(()=>{el.style.opacity='0';},3000);}
 
 // ═══ CUSTOM LEVELS ═══
+function newCustomLevel(){
+  edPlatforms = [];
+  edGapZones = [];
+  edNextGroupId = 1;
+  edScrollY = -200;
+  document.getElementById('edLevelName').value = '';
+  setMode('editor');
+  drawEditor();
+  showNotif('✨ New blank level — start placing platforms!');
+}
+
 function renderCustomLevelsList(){
   const el=document.getElementById('levelCardList');el.innerHTML='';
-  if(!savedLevels.length){el.innerHTML='<div style="color:#555;font-size:11px;text-align:center;padding:10px;">No custom levels yet. Create one in the Editor!</div>';return;}
-  savedLevels.forEach((lvl,i)=>{
+  const query=(document.getElementById('levelSearch')?.value||'').toLowerCase().trim();
+  const filtered = query
+    ? savedLevels.map((lvl,i)=>({lvl,i})).filter(({lvl})=>(lvl.name||'unnamed').toLowerCase().includes(query))
+    : savedLevels.map((lvl,i)=>({lvl,i}));
+  if(!filtered.length){
+    el.innerHTML='<div style="color:#555;font-size:11px;text-align:center;padding:10px;">'+(query?'No levels matching "'+query+'"':'No custom levels yet. Click + New Level to create one!')+'</div>';
+    return;
+  }
+  filtered.forEach(({lvl,i})=>{
     const card=document.createElement('div');card.className='levelCard';
     card.innerHTML=`
       <h3>📐 ${lvl.name||'Unnamed'} <span style="color:#555;font-size:9px;">(${(lvl.platforms||[]).length} platforms)</span></h3>
@@ -3651,9 +4400,13 @@ window.addEventListener('mouseup', e=>{
   if(edMoveMode && edDragPlat) edDropPlatform();
 });
 
+// Editor touch: track start position to compute drag distance
 editorCanvas.addEventListener('touchstart', e=>{
   e.preventDefault();
   editorCanvas._edWasDrag = false;
+  editorCanvas._edTouchStartX = e.touches[0] ? e.touches[0].clientX : 0;
+  editorCanvas._edTouchStartY = e.touches[0] ? e.touches[0].clientY : 0;
+  editorCanvas._edTouchMoved = 0;
   if(edMoveMode && e.touches.length===1){
     const t = e.touches[0];
     const rect = editorCanvas.getBoundingClientRect();
@@ -3669,7 +4422,13 @@ editorCanvas.addEventListener('touchstart', e=>{
 
 editorCanvas.addEventListener('touchmove', e=>{
   e.preventDefault();
-  editorCanvas._edWasDrag = true;
+  // Track total movement to distinguish scroll (large) from place-tap (small)
+  if(e.touches.length===1){
+    const dx = e.touches[0].clientX - (editorCanvas._edTouchStartX||0);
+    const dy = e.touches[0].clientY - (editorCanvas._edTouchStartY||0);
+    editorCanvas._edTouchMoved = Math.sqrt(dx*dx+dy*dy);
+    if(editorCanvas._edTouchMoved > 12) editorCanvas._edWasDrag = true;
+  }
   if(edMoveMode && edDragPlat && e.touches.length===1){
     const t = e.touches[0];
     const rect = editorCanvas.getBoundingClientRect();
@@ -4071,23 +4830,49 @@ let bgMusicTrack = null;
 
 function playBgMusic(track){
   if(!track){ stopBgMusic(); return; }
-  if(bgMusicTrack === track && bgAudio && !bgAudio.paused) return;
+  // Always recreate the Audio element — reusing a paused element can fail
+  // silently after browser suspends audio context (e.g. after page focus change).
+  // The guard prevents UNNECESSARY restarts of the currently-playing track.
+  if(bgMusicTrack === track && bgAudio && !bgAudio.paused && bgAudio.currentTime > 0) return;
   stopBgMusic();
+  if(!bgMusicEnabled) return;   // respect global music toggle
   bgMusicTrack = track;
-  bgAudio = new Audio(BG_MUSIC[track]);
+  const src = BG_MUSIC[track];
+  if(!src){ console.warn('[BGM] No file mapped for track:', track); return; }
+  bgAudio = new Audio(src);
   bgAudio.loop = true;
   bgAudio.volume = isMuted ? 0 : masterVolume;
-  bgAudio.play().catch(()=>{});
+  bgAudio.play().catch(e => {
+    // Autoplay blocked — store intent so the next user gesture can resume
+    console.warn('[BGM] Play blocked for track:', track, e.name);
+    window._pendingBgTrack = track;
+  });
 }
 function stopBgMusic(){
   if(bgAudio){ bgAudio.pause(); bgAudio.currentTime=0; bgAudio=null; }
   bgMusicTrack = null;
+  window._pendingBgTrack = null;
 }
+
+// Resume music after any user gesture if autoplay was blocked on page load
+(function setupAudioResume(){
+  function tryResumeBgMusic(){
+    if(window._pendingBgTrack){
+      const t = window._pendingBgTrack;
+      window._pendingBgTrack = null;
+      playBgMusic(t);
+    }
+  }
+  ['click','touchstart','keydown'].forEach(ev =>
+    document.addEventListener(ev, tryResumeBgMusic, {once: false, passive: true})
+  );
+})();
 function updateBgMusic(){
   const screen = document.querySelector('.screen.active');
   if(!screen) return;
   const id = screen.id;
   if(id==='editorScreen'){ stopBgMusic(); }
+  else if(id==='leaderboardScreen'){ playBgMusic('menu'); return; }  // keep menu music
   else if(id==='gameScreen'){
     if (window.currentStoryEpisode) {
       // Story mode in-game: alternate between storyPlay1 and storyPlay2 randomly
@@ -4377,7 +5162,15 @@ function updateTorch(dt){
     nightMode = true;
     nightVisiblePlatforms.clear();
     showNotif('🔦 Torch dead! Buy 🔋 batteries in shop!');
+    triggerQuickBuyIfEmpty('battery');
+    _torchWarnedAt5 = false; // reset so it fires again if battery restored
   }
+  // Torch low (≤5%) warning
+  if(torchBattery > 0 && torchBattery <= 5 && !_torchWarnedAt5){
+    _torchWarnedAt5 = true;
+    triggerQuickBuyIfEmpty('battery');
+  }
+  if(torchBattery > 5) _torchWarnedAt5 = false;
   // Torch alive → ensure night mode off
   if(torchBattery > 0 && nightMode){
     nightMode = false;
@@ -4997,10 +5790,10 @@ if (closeDemoBtn) closeDemoBtn.onclick = (e) => {
 // Slots: 0=top-left boost, 1=top-right skip, 2=bottom-left book, 3=bottom-right chute
 let selectedSlot=0, dialPendingFire=false;
 const DIAL_SLOTS = [
-  {key:'boost',    getCount:()=>jumpBoosts},
-  {key:'skip',     getCount:()=>skipUses},
-  {key:'book',     getCount:()=>bookUses},
-  {key:'lavaShip', getCount:()=>lavaShips}, // Ensure variable matches what's used in-game
+  {key:'boost',    getCount:()=>jumpBoosts  || 0},
+  {key:'skip',     getCount:()=>skipUses    || 0},
+  {key:'book',     getCount:()=>bookUses    || 0},
+  {key:'lavaShip', getCount:()=>lavaShips   || 0},
 ];
 // Base colors per slot
 const SLOT_COLORS=['#c8900a','#1a4a8a','#4a1080','#0d5a5a'];
@@ -5571,14 +6364,16 @@ function finishAd(){
   adCoinsAtRisk=0;
 
   if(adFromRpsLoss){
-    // From RPS loss Watch Ad — reclaim piggy coins to wallet, go to menu
+    // From RPS loss Watch Ad — reclaim piggy coins, restart same game mode
     adFromRpsLoss=false;
     coins=amt;
     if(currentUser){currentUser.ud.coins=coins;dbSave();}
-    showNotif('📺 Ad watched! Coins reclaimed!');
-    const gcEl=document.getElementById('goCoins');if(gcEl)gcEl.textContent=coins;
-    const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=0;
-    goToMenu();
+    showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
+    setPiggyBank(0);
+    updateHUD();
+    setTimeout(() => {
+      restartGameAfterCoinRecovery();
+    }, 400);
 
   } else if(adFromPiggy){
     // From piggy bank screen Watch Ad — go to start screen and animate
@@ -5592,18 +6387,18 @@ function finishAd(){
     if(currentUser){document.getElementById('bestScoreDisplay').textContent=currentUser.ud.bestScore>0?'🏆 Best: Platform '+currentUser.ud.bestScore+' (Level '+currentUser.ud.bestLevel+')':'No runs yet!';}
     setTimeout(()=>animateCoinTransfer('piggyBankDisplay','startMyCoinsBox',amt,()=>updatePiggyDisplay()),400);
 
-	} else if(adFromGameOver){
-	  adFromGameOver = false;
-	  coins = amt;
-	  if(currentUser) currentUser.ud.coins = coins;
-	  dbSave();
-	  showNotif('📺 Ad watched! Coins reclaimed!');
-	  // Go to start screen, then animate
-	  goToMenu();  // this shows startScreen and resets overlays
-	  setTimeout(() => {
-		animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', amt, () => updatePiggyDisplay());
-	  }, 400);
-	}  else {
+  } else if(adFromGameOver){
+    adFromGameOver = false;
+    coins = amt;
+    if(currentUser){ currentUser.ud.coins = coins; dbSave(); }
+    setPiggyBank(0);
+    updateHUD();
+    showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
+    // Restart the SAME game mode (story or normal) — don't go to menu
+    setTimeout(() => {
+      restartGameAfterCoinRecovery();
+    }, 400);
+  }  else {
     // Legacy fallback
     coins+=amt;
     if(currentUser){currentUser.ud.coins=coins;dbSave();}
@@ -6013,6 +6808,116 @@ function initModeToggle(){
   if(desc) desc.textContent = isClimber ? 'See 10 platforms above you at all times' : 'Blind mode — you cannot see platforms above you!';
 }
 
+// ══════════════════════════════════════════════════════════════
+// ██ LEADERBOARD ██
+// ══════════════════════════════════════════════════════════════
+
+function openLeaderboard() {
+  lbLoad(); storyRunLoad();
+  showScreen('leaderboardScreen');
+  showLbTab('climber');
+}
+
+let currentLbTab = 'climber';
+
+function showLbTab(tab) {
+  currentLbTab = tab;
+  ['Climt','Frogg','Story'].forEach(t => {
+    const id = 'lbTab' + t;
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('active',
+      (tab==='climber'&&t==='Climt')||(tab==='frogger'&&t==='Frogg')||(tab==='story'&&t==='Story'));
+  });
+  const el = document.getElementById('lbContent');
+  if(!el) return;
+  if(tab === 'story') { el.innerHTML = renderLbStory(); }
+  else               { el.innerHTML = renderLbNormal(tab); }
+}
+
+function fmtTime(secs) {
+  const s = Math.round(secs);
+  const m = Math.floor(s/60), r = s%60;
+  return m>0 ? `${m}m ${String(r).padStart(2,'0')}s` : `${r}s`;
+}
+
+function renderLbNormal(mode) {
+  const arr = (leaderboard[mode] || []);
+  if(!arr.length) return `<div class="lbEmpty">No scores yet — play ${mode==='climber'?'Climber':'Frogger'} to appear here!</div>`;
+  let html = '';
+  LB_BUCKETS.slice().reverse().forEach(bucket => {
+    const entries = arr.filter(e => e.bucket === bucket).slice(0,3);
+    if(!entries.length) return;
+    html += `<div class="lbBucket">
+      <div class="lbBucketTitle">🏔️ ${bucket.toLocaleString()}+ Platforms</div>`;
+    entries.forEach((e,i) => {
+      const medal = ['🥇','🥈','🥉'][i] || '';
+      html += `<div class="lbRow">
+        <div class="lbRank">${medal||i+1}</div>
+        <div class="lbName">${e.name}</div>
+        <div class="lbStat">📊 ${e.platforms} plt</div>
+        <div class="lbStat">⏱ ${fmtTime(e.secs)}</div>
+        <div class="lbDate">${e.date}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  return html || `<div class="lbEmpty">No scores above 100 platforms yet.</div>`;
+}
+
+function renderLbStory() {
+  const storyEps = window.VOLCANO_EPISODES || [];
+  if(!storyEps.length) return '<div class="lbEmpty">No episodes found.</div>';
+  let hasAny = false;
+  let html = '<div style="margin-bottom:8px;font-size:11px;color:#888;">Top 3 fastest times per volcano · All players · All runs</div>';
+  storyEps.forEach(ep => {
+    const entries = (leaderboard.story[ep.id] || []).slice(0,3);
+    if(!entries.length) return;
+    hasAny = true;
+    html += `<div class="lbBucket">
+      <div class="lbBucketTitle">🌋 ${ep.name} <span style="color:#888;font-size:9px;font-weight:normal;">· ${ep.location} · ${ep.targetPlats} platforms</span></div>`;
+    entries.forEach((e,i) => {
+      const medal = ['🥇','🥈','🥉'][i] || '';
+      html += `<div class="lbRow">
+        <div class="lbRank">${medal}</div>
+        <div class="lbName">${e.name}</div>
+        <div class="lbStat">⏱ ${fmtTime(e.secs)}</div>
+        <div class="lbDate">${e.date}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  return hasAny ? html : '<div class="lbEmpty">No story completions yet — start Volcano Chronicles!</div>';
+}
+
+// Open the end credits screen after finishing all episodes
+function showStoryEndCredits() {
+  storyRunLoad();
+  const storyEps = window.VOLCANO_EPISODES || [];
+  const el = document.getElementById('creditsRunTimes');
+  if(el) {
+    let totalSecs = 0;
+    let html = '<div style="font-size:11px;color:#888;margin-bottom:8px;">Your times this run:</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">';
+    storyEps.forEach(ep => {
+      const t = storyRunTimes[ep.id];
+      if(t !== undefined) {
+        totalSecs += t;
+        html += `<div class="lbEpRow"><div class="lbEpName">🌋 ${ep.name}</div><div class="lbEpTime">⏱ ${fmtTime(t)}</div></div>`;
+      }
+    });
+    html += '</div>';
+    if(totalSecs > 0) {
+      html += `<div style="text-align:center;margin-top:12px;padding:12px;background:#0e0e22;border-radius:10px;border:1px solid #4a5fd4;">
+        <div style="font-size:10px;color:#888;">TOTAL TIME</div>
+        <div style="font-size:22px;font-weight:bold;color:#ffe066;">⏱ ${fmtTime(totalSecs)}</div>
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
+  const creditsEl = document.getElementById('storyEndCredits');
+  if(creditsEl) creditsEl.style.display = 'flex';
+}
+
 function restoreUserSession() {
   const saved = localStorage.getItem('fil_current_user');
   if (saved) {
@@ -6020,8 +6925,13 @@ function restoreUserSession() {
       const { name, ud } = JSON.parse(saved);
       if (ud.isGuest || getUser(name)) {
         currentUser = { name, ud };
-        // --- FIX: Initialize the global coins variable from the saved user data ---
-        coins = ud.coins || 0;
+        // --- FIX: Initialize all game vars from saved user data on page load/F5 ---
+        coins       = ud.coins      || 0;
+        jumpBoosts  = Math.min(ud.jumpBoosts  || 0, 20);
+        parachutes  = ud.parachutes || 0;
+        skipUses    = ud.skipUses   || 0;
+        bookUses    = ud.bookUses   || 0;
+        lavaShips   = ud.lavaShips  || 0;
         window.coins = coins;
         // --- End fix ---		
         if (!ud.isGuest) {
@@ -6056,6 +6966,8 @@ window.addEventListener('beforeunload', () => {
 // ██ INITIALIZE EVERYTHING ON PAGE LOAD ██
 // ══════════════════════════════════════════════
 dbLoad();
+lbLoad();
+storyRunLoad();
 levelsLoad();
 renderSavedUsers();
 initModeToggle();       // sets visual toggle state
@@ -6865,7 +7777,7 @@ function renderCarousel() {
   if (cardDiv && !ep.completed) {
     cardDiv.style.cursor = 'pointer';
     cardDiv.onclick = () => {
-      closeStoryMap();
+      closeStoryMap(false);  // keep WorldMap.mp3 playing into the episode
       startStoryEpisode(ep.id);
     };
   }
@@ -6873,6 +7785,13 @@ function renderCarousel() {
 
 // Override showStoryWorldMap
 function showStoryWorldMap() {
+  // If all episodes are completed, show the end credits screen instead
+  if (typeof STORY_EPISODES !== 'undefined' || window.VOLCANO_EPISODES) {
+    const eps = (typeof STORY_EPISODES !== 'undefined' ? STORY_EPISODES : null) || window.VOLCANO_EPISODES;
+    if (eps && eps.every(ep => ep.completed)) {
+      if (typeof showStoryEndCredits === 'function') { showStoryEndCredits(); return; }
+    }
+  }
   // --- FIX: Always pull the latest coin balance from the user profile ---
   if (window.currentUser && window.currentUser.ud && typeof window.currentUser.ud.coins === 'number') {
     coins = window.currentUser.ud.coins;
@@ -6883,7 +7802,7 @@ function showStoryWorldMap() {
   // Also force the UI on the start screen to update (if visible)
   if (typeof updatePiggyDisplay === 'function') updatePiggyDisplay();
   
-  // ... rest of your existing showStoryWorldMap code (unchanged) ...  console.log('[STORY] === SHOW WORLD MAP ===');
+  console.log('[STORY] === SHOW WORLD MAP ===');
   console.log('[STORY] window.coins at map open =', coins);
   if (window.currentUser) {
     console.log('[STORY] currentUser.ud.coins =', window.currentUser.ud.coins);
@@ -6923,24 +7842,21 @@ function showStoryWorldMap() {
   updateStoryProgressBar();  
   overlay.style.display = 'flex';
 }
-function closeStoryMap() {
+function closeStoryMap(goingToMenu) {
   const overlay = document.getElementById('storyWorldMapOverlay');
   overlay.style.display = 'none';
-  
-  // Also clear any story mode state and return to the main menu
-  if (typeof restoreEndPlatform === 'function') restoreEndPlatform();
-  if (window.currentStoryEpisode) {
-    window.currentStoryEpisode = null;
+
+  if (goingToMenu) {
+    // ── MENU button: clear state and return to start screen ──
+    if (typeof restoreEndPlatform === 'function') restoreEndPlatform();
+    if (window.currentStoryEpisode) window.currentStoryEpisode = null;
+    if (typeof showScreen === 'function') showScreen('startScreen');
+    // Switch from WorldMap.mp3 back to menu music
+    if (typeof stopStoryMusic === 'function') stopStoryMusic();
+    if (typeof updateBgMusic === 'function') updateBgMusic();
   }
-  // Switch to the start screen (main menu)
-  if (typeof showScreen === 'function') {
-    showScreen('startScreen');
-  } else if (window.goToMenu) {
-    window.goToMenu();
-  }
-  // Stop story map music and resume normal menu music
-  if (typeof stopStoryMusic === 'function') stopStoryMusic();
-  if (typeof updateBgMusic === 'function') updateBgMusic();
+  // If NOT going to menu (i.e. opening an episode), do nothing with music —
+  // WorldMap.mp3 keeps playing through pre-screen and start animation.
 }
 
     // Pre‑game story screen
@@ -7037,7 +7953,6 @@ function startStoryGameLevel(ep) {
   window.storyStartCoins = coins;
   console.log('[STORY] storyStartCoins captured =', window.storyStartCoins);
 
-  // ... rest of your existing startStoryGameLevel (unchanged) ...
   currentStoryEpisode = ep;
   window.currentStoryEpisode = ep;
 
@@ -7090,13 +8005,24 @@ window.gameWin = function() {
     if (nextEp) nextEp.unlocked = true;
     saveStoryProgress();
 
+    // ── Record time for this episode ──
+    const epTimeSecs = Math.round(window.levelTimerSecs || 0);
+    storyRunTimes[currentStoryEpisode.id] = epTimeSecs;
+    storyRunSave();
+    const uName = window.currentUser ? window.currentUser.name : 'Guest';
+    lbSubmitStory(currentStoryEpisode.id, uName, epTimeSecs);
+    console.log('[STORY gameWin] time=', epTimeSecs+'s for ep='+currentStoryEpisode.name);
+
+    // Check if all episodes completed
+    const allDone = STORY_EPISODES.every(ep2 => ep2.completed);
+
     // ── Capture platform count at this exact moment ──
     const finalPlatforms = (typeof window.getPlatformCount === 'function')
       ? window.getPlatformCount()
       : (window.platformCount || 0);
     console.log('[STORY gameWin] finalPlatforms=', finalPlatforms, 'ep.targetPlats=', currentStoryEpisode.targetPlats);
 
-    showEscapeAnimation(currentStoryEpisode, finalPlatforms);
+    showEscapeAnimation(currentStoryEpisode, finalPlatforms, allDone);
 
   } else {
     console.log('[STORY gameWin] ➡️ Normal win path — calling original gameWin');
@@ -7105,7 +8031,7 @@ window.gameWin = function() {
 };
 
     // Escape animation (glider out) – now with finalPlatforms param
-    function showEscapeAnimation(ep, finalPlatforms) {
+    function showEscapeAnimation(ep, finalPlatforms, allDone) {
       if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
       const escapeTitleEl = document.getElementById('escapeAnimTitle');
       if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
@@ -7126,7 +8052,7 @@ window.gameWin = function() {
         storyAnimSkipCallback = null;
         cancelAnimationFrame(animFrameId);
         animDiv.style.display = 'none';
-        showEndStats(ep, finalPlatforms);
+        showEndStats(ep, finalPlatforms, allDone);
       }
 
       // Register the skip callback so Space bar can call it
@@ -7162,8 +8088,8 @@ window.gameWin = function() {
     }
 	
 	
-function showEndStats(ep, finalPlatforms) {
-  console.log('[STATS] showEndStats: coins =', coins);
+function showEndStats(ep, finalPlatforms, allDone) {
+  console.log('[STATS] showEndStats: coins =', coins, 'allDone=', allDone);
   if (!ep) return;
   const target = ep.targetPlats || 0;
   const climbed = (typeof finalPlatforms === 'number') ? finalPlatforms : 0;
@@ -7249,14 +8175,19 @@ function showEndStats(ep, finalPlatforms) {
       continueBtn.disabled = false;
       continueBtn.style.opacity = '1';
       continueBtn.onclick = () => {
-        console.log('[STORY] CONTINUE clicked, final coins =', coins);
+        console.log('[STORY] CONTINUE clicked, final coins =', coins, 'allDone=', allDone);
         statsOverlay.style.display = 'none';
         restoreEndPlatform();
         currentStoryEpisode = null;
         window.currentStoryEpisode = null;
         if (typeof window.stopBgMusic === 'function') window.stopBgMusic();
-        if (typeof showStoryWorldMap === 'function') showStoryWorldMap();
         if (window.updatePiggyDisplay) setTimeout(window.updatePiggyDisplay, 200);
+        if (allDone) {
+          // All episodes complete — show end credits
+          if (typeof showStoryEndCredits === 'function') showStoryEndCredits();
+        } else {
+          if (typeof showStoryWorldMap === 'function') showStoryWorldMap();
+        }
       };
     }
 
@@ -7386,6 +8317,8 @@ window.updateHUD = function() {
 	  storyProgress.completedEpisodes = [];
 	  currentStoryEpisode = null;
 	  saveStoryProgress();
+	  // Clear the current run times (all-time leaderboard is preserved)
+	  storyRunClear();
 
 	  // Reset the carousel index to the first episode
 	  currentCarouselIndex = 0;
@@ -7414,7 +8347,7 @@ window.updateHUD = function() {
     loadStoryProgress();
     window.addEventListener('DOMContentLoaded', () => {
       addStoryMapButton();
-      document.getElementById('closeMapBtn')?.addEventListener('click', closeStoryMap);
+      document.getElementById('closeMapBtn')?.addEventListener('click', () => closeStoryMap(true));
     });
   })();
 </script>
