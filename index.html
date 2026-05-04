@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava v66</title>
+<title>Floor Is Lava v72</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
@@ -760,6 +760,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <div id="gameScreen" class="screen">
   <canvas id="gameCanvas"></canvas>
   <div id="hud">
+    <div id="practiceHudBadge" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(255,200,50,0.15);border:1px solid rgba(255,200,50,0.4);border-radius:12px;padding:2px 10px;font-size:9px;font-weight:bold;color:#ffe066;letter-spacing:0.5px;pointer-events:none;z-index:20;">🎮 PRACTICE — not saving</div>
     <div id="coinDisplay">🪙 0</div>
     <div id="levelDisplay">Level 1</div>
     <div id="platformDisplay">Platform 0</div>
@@ -879,6 +880,9 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <h1 id="goTitle">💀 YOU DIED!</h1>
     <p id="goScore"></p>
     <p id="penaltyMsg"></p>
+    <div id="practiceNotice" style="display:none;margin:6px auto 4px;padding:5px 14px;border-radius:20px;background:rgba(255,200,50,0.12);border:1.5px solid rgba(255,200,50,0.4);color:#ffe066;font-size:10px;font-weight:bold;letter-spacing:0.5px;text-align:center;">
+      🎮 PRACTICE MODE — coins &amp; progress not saved
+    </div>
     <div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;">
       <div style="background:#1a1a3e;border:1.5px solid #4a5fd4;border-radius:10px;padding:6px 14px;text-align:center;min-width:90px;">
         <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🪙 MY COINS</div>
@@ -1009,7 +1013,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <div id="editorScreen" class="screen">
   <div id="editorToolbar">
     <label>Color:</label>
-    <select id="edColor"><option value="red">🟥 Red</option><option value="blue">🟦 Blue</option><option value="yellow">🟨 Yellow</option><option value="green">🟩 Green</option><option value="purple">🟪 Purple</option><option value="ice">❄️ Ice</option></select>
+    <select id="edColor"><option value="red">🟥 Red</option><option value="blue">🟦 Blue</option><option value="yellow">🟨 Yellow</option><option value="green">🟩 Green</option><option value="purple">🟪 Purple</option><option value="ice">❄️ Ice</option><option value="swing">🪝 Swing</option><option value="crumble">💥 Crumble</option></select>
     <label>Width:</label>
     <button class="edBtn" onclick="stepEdWidth(-50)">◀</button>
     <select id="edWidth" onchange="snapEdWidth()" style="width:58px">
@@ -1029,14 +1033,28 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <button class="edBtn danger" onclick="editorClear()">🗑</button>
     <label>Name:</label>
     <input type="text" id="edLevelName" placeholder="My Level" style="width:80px">
-    <button class="edBtn primary" onclick="saveEditorLevel()">💾 Save</button>
     <button class="edBtn" onclick="editorLoad()">📥 Play</button>
     <button class="edBtn" onclick="exportLevel()">📤 Export</button>
     <button class="edBtn" id="bpToggleBtn" onclick="bpToggle()" title="Block Pattern mode" style="border-color:#27ae60;color:#7af07a;">🧱 Pattern</button>
     <button class="edBtn" onclick="edToggleZoom()" title="Cycle zoom" style="margin-left:auto;">🔍</button>
-    <button class="edBtn" onclick="goToMenu()" style="border-color:#ff6644;color:#ff9977;margin-left:6px;" title="Exit editor and return to main menu">🚪 Exit</button>
+    <button class="edBtn primary" onclick="saveEditorLevel()" title="Save level">💾 Save</button>
+    <button class="edBtn" onclick="confirmEditorExit()" style="border-color:#ff6644;color:#ff9977;" title="Exit editor">🚪 Exit</button>
     <span style="color:#444;font-size:9px;" id="edClickHint">Click=place</span>
   </div>
+  <!-- Editor Exit Confirmation Modal -->
+  <div id="edExitModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;align-items:center;justify-content:center;">
+    <div style="background:#0e0e22;border:1.5px solid #4a5fd4;border-radius:16px;padding:22px 24px;max-width:300px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.8);">
+      <div style="font-size:22px;margin-bottom:8px;">🚪</div>
+      <div style="font-weight:bold;font-size:15px;color:#e8e0ff;margin-bottom:6px;">Exit Editor?</div>
+      <div style="font-size:11px;color:#888;margin-bottom:18px;">Your unsaved changes are auto-saved every 10s and will be here when you return. Or save now to keep a named copy.</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button onclick="saveEditorLevel();goToMenu();" style="padding:10px;border-radius:10px;background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;border:none;font-weight:bold;font-size:13px;cursor:pointer;">💾 Save &amp; Exit</button>
+        <button onclick="goToMenu();" style="padding:10px;border-radius:10px;background:rgba(255,100,60,0.15);color:#ff9977;border:1.5px solid #ff6644;font-weight:bold;font-size:13px;cursor:pointer;">🚪 Exit without saving</button>
+        <button onclick="document.getElementById('edExitModal').style.display='none';" style="padding:8px;border-radius:10px;background:transparent;color:#666;border:1px solid #333;font-size:12px;cursor:pointer;">← Keep editing</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Save toast notification (above canvas) -->
   <div id="edSaveToast">✅ Custom Level Saved!</div>
 
@@ -1452,7 +1470,7 @@ function showScreen(id, from){
     setTimeout(() => { if(bgMusicEnabled && !bgAudio) updateBgMusic(); }, 120);
   }
   if(id==='gameScreen')resizeGame();
-  if(id==='editorScreen'){resizeEditor(); bpRenderTray();}
+  if(id==='editorScreen'){resizeEditor(); bpRenderTray(); edAutoSaveStart(); edAutoSaveRestore();}
   if(id==='customLevelsScreen')renderCustomLevelsList();
   if(id==='piggyScreen'){document.getElementById('piggyAmt').textContent=getPiggyBank()+' coins saved';hideMiniPanels();clearTimeout(reactTimer);updatePiggyCards();}
     // Stop info demo when leaving info screen
@@ -1702,6 +1720,9 @@ function initGame(){
   level = 1; platformCount = 0; bigHead = false;
   _unreachCount = 0; _reachSinceUnreach = 0;  // F5 reset
   _torchWarnedAt5 = false; hideQuickBuy();
+  // Show/hide practice mode badge in HUD
+  const pracBadge = document.getElementById('practiceHudBadge');
+  if(pracBadge) pracBadge.style.display = isCustomPlayMode() ? 'block' : 'none';
   booksOwned = 0; 
   movingPlatformAbove = null; bookPlatformPulled = false;
   onPurple = false; purpleTimer = 0; purplePlatform = null;
@@ -1719,15 +1740,33 @@ function initGame(){
   bgAnimations = [];
 
 if(customPlayPlatforms && customPlayPlatforms.length > 0){
-  platforms = customPlayPlatforms.map((p,i) => ({
-    ...p,
-    index: i,
-    hasCoin: p.color === 'green',
-    origY: p.y,
-    pulled: false,
-    isGap: false,
-    iceUsed: p.iceUsed !== undefined ? p.iceUsed : false
-  }));
+  platforms = customPlayPlatforms.map((p,i) => {
+    const armLen = PLATFORM_GAP * 0.9;
+    const isSwing   = p.color === 'swing';
+    const isCrumble = p.color === 'crumble';
+    return {
+      ...p,
+      index: i,
+      hasCoin: p.color === 'green',
+      origY: p.y,
+      pulled: false,
+      isGap: false,
+      iceUsed: p.iceUsed !== undefined ? p.iceUsed : false,
+      // Initialise swing physics if this is a swing platform
+      swingData: isSwing ? {
+        angle: 0, vel: 0,
+        pivotX: p.x + p.w/2,
+        pivotY: p.y - armLen,
+        platCX: p.x + p.w/2,
+        platCY: p.y,
+        tilt: 0
+      } : (p.swingData || null),
+      // Initialise crumble state
+      crumbleState: isCrumble ? 'idle' : (p.crumbleState || null),
+      crumbleTimer: 0,
+      crumbleShakeX: 0,
+    };
+  });
     let last = platforms[platforms.length - 1];
     while(platforms.length < 30){ const np = makePlatform(last.y - PLATFORM_GAP, last.index + 1, last.x, last.w); platforms.push(np); last = np; }
   } else {
@@ -1848,7 +1887,7 @@ function isDangerous(){
 function doReset(){
   if(!gameRunning && !paused) return;
   const danger = isDangerous(), pen = danger ? PENALTY : 0;
-  if(danger){coins = Math.max(0, coins - pen); if(currentUser){currentUser.ud.coins = coins; dbSave();} showNotif('⚠️ Cheat reset! –' + pen + ' coins 💸');}
+  if(danger){if(!isCustomPlayMode()){coins = Math.max(0, coins - pen); if(currentUser){currentUser.ud.coins = coins; dbSave();}} showNotif('⚠️ Cheat reset! –' + pen + ' coins 💸');}
   paused = false; document.getElementById('pauseOverlay').classList.remove('show');
   gameRunning = false; cancelAnimationFrame(animId); lastTime = null; initGame(); animId = requestAnimationFrame(gameLoop);
 }
@@ -1875,8 +1914,8 @@ function jump(half, boostOverride){
     let force = half ? HALF_JUMP : JUMP_FORCE;
     if(boostOverride && jumpBoosts > 0){
       force = JUMP_BOOST_FORCE; jumpBoosts--;
-      if(currentUser) currentUser.ud.jumpBoosts = jumpBoosts;
-      dbSave(); showNotif('⬆️ Boost! (' + jumpBoosts + ' left)'); updateHUD();
+      if(currentUser && !isCustomPlayMode()) { currentUser.ud.jumpBoosts = jumpBoosts; dbSave(); }
+      showNotif('⬆️ Boost! (' + jumpBoosts + ' left)'); updateHUD();
       if(jumpBoosts <= 0) triggerQuickBuyIfEmpty('boost');
     }
     player.vy = force; player.onGround = false;
@@ -2073,8 +2112,8 @@ function checkParachute(){
     if(parachuteDeployY === null) parachuteDeployY = player.y;
     if(player.y - parachuteDeployY >= PARACHUTE_DEPLOY_PX){
       parachuteActive = true; parachutes--;
-      if(currentUser) currentUser.ud.parachutes = parachutes;
-      dbSave(); showNotif('🪂 Parachute auto-deployed!');
+      if(currentUser && !isCustomPlayMode()) { currentUser.ud.parachutes = parachutes; dbSave(); }
+      showNotif('🪂 Parachute auto-deployed!');
       if(parachutes <= 0) triggerQuickBuyIfEmpty('chute');
       document.getElementById('parachuteHUD').style.opacity = '1';
       updateHUD();
@@ -2668,7 +2707,7 @@ function gameLoop(ts){
     if(p.color==='green' && p.hasCoin){
       const cx = p.x + p.w/2, cy = p.y - 12;
       if(player.x + player.w > cx - 10 && player.x < cx + 10 && player.y + player.h > cy - 10 && player.y < cy + 10){
-        p.hasCoin = false; coins += 20; playSound('coin'); showNotif('+20 coins! 🪙'); updateHUD();
+        p.hasCoin = false; if(!isCustomPlayMode()){coins += 20;} playSound('coin'); showNotif(isCustomPlayMode()?'+20 coins (practice)':'+20 coins! 🪙'); updateHUD();
       }
     }
   }
@@ -2731,7 +2770,7 @@ function gameLoop(ts){
           if(onPurple){onPurple=false;purpleTimer=0;purplePlatform=null;document.getElementById('purpleWarning').style.opacity='0';}
           // Trigger crumble platform countdown on landing
           if(p.crumbleState==='idle') triggerCrumble(p);
-          if(p.color==='green' && p.hasCoin){p.hasCoin=false;coins+=20;playSound('coin');showNotif('+20 coins! 🪙');updateHUD();}
+          if(p.color==='green' && p.hasCoin){p.hasCoin=false;if(!isCustomPlayMode()){coins+=20;if(currentUser)currentUser.ud.coins=coins;}playSound('coin');showNotif(isCustomPlayMode()?'+20 coins (practice — not saved)':'+20 coins! 🪙');updateHUD();}
 // Ice platform: lowers lava by 2 platform gaps
 if (p.color === 'ice' && !p.iceUsed) {
   p.iceUsed = true;
@@ -2748,8 +2787,8 @@ if (p.color === 'ice' && !p.iceUsed) {
             const nl = Math.floor(platformCount / 100) + 1;
 			if(nl !== level){
 			  level = nl; lavaPixPerFrame = lavaSpeedForLevel(level) / 60;
-			  coins += 50; playSound('coin');
-			  showNotif('🌋 Level ' + level + '! +50 coins 🪙');
+			  if(!isCustomPlayMode()) coins += 50; playSound('coin');
+			  showNotif(isCustomPlayMode() ? '🌋 Level ' + level + '! (practice)' : '🌋 Level ' + level + '! +50 coins 🪙');
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
             if(endPlatform > 0 && platformCount >= endPlatform){
@@ -3384,6 +3423,8 @@ function drawLavaG(lavaScreenY){
 // ═══ SAVE SCORE ═══
 function saveScore(){
   if(!currentUser) return;
+  // Practice mode: no leaderboard, no score/power-up persistence
+  if(isCustomPlayMode()) return;
   const ud = currentUser.ud;
   // Submit to leaderboard (normal modes)
   if (!window.currentStoryEpisode && !window.versusMode) {
@@ -3433,15 +3474,17 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
 
   } else if(outcome === 'menu'){
     // Sell power-ups → coins, keep coins, go to menu
-    sellAllPowerUps();
-    if(currentUser){
-      currentUser.ud.coins = coins;
-      currentUser.ud.jumpBoosts = 0;
-      currentUser.ud.parachutes = 0;
-      currentUser.ud.skipUses = 0;
-      currentUser.ud.bookUses = 0;
-      currentUser.ud.lavaShips = 0;
-      dbSave();
+    if(!isCustomPlayMode()){
+      sellAllPowerUps();
+      if(currentUser){
+        currentUser.ud.coins = coins;
+        currentUser.ud.jumpBoosts = 0;
+        currentUser.ud.parachutes = 0;
+        currentUser.ud.skipUses = 0;
+        currentUser.ud.bookUses = 0;
+        currentUser.ud.lavaShips = 0;
+        dbSave();
+      }
     }
     updateHUD();
     updatePiggyDisplay();
@@ -3449,7 +3492,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
 
   } else if(outcome === 'menu-retain'){
     // Keep power-ups and coins exactly as they are
-    if(currentUser){
+    if(currentUser && !isCustomPlayMode()){
       currentUser.ud.coins = coins;
       currentUser.ud.jumpBoosts = jumpBoosts;
       currentUser.ud.parachutes = parachutes;
@@ -3607,43 +3650,71 @@ function gameEnd(fromPurple) {
   }
   gameRunning = false;
   cancelAnimationFrame(animId);
-  saveScore();
+
+  const practiceMode = isCustomPlayMode();
+
+  if (!practiceMode) {
+    saveScore();
+  }
   lastGameWon = false;
 
-  // --- DEDUCT 30 COINS (death penalty) ---
-  const penalty = 30;
-  let deducted = Math.min(penalty, coins);
-  if (deducted > 0) {
-    coins -= deducted;
-    if (currentUser) currentUser.ud.coins = coins;
-    showNotif(`💸 You lost ${deducted} coins!`);
-    document.getElementById('penaltyMsg').innerHTML = `💸 Penalty: -${deducted} coins (death penalty)`;
-  } else {
-    document.getElementById('penaltyMsg').innerHTML = '';
-  }
-
-  // Move remaining coins to piggy and reset power-ups
-  handleCoinsAndPowerUps('die');   // this will also set coins = 0
-
-  // Update UI
+  // Update UI elements
   document.getElementById('purpleWarning').style.opacity = '0';
   document.getElementById('goTitle').textContent = fromPurple ? '💀 YOU DIED! (Purple got you)' : '💀 YOU DIED!';
   document.getElementById('goScore').textContent = 'Platform ' + platformCount + ' — Level ' + level;
-  // (do NOT override penaltyMsg again – it's already set)
 
-  // Coins are now 0; piggy holds everything
-  const gcEl = document.getElementById('goCoins');
-  if (gcEl) gcEl.textContent = 0;
-  const piggyAmt = getPiggyBank();
-  const gpEl = document.getElementById('goPiggy');
-  if (gpEl) gpEl.textContent = piggyAmt;
-  if (gpEl) gpEl.parentElement.style.display = '';
+  // ── Practice mode: no coin penalty, no piggy, no RPS/Ad ──
+  const practiceEl = document.getElementById('practiceNotice');
+  if (practiceMode) {
+    document.getElementById('penaltyMsg').innerHTML = '';
+    if (practiceEl) practiceEl.style.display = 'block';
 
-  // RPS and Ad buttons
-  const adBtn = document.getElementById('goAdBtn');
-  if (adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
-  const rpsBtn = document.getElementById('rpsBtn');
-  if (rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+    // Reset power-ups locally (don't persist)
+    jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0;
+    booksOwned = false; bigHead = false; lavaShips = 0; lavaShipActive = false;
+
+    const gcEl = document.getElementById('goCoins');
+    if (gcEl) gcEl.textContent = '—';
+    const gpEl = document.getElementById('goPiggy');
+    if (gpEl) gpEl.parentElement.style.display = 'none';
+
+    const adBtn = document.getElementById('goAdBtn');
+    if (adBtn) adBtn.style.display = 'none';
+    const rpsBtn = document.getElementById('rpsBtn');
+    if (rpsBtn) rpsBtn.style.display = 'none';
+
+  } else {
+    // ── Normal mode: coin penalty + piggy + RPS/Ad ──
+    if (practiceEl) practiceEl.style.display = 'none';
+
+    // --- DEDUCT 30 COINS (death penalty) ---
+    const penalty = 30;
+    let deducted = Math.min(penalty, coins);
+    if (deducted > 0) {
+      coins -= deducted;
+      if (currentUser) currentUser.ud.coins = coins;
+      showNotif(`💸 You lost ${deducted} coins!`);
+      document.getElementById('penaltyMsg').innerHTML = `💸 Penalty: -${deducted} coins (death penalty)`;
+    } else {
+      document.getElementById('penaltyMsg').innerHTML = '';
+    }
+
+    // Move remaining coins to piggy and reset power-ups
+    handleCoinsAndPowerUps('die');   // this will also set coins = 0
+
+    // Coins are now 0; piggy holds everything
+    const gcEl = document.getElementById('goCoins');
+    if (gcEl) gcEl.textContent = 0;
+    const piggyAmt = getPiggyBank();
+    const gpEl = document.getElementById('goPiggy');
+    if (gpEl) gpEl.textContent = piggyAmt;
+    if (gpEl) gpEl.parentElement.style.display = '';
+
+    const adBtn = document.getElementById('goAdBtn');
+    if (adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+    const rpsBtn = document.getElementById('rpsBtn');
+    if (rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+  }
 
   // Show Rematch (versus) or Play Again (solo)
   const rematchBtn = document.getElementById('goRematchBtn');
@@ -3663,45 +3734,55 @@ function gameEnd(fromPurple) {
 function gameWin() {
   gameRunning = false;
   cancelAnimationFrame(animId);
-  saveScore();
-  lastGameWon = true;
 
-  // Win path — keep coins AND power-ups, no piggy/RPS/ad
-  handleCoinsAndPowerUps('win');
+  const practiceMode = isCustomPlayMode();
+
+  if (!practiceMode) {
+    saveScore();
+    lastGameWon = true;
+    handleCoinsAndPowerUps('win');
+  }
 
   updateHUD();
 
   document.getElementById('goTitle').textContent = '🏆 YOU WIN!';
-  document.getElementById('goScore').textContent =
-    'All ' + endPlatform + ' platforms! ';
+  document.getElementById('goScore').textContent = 'All ' + endPlatform + ' platforms! ';
 
-  const gcEl = document.getElementById('goCoins');
-  if (gcEl) gcEl.textContent = coins;
+  const practiceEl = document.getElementById('practiceNotice');
 
-  // Hide the piggy display — player keeps their coins
-  const gpEl = document.getElementById('goPiggy');
-  if (gpEl && gpEl.parentElement) gpEl.parentElement.style.display = 'none';
-
-  // Hide RPS and Ad buttons — player won, they keep everything
-  const adBtn2 = document.getElementById('goAdBtn');
-  if (adBtn2) adBtn2.style.display = 'none';
-
-  const rpsBtn2 = document.getElementById('rpsBtn');
-  if (rpsBtn2) rpsBtn2.style.display = 'none';
-
-  // ✅ Message adapts to mode
-  document.getElementById('penaltyMsg').textContent = versusMode
-    ? '🏆 Victory! Continue your Versus run.'
-    : '🎉 Coins & power-ups saved! Play Again to continue.';
+  if (practiceMode) {
+    // Practice mode: show placeholder, hide coin/piggy panel, show practice notice
+    const gcEl = document.getElementById('goCoins');
+    if (gcEl) gcEl.textContent = '—';
+    const gpEl = document.getElementById('goPiggy');
+    if (gpEl && gpEl.parentElement) gpEl.parentElement.style.display = 'none';
+    const adBtn2 = document.getElementById('goAdBtn');
+    if (adBtn2) adBtn2.style.display = 'none';
+    const rpsBtn2 = document.getElementById('rpsBtn');
+    if (rpsBtn2) rpsBtn2.style.display = 'none';
+    document.getElementById('penaltyMsg').textContent = '';
+    if (practiceEl) practiceEl.style.display = 'block';
+  } else {
+    const gcEl = document.getElementById('goCoins');
+    if (gcEl) gcEl.textContent = coins;
+    const gpEl = document.getElementById('goPiggy');
+    if (gpEl && gpEl.parentElement) gpEl.parentElement.style.display = 'none';
+    const adBtn2 = document.getElementById('goAdBtn');
+    if (adBtn2) adBtn2.style.display = 'none';
+    const rpsBtn2 = document.getElementById('rpsBtn');
+    if (rpsBtn2) rpsBtn2.style.display = 'none';
+    if (practiceEl) practiceEl.style.display = 'none';
+    document.getElementById('penaltyMsg').textContent = versusMode
+      ? '🏆 Victory! Continue your Versus run.'
+      : '🎉 Coins & power-ups saved! Play Again to continue.';
+  }
 
   const gameOverEl = document.getElementById('gameOver');
   gameOverEl.classList.add('show');
 
-  // ✅ FORCE final button state AFTER everything else
   requestAnimationFrame(() => {
     const restartBtn = document.getElementById('restartBtn');
     const rematchBtn = document.getElementById('goRematchBtn');
-
     if (versusMode) {
       if (restartBtn) restartBtn.style.display = 'none';
       if (rematchBtn) rematchBtn.style.display = 'block';
@@ -3710,7 +3791,6 @@ function gameWin() {
       if (rematchBtn) rematchBtn.style.display = 'none';
     }
   });
-
 }
 // Track whether the last game ended in a win so restartGame can carry state over
 
@@ -3849,18 +3929,35 @@ function goToMenu() {
   lastGameWon = false;
   diedInVersus = false;
 
-  // Power-ups: convert to coins (default) OR retain for next game (if setting enabled)
-  if (retainPowerups) {
-    // Save current power-up state and coins as-is; do NOT sell anything
-    saveCurrentPowerupState();
-    handleCoinsAndPowerUps('menu-retain');
+  if (isCustomPlayMode()) {
+    // Practice mode: discard all local state, restore coins/power-ups from saved user data
+    // so nothing accumulated during the session bleeds back
+    if (currentUser) {
+      const ud = currentUser.ud;
+      coins      = ud.coins      || 0;
+      jumpBoosts = Math.min(ud.jumpBoosts  || 0, 20);
+      parachutes = ud.parachutes || 0;
+      skipUses   = ud.skipUses   || 0;
+      bookUses   = ud.bookUses   || 0;
+      lavaShips  = ud.lavaShips  || 0;
+    } else {
+      coins = jumpBoosts = parachutes = skipUses = bookUses = lavaShips = 0;
+    }
+    // No handleCoinsAndPowerUps, no saveScore, no dbSave — session is fully discarded
   } else {
-    // Default: sell power-ups → coins
-    handleCoinsAndPowerUps('menu');
-  }
+    // Power-ups: convert to coins (default) OR retain for next game (if setting enabled)
+    if (retainPowerups) {
+      // Save current power-up state and coins as-is; do NOT sell anything
+      saveCurrentPowerupState();
+      handleCoinsAndPowerUps('menu-retain');
+    } else {
+      // Default: sell power-ups → coins
+      handleCoinsAndPowerUps('menu');
+    }
 
-  // Save progress
-  saveScore();
+    // Save progress
+    saveScore();
+  }
 
   // Reset overlays (also restore piggy display if gameWin hid it)
   document.getElementById('gameOver').classList.remove('show');
@@ -3905,7 +4002,7 @@ function buyItem(type){
     playSound('buy');
     updateTorchHUD();
   }
-  if(currentUser)currentUser.ud.coins=coins;dbSave();updateHUD();
+  if(currentUser && !isCustomPlayMode()){currentUser.ud.coins=coins;dbSave();}updateHUD();
 }
 function updateEndPlatform(){endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;updateHUD();}
 
@@ -4237,6 +4334,22 @@ function drawEditor(){
     eCtx.fillStyle=COLORS[p.color]||'#888';
     eCtx.globalAlpha = isActive ? 0.5 : 1.0;
     eCtx.beginPath();eCtx.roundRect(sx,sy,sw,sh,2);eCtx.fill();
+
+    // ── Special platform indicators ──
+    if(p.color === 'swing'){
+      // Draw a small chain/anchor dot above to hint at swing behaviour
+      eCtx.fillStyle='rgba(255,200,100,0.7)';
+      eCtx.beginPath();eCtx.arc(sx+sw/2, sy-4, 3, 0, Math.PI*2);eCtx.fill();
+      eCtx.strokeStyle='rgba(255,200,100,0.4)'; eCtx.lineWidth=1; eCtx.setLineDash([2,2]);
+      eCtx.beginPath();eCtx.moveTo(sx+sw/2,sy-4);eCtx.lineTo(sx+sw/2,sy);eCtx.stroke();
+      eCtx.setLineDash([]);
+    } else if(p.color === 'crumble'){
+      // Draw subtle crack marks
+      eCtx.strokeStyle='rgba(255,180,80,0.6)'; eCtx.lineWidth=1;
+      eCtx.beginPath();eCtx.moveTo(sx+sw*0.3,sy+1);eCtx.lineTo(sx+sw*0.4,sy+sh-1);eCtx.stroke();
+      eCtx.beginPath();eCtx.moveTo(sx+sw*0.7,sy+1);eCtx.lineTo(sx+sw*0.6,sy+sh-1);eCtx.stroke();
+    }
+
     // group border hint
     if(p._groupId && !edMoveMode){
       eCtx.strokeStyle='#ffffff22'; eCtx.lineWidth=1;
@@ -4345,6 +4458,7 @@ function editorPlaceAt(sx, wy){
     }
     edPlatforms.push({x, y:wy, w:wVal, h:PLATFORM_H, color, _idx:edPlatforms.length});
     drawEditor();
+    edAutoSave();
   }
 }
 
@@ -4465,6 +4579,11 @@ editorCanvas.addEventListener('touchend', e=>{
 
 function editorUndo(){edPlatforms.pop();drawEditor();}
 function editorClear(){if(confirm('Clear all?')){edPlatforms=[];edGapZones=[];edNextGroupId=1;drawEditor();}}
+function confirmEditorExit(){
+  const modal = document.getElementById('edExitModal');
+  if(modal) modal.style.display = 'flex';
+}
+
 function saveEditorLevel(){
   const name=document.getElementById('edLevelName').value.trim()||('Level '+(savedLevels.length+1));
   if(!edPlatforms.length){alert('Add platforms first!');return;}
@@ -4871,7 +4990,7 @@ function updateBgMusic(){
   const screen = document.querySelector('.screen.active');
   if(!screen) return;
   const id = screen.id;
-  if(id==='editorScreen'){ stopBgMusic(); }
+  if(id==='editorScreen'){ stopBgMusic(); edAutoSaveStop(); edAutoSave(); }
   else if(id==='leaderboardScreen'){ playBgMusic('menu'); return; }  // keep menu music
   else if(id==='gameScreen'){
     if (window.currentStoryEpisode) {
@@ -5789,6 +5908,61 @@ if (closeDemoBtn) closeDemoBtn.onclick = (e) => {
 // ── POWER GRID (replaces old rotating dial) ──
 // Slots: 0=top-left boost, 1=top-right skip, 2=bottom-left book, 3=bottom-right chute
 let selectedSlot=0, dialPendingFire=false;
+
+// ── EDITOR AUTO-SAVE ─────────────────────────────────
+const ED_AUTOSAVE_KEY = 'fil_editor_autosave';
+let _edAutoSaveTimer = null;
+
+function edAutoSave(){
+  try {
+    const name = document.getElementById('edLevelName')?.value || '';
+    const state = {
+      platforms: edPlatforms,
+      scrollY:   edScrollY,
+      name:      name,
+      ts:        Date.now()
+    };
+    localStorage.setItem(ED_AUTOSAVE_KEY, JSON.stringify(state));
+  } catch(e){}
+}
+
+function edAutoSaveStart(){
+  edAutoSaveStop();
+  _edAutoSaveTimer = setInterval(edAutoSave, 10000);
+}
+
+function edAutoSaveStop(){
+  if(_edAutoSaveTimer){ clearInterval(_edAutoSaveTimer); _edAutoSaveTimer = null; }
+}
+
+function edAutoSaveRestore(){
+  try {
+    const raw = localStorage.getItem(ED_AUTOSAVE_KEY);
+    if(!raw) return false;
+    const state = JSON.parse(raw);
+    if(!state || !state.platforms || !state.platforms.length) return false;
+    // Only restore if it was saved less than 7 days ago
+    if(Date.now() - (state.ts || 0) > 7 * 24 * 3600 * 1000) return false;
+    edPlatforms = state.platforms;
+    edScrollY   = state.scrollY || -200;
+    edNextGroupId = (edPlatforms.reduce((mx,p) => Math.max(mx, p._groupId||0), 0)) + 1;
+    const nameEl = document.getElementById('edLevelName');
+    if(nameEl && state.name) nameEl.value = state.name;
+    drawEditor();
+    showEdSaveToast('↩️ Auto-save restored — ' + edPlatforms.length + ' platforms');
+    return true;
+  } catch(e){ return false; }
+}
+// ── END EDITOR AUTO-SAVE ─────────────────────────────
+
+// ── PRACTICE MODE: active when playing a custom level standalone ──
+// No coin/progress persistence in this mode.
+function isCustomPlayMode(){
+  return !!(customPlayPlatforms && customPlayPlatforms.length > 0
+            && !window.currentStoryEpisode
+            && !window.versusMode);
+}
+
 const DIAL_SLOTS = [
   {key:'boost',    getCount:()=>jumpBoosts  || 0},
   {key:'skip',     getCount:()=>skipUses    || 0},
@@ -6036,7 +6210,7 @@ function checkVersusWin(){
   const allOut=bots.every(b=>b.eliminated);
   if(allOut&&allBotsDeadRespawnQueue.length===0&&respawnTimer<=0){
     allBotsDeadRespawnQueue=[0,1,2];respawnTimer=120;
-    coins+=20;if(currentUser){currentUser.ud.coins=coins;dbSave();}
+    if(!isCustomPlayMode()){coins+=20;if(currentUser){currentUser.ud.coins=coins;dbSave();}}
     showNotif('All opponents fell! +20 coins. Respawning...');updateHUD();
   }
 }
@@ -7348,10 +7522,29 @@ window.addEventListener('beforeunload', () => {
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && gameRunning && retainPowerups) {
-    // App backgrounded on mobile — save state immediately
-    saveCurrentPowerupState();
+  if (document.hidden) {
+    // App backgrounded / tab hidden — pause music immediately
+    if (bgAudio && !bgAudio.paused) {
+      bgAudio._pausedByVisibility = true;
+      bgAudio.pause();
+    }
+    // Also save powerup state if needed
+    if (gameRunning && retainPowerups) saveCurrentPowerupState();
+  } else {
+    // App foregrounded — resume music if it was playing before
+    if (bgAudio && bgAudio._pausedByVisibility) {
+      bgAudio._pausedByVisibility = false;
+      bgAudio.play().catch(() => {
+        // Autoplay blocked — mark as pending so next user gesture resumes it
+        window._pendingBgTrack = bgMusicTrack;
+      });
+    }
   }
+});
+
+// Also handle page hide (iOS Safari PWA close/switch)
+window.addEventListener('pagehide', () => {
+  if (bgAudio && !bgAudio.paused) bgAudio.pause();
 });
 
 // ── Restore any persisted session after login / page load ──
