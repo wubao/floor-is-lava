@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava v72</title>
+<title>Floor Is Lava v74</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
@@ -997,7 +997,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <!-- CUSTOM LEVELS -->
 <div id="customLevelsScreen" class="screen">
   <h2>🗂 CUSTOM LEVELS</h2>
-  <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;width:100%;box-sizing:border-box;">
+  <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;width:100%;max-width:320px;box-sizing:border-box;">
     <button onclick="newCustomLevel()" style="padding:7px 16px;border-radius:10px;background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;border:none;font-weight:bold;font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap;">+ New Level</button>
     <input id="levelSearch" type="search" placeholder="🔍 Search levels..." oninput="renderCustomLevelsList()" style="flex:1;min-width:0;padding:7px 10px;border-radius:10px;border:1.5px solid #2a2a4a;background:#0e0e22;color:#e8e0ff;font-size:12px;">
   </div>
@@ -1194,7 +1194,7 @@ function getStalagmiteConfig(){
 }
 // ═══════════════════════════════════════════
 
-const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af',ice:'#a0f0ff',swing:'#d4780a',crumble:'#8b4513'};
+const COLORS = {red:'#e02060',blue:'#2980e8',yellow:'#f5c518',green:'#27ae60',purple:'#9b27af',ice:'#a0f0ff',swing:'#d4780a',crumble:'#8b4513',sticky:'#c8a020'};
 const TRICK_TYPES = ['flip','backflip','tilt'];
 
 function lavaSpeedForLevel(lvl) {
@@ -1503,6 +1503,9 @@ let platforms, player, camera, lavaWorldY, lavaPixPerFrame, initialTimer, initia
 let _unreachCount = 0, _reachSinceUnreach = 0;  // F5: unreachable platform ratio tracking
 let _torchWarnedAt5 = false;  // quick-buy: fire once per low-battery event
 let purpleTimer=0, onPurple=false, purplePlatform=null;
+// ── STICKY PLATFORM STATE ──
+let onSticky=false, stickyTimer=0, stickyPlatform=null;
+// stickyTimer: >0 = fully stuck (1s), then transitions to slow movement
 let gameRunning=false, paused=false, animId, lastTime=null;
 let levelTimerSecs = 0;   // seconds elapsed in the current level/episode
 let levelTimerStart = 0;  // performance.now() at game start
@@ -1622,9 +1625,10 @@ function makePlatform(y, index, prevX, prevW){
     vine = { active: true, position: pos, swingAngle: 0, swingSpeed: 0, launched: false };
   }
 
-  // ── SWING + CRUMBLE platform generation ──
+  // ── SWING + CRUMBLE + STICKY platform generation ──
   const pSwing   = cfg.swing   != null ? cfg.swing   : 0.04;
   const pCrumble = cfg.crumble != null ? cfg.crumble : 0.04;
+  const pSticky  = cfg.sticky  != null ? cfg.sticky  : 0.03;
   let swingData = null;
   let crumbleState = null;
   if (!isGap && color !== 'purple') {
@@ -1635,6 +1639,8 @@ function makePlatform(y, index, prevX, prevW){
     } else if (sr < pSwing + pCrumble) {
       color = 'crumble';
       crumbleState = 'idle';
+    } else if (sr < pSwing + pCrumble + pSticky) {
+      color = 'sticky';
     }
   }
 
@@ -1726,6 +1732,7 @@ function initGame(){
   booksOwned = 0; 
   movingPlatformAbove = null; bookPlatformPulled = false;
   onPurple = false; purpleTimer = 0; purplePlatform = null;
+  onSticky = false; stickyTimer = 0; stickyPlatform = null;
   parachuteActive = false; parachuteDeployY = null;
   document.getElementById('parachuteHUD').style.opacity = '0';
   anim = {active:false, type:'none', angle:0, funnyFace:false, tiltDir:1, progress:0};
@@ -1912,6 +1919,11 @@ function jump(half, boostOverride){
   if(!gameRunning || paused) return;
   if(player.onGround){
     let force = half ? HALF_JUMP : JUMP_FORCE;
+    // Sticky platform: limit to half jump if in slow phase, block entirely if fully stuck
+    if(onSticky){
+      if(stickyTimer > 0) return; // fully stuck — cannot jump yet
+      force = HALF_JUMP; // slow phase: half jump only
+    }
     if(boostOverride && jumpBoosts > 0){
       force = JUMP_BOOST_FORCE; jumpBoosts--;
       if(currentUser && !isCustomPlayMode()) { currentUser.ud.jumpBoosts = jumpBoosts; dbSave(); }
@@ -1924,6 +1936,8 @@ function jump(half, boostOverride){
     }
     onPurple = false; purpleTimer = 0; purplePlatform = null;
     document.getElementById('purpleWarning').style.opacity = '0';
+    // Clear sticky when player jumps off
+    onSticky = false; stickyTimer = 0; stickyPlatform = null;
     parachuteActive = false; parachuteDeployY = null;
     document.getElementById('parachuteHUD').style.opacity = '0';
     if(!half) maybeTriggerTrick();
@@ -2206,31 +2220,37 @@ function updateSwingPlatforms(dt){
   for(const p of platforms){
     if(!p.swingData) continue;
     const sd = p.swingData;
-    const MAX_VEL = 0.10;
-    const DECAY   = 0.988;
+    const MAX_VEL = 0.05;   // 2x slower max angular velocity
+    const DECAY   = 0.980;   // slightly more damping for gradual feel
     const armLen  = PLATFORM_GAP * 0.9;
 
     const onThisSwing = player.onGround && player.currentPlatformIndex === p.index;
 
-    // ── 1. Player input accelerates/brakes swing ──
+    // ── 1. Player input accelerates/brakes swing (half the force, 2x slower build-up) ──
     if(onThisSwing){
-      const px_dir = keys['ArrowRight']||keys['KeyD'] ? 1 : keys['ArrowLeft']||keys['KeyQ'] ? -1 : 0;
+      const px_dir = keys['ArrowRight']||keys['KeyD'] ? 1 : keys['ArrowLeft']||keys['KeyQ'] ? -1 : touchMoveVX !== 0 ? touchMoveVX : 0;
       if(px_dir !== 0){
         const sameDir = (px_dir * sd.vel >= 0);
-        sd.vel += px_dir * (sameDir ? 0.004 : -0.008) * dt;
+        sd.vel += px_dir * (sameDir ? 0.002 : -0.004) * dt;  // halved from 0.004/0.008
       }
     }
 
-    // ── 2. Pendulum restoring force ──
-    sd.vel += -0.003 * Math.sin(sd.angle) * dt;
+    // ── 2. Pendulum restoring force (also halved so it swings slower) ──
+    sd.vel += -0.0015 * Math.sin(sd.angle) * dt;
     sd.vel *= Math.pow(DECAY, dt);
     sd.vel = Math.max(-MAX_VEL, Math.min(MAX_VEL, sd.vel));
+
+    // ── 3. Near-peak pause: slow further as approaching top, hold briefly ──
+    const MAX_ANGLE = Math.PI * 0.40;
+    const nearPeak  = Math.abs(sd.angle) > MAX_ANGLE * 0.80;
+    // Apply extra drag near peak — feels "suspended" giving player time to jump
+    const peakDrag = nearPeak ? Math.pow(0.88, dt) : 1;
+    sd.vel *= peakDrag;
+
     sd.angle += sd.vel * dt;
 
-    // ── 3. Clamp angle ──
-    const MAX_ANGLE = Math.PI * 0.40;
-    if(sd.angle >  MAX_ANGLE){ sd.angle =  MAX_ANGLE; sd.vel *= -0.25; }
-    if(sd.angle < -MAX_ANGLE){ sd.angle = -MAX_ANGLE; sd.vel *= -0.25; }
+    if(sd.angle >  MAX_ANGLE){ sd.angle =  MAX_ANGLE; sd.vel *= -0.15; }
+    if(sd.angle < -MAX_ANGLE){ sd.angle = -MAX_ANGLE; sd.vel *= -0.15; }
 
     // ── 4. Recompute world position of platform center ──
     // Platform center hangs at: pivot + (sin,cos)*armLen
@@ -2251,7 +2271,7 @@ function updateSwingPlatforms(dt){
     if(onThisSwing){
       // Gravity component along slope (slide toward low end)
       // tilt>0 means right end is higher → slide left (negative vx)
-      const slopeAccel = -Math.sin(sd.tilt) * 0.4 * dt;  // slide force
+      const slopeAccel = -Math.sin(sd.tilt) * 0.18 * dt;  // gentler slide (2x slower)
       player.vx += slopeAccel;
 
       // Clamp slide speed to prevent runaway
@@ -2294,7 +2314,7 @@ function updateSwingPlatforms(dt){
         const endIsHigh = (offRight && sd.tilt > 0.05) || (offLeft && sd.tilt < -0.05);
         if(endIsHigh){
           // Catapult upward — more velocity = more height
-          player.vy = -edgeVelMag * Math.sin(Math.abs(sd.tilt)) * 2.5 - 3;
+          player.vy = -edgeVelMag * Math.sin(Math.abs(sd.tilt)) * 1.5 - 2;  // gentler launch
         } else {
           // Slide off the low end — small downward nudge
           player.vy = 1.5;
@@ -2680,6 +2700,19 @@ function gameLoop(ts){
   if(keys['ArrowLeft']||keys['KeyQ']) vxInput = -MOVE_SPEED;
   else if(keys['ArrowRight']||keys['KeyD']) vxInput = MOVE_SPEED;
   else if(touchMoveVX !== 0) vxInput = touchMoveVX * MOVE_SPEED;
+
+  // ── STICKY PLATFORM: slow movement & short jump while stuck ──
+  if(onSticky){
+    stickyTimer -= dt * (16.67/1000) * 1000;
+    if(stickyTimer > 0){
+      // Fully stuck: no horizontal input
+      vxInput = 0;
+    } else {
+      // Stuck slow phase: movement at 25% speed (stickyTimer <= 0 means we're in slow phase until leaving platform)
+      vxInput *= 0.25;
+    }
+  }
+
   if(vxInput !== 0) player.vx = vxInput; else player.vx *= 0.75;
 
   // parachute physics
@@ -2722,6 +2755,8 @@ function gameLoop(ts){
 
   // platform collisions
   player.onGround = false;
+  // Clear sticky when player is in the air (fell off sticky platform)
+  if(onSticky && !player.onGround && player.vy < -2){ onSticky=false; stickyTimer=0; stickyPlatform=null; }
   for(const p of platforms){
     // Skip platforms that are no longer in their original horizontal position
     if(p.tipping && p.tipping !== 'idle') continue;
@@ -2770,6 +2805,17 @@ function gameLoop(ts){
           if(onPurple){onPurple=false;purpleTimer=0;purplePlatform=null;document.getElementById('purpleWarning').style.opacity='0';}
           // Trigger crumble platform countdown on landing
           if(p.crumbleState==='idle') triggerCrumble(p);
+          // ── STICKY PLATFORM: stick player for 1s, then slow movement ──
+          if(p.color==='sticky'){
+            if(!onSticky || stickyPlatform !== p){
+              onSticky = true; stickyTimer = 1000; stickyPlatform = p;
+              showNotif('🟡 STICKY GOO! Stuck for 1 second!');
+              playSound('sticky');
+            }
+          } else {
+            // Leaving a non-sticky platform clears sticky state if was airborne
+            if(stickyPlatform && stickyPlatform !== p){ onSticky=false; stickyTimer=0; stickyPlatform=null; }
+          }
           if(p.color==='green' && p.hasCoin){p.hasCoin=false;if(!isCustomPlayMode()){coins+=20;if(currentUser)currentUser.ud.coins=coins;}playSound('coin');showNotif(isCustomPlayMode()?'+20 coins (practice — not saved)':'+20 coins! 🪙');updateHUD();}
 // Ice platform: lowers lava by 2 platform gaps
 if (p.color === 'ice' && !p.iceUsed) {
@@ -2885,6 +2931,9 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
   updateBgAnims(dt);
   updateTorch(dt);
   if(versusMode){updateBots(dt);checkVersusWin();updateRespawns(dt);}
+  // Bad guy system — active in story episodes every 3rd episode
+  maybeInitScorchaForEpisode();
+  if(SCORCHA.active) updateScorcha(dt);
 
   // camera follows player using zoomed dimensions
   const zW = getZoomedCanvasW(), zH = getZoomedCanvasH();
@@ -3291,6 +3340,7 @@ function drawSwingPlatform(p){
   drawPlayerG();
   if(lavaShipActive) drawLavaShip();
   if(versusMode)drawBots();
+  if(SCORCHA.active)drawScorcha();
 
   if(parachuteActive && !player.onGround && !lavaShipActive){
     const px = player.x - camera.x + player.w / 2, py = player.y - camera.y;
@@ -3343,6 +3393,28 @@ function drawPlatform(p, sx, sy){
     gCtx.font = '12px Arial';
     gCtx.textAlign = 'center';
     gCtx.fillText('❄️', sx + p.w / 2, sy + p.h / 2);
+  }
+
+  // ── STICKY PLATFORM: goo blobs on top ──
+  if(p.color === 'sticky'){
+    const t2 = Date.now() * 0.003;
+    for(let i=0;i<4;i++){
+      const bx = sx + p.w*0.15 + i*p.w*0.22;
+      const by = sy + 3 + Math.sin(t2+i*1.3)*2;
+      const br = 4 + Math.sin(t2*1.5+i)*1.5;
+      const g2 = gCtx.createRadialGradient(bx,by,0,bx,by,br);
+      g2.addColorStop(0,'#ffe04a'); g2.addColorStop(1,'#c87010');
+      gCtx.fillStyle=g2;
+      gCtx.beginPath(); gCtx.arc(bx,by,br,0,Math.PI*2); gCtx.fill();
+    }
+    // thread connecting blobs
+    gCtx.strokeStyle='rgba(200,140,20,0.5)'; gCtx.lineWidth=1.5;
+    gCtx.beginPath(); gCtx.moveTo(sx+p.w*0.15,sy+4);
+    for(let i=1;i<4;i++) gCtx.lineTo(sx+p.w*0.15+i*p.w*0.22, sy+4+Math.sin(Date.now()*0.003+i*1.3)*2);
+    gCtx.stroke();
+    // label
+    gCtx.font='9px Arial'; gCtx.textAlign='center'; gCtx.fillStyle='#ffe06688';
+    gCtx.fillText('🫧', sx+p.w/2, sy+p.h-1);
   }
 
   // ---------- VINE DRAWING ----------
@@ -3650,6 +3722,7 @@ function gameEnd(fromPurple) {
   }
   gameRunning = false;
   cancelAnimationFrame(animId);
+  resetScorcha();
 
   const practiceMode = isCustomPlayMode();
 
@@ -5047,6 +5120,9 @@ function playSound(type){
   else if(type==='coin'){osc.type='sine';osc.frequency.setValueAtTime(880,now);osc.frequency.setValueAtTime(1320,now+0.08);gain.gain.setValueAtTime(0.18,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.22);osc.start(now);osc.stop(now+0.22);}
   else if(type==='death'){osc.type='sawtooth';osc.frequency.setValueAtTime(400,now);osc.frequency.exponentialRampToValueAtTime(80,now+0.5);gain.gain.setValueAtTime(0.25,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.5);osc.start(now);osc.stop(now+0.5);}
   else if(type==='buy'){osc.type='sine';osc.frequency.setValueAtTime(660,now);osc.frequency.setValueAtTime(990,now+0.1);gain.gain.setValueAtTime(0.15,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.2);osc.start(now);osc.stop(now+0.2);}
+  else if(type==='sticky'){osc.type='sine';osc.frequency.setValueAtTime(120,now);osc.frequency.exponentialRampToValueAtTime(60,now+0.35);gain.gain.setValueAtTime(0.22,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.35);osc.start(now);osc.stop(now+0.35);}
+  else if(type==='badguy'){osc.type='square';osc.frequency.setValueAtTime(220,now);osc.frequency.exponentialRampToValueAtTime(110,now+0.25);gain.gain.setValueAtTime(0.18,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.25);osc.start(now);osc.stop(now+0.25);}
+  else if(type==='net'){osc.type='sawtooth';osc.frequency.setValueAtTime(180,now);osc.frequency.setValueAtTime(90,now+0.1);gain.gain.setValueAtTime(0.2,now);gain.gain.exponentialRampToValueAtTime(0.001,now+0.3);osc.start(now);osc.stop(now+0.3);}
 }
 
 // ═══ MASTER VOLUME ═══
@@ -6421,6 +6497,535 @@ function drawBots(){
   });
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// BAD GUY SYSTEM — "SCORCHA" the Volcanic Saboteur
+// Appears every 3rd story episode. Powers cycle per spec.
+// ══════════════════════════════════════════════════════════════════
+
+const SCORCHA = {
+  // Visual
+  skinColor: '#d4486a',
+  bodyColor: '#1a1a1a',
+  hairColor: '#ff2200',
+  // State
+  active: false,
+  phase: 'hidden',   // 'hidden' | 'dropping' | 'roaming' | 'escaping'
+  x: 0, y: 0, vy: 0, vx: 0,
+  onGround: false,
+  // Timing
+  platformsUntilReturn: 0,
+  jumpCount: 0,
+  jumpTarget: null,
+  actionDone: 0,
+  actionDoneCount: 0,
+  actTimer: 0,
+  escapeTimer: 0,
+  // Escape rope
+  ropeX: 0, ropeTopY: 0, ropeLen: 0,
+  // Power selection
+  power: 1, // current power (1-4)
+  powers: [], // array of active powers for this episode
+  // Net throw
+  netActive: false, netX: 0, netY: 0, netVY: 0, netW: 0,
+  netLanded: false, netTimer: 0, // ensnare timer
+  playerEnsnared: false, playerEnsnareTimer: 0,
+  // Idle animation
+  idleT: 0,
+  animAngle: 0,
+};
+
+// Assign powers based on episode index (among bad-guy episodes: 0,1,2,3...)
+// ep 0 (game ep 3): [1]
+// ep 1 (game ep 6): [1,2]
+// ep 2 (game ep 9): [1,2,3]
+// ep 3 (game ep 12): [1,2,3,4]
+// ep 4+: cycles. Pattern: 4 bad-guy eps give 16 combos.
+const SCORCHA_POWER_COMBOS = [
+  [1],[1,2],[1,2,3],[1,2,3,4],
+  [2],[2,3],[2,3,4],[1,2,3,4],
+  [3],[3,4],[1,3],[2,4],
+  [4],[1,4],[2,3,4],[1,2,3,4],
+];
+
+function scorchaEpisodePowers(storyEpId) {
+  // bad-guy episodes are every 3rd (ep 3,6,9,12,...) → bad-guy index 0,1,2,...
+  const bgIdx = Math.floor((storyEpId - 3) / 3);
+  const combo = SCORCHA_POWER_COMBOS[bgIdx % SCORCHA_POWER_COMBOS.length];
+  // For the final episode (id 50), give all 4 powers
+  if(storyEpId >= 50) return [1,2,3,4];
+  return combo;
+}
+
+function isBadGuyEpisode(storyEpId) {
+  if(!storyEpId && storyEpId !== 0) return false;
+  return storyEpId >= 3 && (storyEpId - 3) % 3 === 0;
+}
+
+function initScorcha(storyEpId) {
+  SCORCHA.active = true;
+  SCORCHA.phase = 'hidden';
+  SCORCHA.powers = scorchaEpisodePowers(storyEpId);
+  SCORCHA.power = SCORCHA.powers[0];
+  SCORCHA._powerIdx = 0;
+  SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random() * 26); // 25-50
+  SCORCHA.netActive = false;
+  SCORCHA.playerEnsnared = false;
+  SCORCHA.playerEnsnareTimer = 0;
+  SCORCHA.idleT = 0;
+  SCORCHA.actionDoneCount = 0;
+  SCORCHA.actTimer = 0;
+  SCORCHA.jumpCount = 0;
+}
+
+function resetScorcha() {
+  SCORCHA.active = false;
+  SCORCHA.phase = 'hidden';
+  SCORCHA.netActive = false;
+  SCORCHA.playerEnsnared = false;
+  SCORCHA.playerEnsnareTimer = 0;
+}
+
+// Choose next power from the episode's power set
+function scorchaNextPower() {
+  SCORCHA._powerIdx = (SCORCHA._powerIdx + 1) % SCORCHA.powers.length;
+  SCORCHA.power = SCORCHA.powers[SCORCHA._powerIdx];
+}
+
+function updateScorcha(dt) {
+  if(!SCORCHA.active || !gameRunning) return;
+  SCORCHA.idleT += dt * 0.05;
+
+  // ── PLAYER ENSNARE (net hit) ──
+  if(SCORCHA.playerEnsnared){
+    SCORCHA.playerEnsnareTimer -= dt * (16.67/1000) * 1000;
+    player.vx = 0;
+    if(SCORCHA.playerEnsnareTimer <= 0){
+      SCORCHA.playerEnsnared = false;
+      showNotif('🕸️ Net broken free!');
+    }
+    // Don't return — still need to update the flying net and check collision
+  }
+
+  // ── FLYING NET ──
+  if(SCORCHA.netActive && !SCORCHA.netLanded){
+    SCORCHA.netY += SCORCHA.netVY * dt;
+    SCORCHA.netVY += 0.3 * dt;
+    if(!SCORCHA.playerEnsnared){
+      const pw = player.w * 3;
+      const nx = SCORCHA.netX - pw/2, ny = SCORCHA.netY;
+      if(player.x + player.w > nx && player.x < nx + pw &&
+         player.y + player.h > ny && player.y < ny + 30){
+        SCORCHA.netActive = false;
+        SCORCHA.playerEnsnared = true;
+        SCORCHA.playerEnsnareTimer = 2000;
+        playSound('net');
+        showNotif('🕸️ NET! Ensnared for 2 seconds!');
+      }
+    }
+    if(SCORCHA.netY - camera.y > getZoomedCanvasH() + 60) SCORCHA.netActive = false;
+  }
+
+  // ── PHASE: HIDDEN — wait for platform count ──
+  if(SCORCHA.phase === 'hidden'){
+    if(typeof SCORCHA._lastPlatCount === 'undefined') SCORCHA._lastPlatCount = platformCount;
+    const diff = platformCount - SCORCHA._lastPlatCount;
+    if(diff > 0){ SCORCHA.platformsUntilReturn -= diff; SCORCHA._lastPlatCount = platformCount; }
+    if(SCORCHA.platformsUntilReturn <= 0) scorchaStartDrop();
+    return;
+  }
+
+  // ── PHASE: DROPPING — fall to a real platform above the player ──
+  if(SCORCHA.phase === 'dropping'){
+    SCORCHA.vy += GRAVITY * dt;
+    SCORCHA.y  += SCORCHA.vy * dt;
+    SCORCHA.x  += SCORCHA.vx * dt;
+    // Collide with any platform
+    for(const p of platforms){
+      if(p.crumbleState === 'gone') continue;
+      if(SCORCHA.vy >= 0 &&
+         SCORCHA.y + 50 > p.y && SCORCHA.y + 50 < p.y + p.h + Math.abs(SCORCHA.vy)*dt + 10 &&
+         SCORCHA.x + 34 > p.x + 4 && SCORCHA.x + 6 < p.x + p.w - 4){
+        // Only land if this platform is ABOVE the player (lower y = higher on screen)
+        if(p.y < player.y){
+          SCORCHA.y = p.y - 50; SCORCHA.vy = 0; SCORCHA.onGround = true;
+          SCORCHA._currentPlat = p;
+          SCORCHA._jumpTimer = BOT_INTERVALS.hard[1]; // hard difficulty interval
+          SCORCHA.jumpCount = 0;
+          SCORCHA.actionDoneCount = 0;
+          SCORCHA.phase = 'roaming';
+          playSound('badguy');
+          showNotif('⚠️ SCORCHA lands!');
+        } else {
+          // Hit a platform below/at player level — bounce off and keep falling
+          SCORCHA.vy = -4; SCORCHA.vx = (Math.random()-0.5)*5;
+        }
+        break;
+      }
+    }
+    // If Scorcha falls too far below player, abort
+    if(SCORCHA.y - camera.y > getZoomedCanvasH() + 300){
+      SCORCHA.phase = 'hidden';
+      SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random()*26);
+      SCORCHA._lastPlatCount = platformCount;
+    }
+    return;
+  }
+
+  // ── PHASE: ROAMING — hard-difficulty bot AI, uses power opportunistically ──
+  if(SCORCHA.phase === 'roaming'){
+    // Apply gravity & move
+    SCORCHA.vy += GRAVITY * dt;
+    SCORCHA.y  += SCORCHA.vy * dt;
+    SCORCHA.x  += SCORCHA.vx * dt;
+    if(SCORCHA.onGround) SCORCHA.vx *= 0.80;
+    // World edge bounce
+    if(SCORCHA.x < 10){ SCORCHA.x = 10; SCORCHA.vx = Math.abs(SCORCHA.vx)*0.5; }
+    if(SCORCHA.x + 40 > WORLD_W-10){ SCORCHA.x = WORLD_W-50; SCORCHA.vx = -Math.abs(SCORCHA.vx)*0.5; }
+
+    SCORCHA.onGround = false;
+    // Platform collision (same as bots)
+    for(const p of platforms){
+      if(p.crumbleState === 'gone') continue;
+      if(p.tipping && p.tipping !== 'idle') continue;
+      if(SCORCHA.vy >= 0 &&
+         SCORCHA.y + 50 > p.y && SCORCHA.y + 50 < p.y + p.h + Math.abs(SCORCHA.vy)*dt + 8 &&
+         SCORCHA.x + 36 > p.x + 4 && SCORCHA.x + 4 < p.x + p.w - 4){
+        SCORCHA.y = p.y - 50; SCORCHA.vy = 0; SCORCHA.onGround = true;
+        SCORCHA._currentPlat = p;
+        break;
+      }
+    }
+
+    // Fell into lava — abort
+    if(lavaWorldY <= SCORCHA.y + 50){
+      SCORCHA.phase = 'hidden';
+      SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random()*26);
+      SCORCHA._lastPlatCount = platformCount;
+      return;
+    }
+
+    // Jump timer — hard difficulty
+    if(typeof SCORCHA._jumpTimer === 'undefined') SCORCHA._jumpTimer = BOT_INTERVALS.hard[1];
+    if(SCORCHA.onGround){
+      SCORCHA._jumpTimer -= dt;
+      if(SCORCHA._jumpTimer <= 0){
+        // ── Try to use power on current platform or adjacent ones ──
+        if(SCORCHA.actionDoneCount < 3){
+          const used = scorchaCheckAndUsePower();
+          if(used) SCORCHA.actionDoneCount++;
+        }
+        // ── If used power 3 times, escape ──
+        if(SCORCHA.actionDoneCount >= 3){
+          scorchaStartEscape(); return;
+        }
+        // ── Hard-bot jump: target best platform above player area ──
+        const abovePlayer = platforms.filter(p =>
+          p.y < player.y + PLATFORM_GAP * 2 &&
+          p.y > player.y - PLATFORM_GAP * 6 &&
+          p.crumbleState !== 'gone' &&
+          (!p.tipping || p.tipping === 'idle')
+        ).sort((a, b) => b.y - a.y); // highest y = lowest visual = closest above player
+
+        let target = null;
+        if(abovePlayer.length > 0){
+          // Hard diff: pick the most strategically useful platform
+          target = abovePlayer[Math.floor(Math.random() * Math.min(abovePlayer.length, 2))];
+        } else {
+          // Fallback: any platform above current position
+          const above = platforms.filter(p =>
+            p.y < SCORCHA.y && p.y > SCORCHA.y - PLATFORM_GAP*4 &&
+            p.crumbleState !== 'gone'
+          ).sort((a,b) => b.y - a.y);
+          if(above.length > 0) target = above[0];
+        }
+
+        if(target){
+          const tx = target.x + target.w * (0.2 + Math.random() * 0.6);
+          SCORCHA.vx = Math.max(-5, Math.min(5, (tx - (SCORCHA.x + 20)) * 0.045));
+          SCORCHA.vy = JUMP_FORCE * (0.92 + Math.random() * 0.16);
+        } else {
+          SCORCHA.vy = JUMP_FORCE;
+          SCORCHA.vx = (Math.random() - 0.5) * 6;
+        }
+        SCORCHA.onGround = false;
+        SCORCHA.jumpCount++;
+        // Reset timer — hard difficulty: 25–60 frames
+        SCORCHA._jumpTimer = BOT_INTERVALS.hard[1] * (0.5 + Math.random() * 0.8);
+      }
+    }
+
+    // If Scorcha drifts too far above player without acting, escape
+    const scorchaScreenY = SCORCHA.y - camera.y;
+    if(scorchaScreenY < -200){
+      scorchaStartEscape(); return;
+    }
+
+    // Player collision — player catches Scorcha
+    scorchaCheckPlayerCollision();
+    return;
+  }
+
+  // ── PHASE: ESCAPING — fly up on rope ──
+  if(SCORCHA.phase === 'escaping'){
+    SCORCHA.escapeTimer += dt * (16.67/1000) * 1000;
+    const up = Math.min(SCORCHA.escapeTimer / 1000, 1);
+    SCORCHA.y -= up * 10 * dt;
+    SCORCHA.x += SCORCHA.vx * dt * 0.5;
+    const screenY = SCORCHA.y - camera.y;
+    if(screenY < -120 || SCORCHA.escapeTimer > 2200){
+      SCORCHA.phase = 'hidden';
+      SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random()*26);
+      SCORCHA._lastPlatCount = platformCount;
+      scorchaNextPower();
+    }
+  }
+}
+
+// Check if Scorcha can use her power on the current or nearby platforms, returns true if used
+function scorchaCheckAndUsePower() {
+  const pow = SCORCHA.power;
+  const cp = SCORCHA._currentPlat;
+  if(!cp) return false;
+
+  if(pow === 1){
+    // Tip the platform Scorcha just landed on (if it's above player)
+    if(cp.tipping === null && cp.y < player.y){
+      cp.tipping = 'shaking'; cp.tipTimer = 0; cp.tipShakeTimer = 800;
+      cp.tipDir = Math.random()<0.5?'left':'right';
+      cp.tipPivotX = cp.x + cp.w/2; cp.tipPivotY = cp.y + cp.h;
+      showNotif('🌀 Scorcha tips a platform!');
+      return true;
+    }
+    // Fallback: tip any eligible platform near player
+    const t = platforms.find(p => p.tipping === null && p.y < player.y && p.y > player.y - PLATFORM_GAP*3);
+    if(t){
+      t.tipping = 'shaking'; t.tipTimer = 0; t.tipShakeTimer = 800;
+      t.tipDir = Math.random()<0.5?'left':'right';
+      t.tipPivotX = t.x + t.w/2; t.tipPivotY = t.y + t.h;
+      showNotif('🌀 Scorcha tips a platform!');
+      return true;
+    }
+    return false;
+
+  } else if(pow === 2){
+    const candidates = platforms.filter(p =>
+      ['red','blue','yellow'].includes(p.color) && !p.crumbleState &&
+      p.y < player.y && p.y > player.y - PLATFORM_GAP*5
+    ).slice(0, 1);
+    if(candidates.length){
+      const p2 = candidates[0];
+      p2.color = 'crumble'; p2.crumbleState = 'idle'; triggerCrumble(p2);
+      showNotif('💥 Scorcha crumbles a platform!');
+      return true;
+    }
+    return false;
+
+  } else if(pow === 3){
+    const candidates = platforms.filter(p =>
+      ['red','blue','yellow'].includes(p.color) && !p.crumbleState &&
+      p.y < player.y && p.y > player.y - PLATFORM_GAP*5
+    ).slice(0, 1);
+    if(candidates.length){
+      candidates[0].color = 'sticky';
+      showNotif('🟡 Scorcha stickifies a platform!');
+      return true;
+    }
+    return false;
+
+  } else if(pow === 4){
+    if(!SCORCHA.netActive){
+      SCORCHA.netActive = true;
+      SCORCHA.netLanded = false;
+      SCORCHA.netX = SCORCHA.x + 20;
+      SCORCHA.netY = SCORCHA.y + 10;
+      SCORCHA.netVY = 5;
+      SCORCHA.netW = player.w * 3;
+      playSound('net');
+      showNotif('🕸️ Scorcha throws a net!');
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
+
+function scorchaCheckPlayerCollision() {
+  if(SCORCHA.phase !== 'roaming') return;
+  const dx = (player.x + player.w/2) - (SCORCHA.x + 20);
+  const dy = (player.y + player.h/2) - (SCORCHA.y + 25);
+  if(Math.abs(dx) < 35 && Math.abs(dy) < 45){
+    SCORCHA.vx = dx > 0 ? 8 : -8;
+    SCORCHA.vy = -9;
+    SCORCHA.phase = 'escaping';
+    SCORCHA.ropeX = SCORCHA.x + 20;
+    SCORCHA.ropeTopY = SCORCHA.y - PLATFORM_GAP * 20;
+    SCORCHA.escapeTimer = 0;
+    showNotif('💥 You hit SCORCHA! She\'s escaping!');
+    playSound('badguy');
+  }
+}
+
+function scorchaStartDrop() {
+  // Find a real platform that is 3–6 platforms above the player
+  const candidates = platforms.filter(p =>
+    p.y < player.y - PLATFORM_GAP * 3 &&
+    p.y > player.y - PLATFORM_GAP * 8 &&
+    p.crumbleState !== 'gone' &&
+    (!p.tipping || p.tipping === 'idle')
+  );
+  let targetPlat = null;
+  if(candidates.length > 0){
+    targetPlat = candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  // Spawn Scorcha above the target platform (or above player if none found)
+  const dropX = targetPlat
+    ? targetPlat.x + targetPlat.w * (0.2 + Math.random() * 0.6)
+    : 100 + Math.random() * (WORLD_W - 200);
+  const dropY = targetPlat
+    ? targetPlat.y - 120   // start above the platform
+    : player.y - PLATFORM_GAP * 6;
+  SCORCHA.x = dropX;
+  SCORCHA.y = dropY;
+  SCORCHA.vy = 3;   // falling down
+  SCORCHA.vx = 0;
+  SCORCHA.onGround = false;
+  SCORCHA.actionDoneCount = 0;
+  SCORCHA._jumpTimer = BOT_INTERVALS.hard[1];
+  SCORCHA.phase = 'dropping';
+  showNotif('⚠️ SCORCHA drops in!');
+}
+
+function scorchaStartEscape() {
+  SCORCHA.phase = 'escaping';
+  SCORCHA.ropeX = SCORCHA.x + 20;
+  SCORCHA.ropeTopY = SCORCHA.y - PLATFORM_GAP * 20;
+  SCORCHA.escapeTimer = 0;
+  // Drift left or right
+  SCORCHA.vx = (Math.random()<0.5 ? -1 : 1) * (1.5 + Math.random()*1.5);
+}
+
+function drawScorcha() {
+  if(!SCORCHA.active) return;
+  if(SCORCHA.phase === 'hidden') return;
+
+  const sx = SCORCHA.x - camera.x, sy = SCORCHA.y - camera.y;
+  const zH = getZoomedCanvasH();
+  if(sy < -120 || sy > zH + 80) return;
+
+  gCtx.save();
+
+  // Escape rope visual
+  if(SCORCHA.phase === 'escaping'){
+    const ropesx = SCORCHA.ropeX - camera.x;
+    const ropeTopSy = SCORCHA.ropeTopY - camera.y;
+    gCtx.strokeStyle = '#c8a86b'; gCtx.lineWidth = 3; gCtx.setLineDash([6,4]);
+    gCtx.beginPath(); gCtx.moveTo(ropesx, ropeTopSy); gCtx.lineTo(ropesx, sy+20);
+    gCtx.stroke(); gCtx.setLineDash([]);
+  }
+
+  // Body
+  gCtx.fillStyle = SCORCHA.bodyColor;
+  gCtx.beginPath(); gCtx.roundRect(sx+2,sy+31,36,19,3); gCtx.fill();
+  // Flame shoulder pads
+  gCtx.fillStyle = '#ff4400';
+  gCtx.beginPath(); gCtx.arc(sx+2, sy+34, 7, 0, Math.PI*2); gCtx.fill();
+  gCtx.beginPath(); gCtx.arc(sx+38, sy+34, 7, 0, Math.PI*2); gCtx.fill();
+  // Legs
+  const legBob = SCORCHA.onGround ? Math.sin(SCORCHA.idleT)*2 : 0;
+  gCtx.fillStyle = '#2a0808';
+  gCtx.fillRect(sx+4, sy+50+legBob, 13, 12);
+  gCtx.fillRect(sx+23, sy+50-legBob, 13, 12);
+  gCtx.fillStyle = '#ff2200';
+  gCtx.beginPath(); gCtx.roundRect(sx+2, sy+61+legBob, 17, 5, 2); gCtx.fill();
+  gCtx.beginPath(); gCtx.roundRect(sx+21, sy+61-legBob, 17, 5, 2); gCtx.fill();
+  // Arms
+  const armSwing = SCORCHA.onGround ? Math.sin(SCORCHA.idleT)*4 : 0;
+  gCtx.fillStyle = SCORCHA.bodyColor;
+  gCtx.fillRect(sx-5, sy+33+armSwing, 8, 14);
+  gCtx.fillRect(sx+37, sy+33-armSwing, 8, 14);
+  gCtx.fillStyle = SCORCHA.skinColor;
+  gCtx.beginPath(); gCtx.arc(sx-1, sy+47+armSwing, 5, 0, Math.PI*2); gCtx.fill();
+  gCtx.beginPath(); gCtx.arc(sx+41, sy+47-armSwing, 5, 0, Math.PI*2); gCtx.fill();
+  // Head
+  gCtx.fillStyle = SCORCHA.skinColor;
+  gCtx.beginPath(); gCtx.roundRect(sx+4, sy+2, 32, 28, 5); gCtx.fill();
+  gCtx.strokeStyle = '#8B2040'; gCtx.lineWidth = 1; gCtx.stroke();
+  // Flaming hair
+  gCtx.fillStyle = '#ff2200';
+  gCtx.beginPath(); gCtx.roundRect(sx+2, sy, 36, 10, 4); gCtx.fill();
+  // Flame spikes
+  for(let i=0;i<5;i++){
+    const fx = sx+6+i*7;
+    const fh = 8+Math.sin(Date.now()*0.008+i)*5;
+    gCtx.fillStyle = i%2===0?'#ff4400':'#ffaa00';
+    gCtx.beginPath(); gCtx.moveTo(fx-3,sy); gCtx.lineTo(fx+3,sy); gCtx.lineTo(fx, sy-fh); gCtx.closePath(); gCtx.fill();
+  }
+  // Eyes — glowing red
+  gCtx.fillStyle = '#ff0000'; gCtx.shadowColor='#ff4400'; gCtx.shadowBlur=6;
+  gCtx.beginPath(); gCtx.arc(sx+13,sy+13,3,0,Math.PI*2); gCtx.fill();
+  gCtx.beginPath(); gCtx.arc(sx+27,sy+13,3,0,Math.PI*2); gCtx.fill();
+  gCtx.shadowBlur=0;
+  gCtx.fillStyle='#ff8888';
+  gCtx.beginPath(); gCtx.arc(sx+14,sy+12,1,0,Math.PI*2); gCtx.fill();
+  gCtx.beginPath(); gCtx.arc(sx+28,sy+12,1,0,Math.PI*2); gCtx.fill();
+  // Snarl mouth
+  gCtx.strokeStyle='#8B2040'; gCtx.lineWidth=1.5;
+  gCtx.beginPath(); gCtx.moveTo(sx+14,sy+22); gCtx.lineTo(sx+26,sy+22); gCtx.stroke();
+  // Name tag
+  gCtx.font='8px Arial'; gCtx.textAlign='center'; gCtx.fillStyle='rgba(0,0,0,0.6)';
+  gCtx.fillRect(sx+20-18,sy-18,36,11);
+  gCtx.fillStyle='#ff6644'; gCtx.fillText('SCORCHA',sx+20,sy-9);
+
+  // Draw net if thrown
+  if(SCORCHA.netActive && !SCORCHA.netLanded){
+    const nx = SCORCHA.netX - camera.x - SCORCHA.netW/2;
+    const ny = SCORCHA.netY - camera.y;
+    const nw = SCORCHA.netW;
+    gCtx.strokeStyle='rgba(200,200,100,0.85)'; gCtx.lineWidth=1.5;
+    // Horizontal threads
+    for(let row=0;row<=3;row++){
+      gCtx.beginPath(); gCtx.moveTo(nx, ny+row*8); gCtx.lineTo(nx+nw, ny+row*8); gCtx.stroke();
+    }
+    // Vertical threads
+    for(let col=0;col<=5;col++){
+      gCtx.beginPath(); gCtx.moveTo(nx+col*(nw/5), ny); gCtx.lineTo(nx+col*(nw/5), ny+24); gCtx.stroke();
+    }
+    // Outline
+    gCtx.strokeStyle='rgba(255,230,50,0.6)'; gCtx.lineWidth=2;
+    gCtx.beginPath(); gCtx.roundRect(nx,ny,nw,24,3); gCtx.stroke();
+  }
+
+  // Draw ensnare effect on player
+  if(SCORCHA.playerEnsnared){
+    const px = player.x - camera.x - 10;
+    const py2 = player.y - camera.y - 5;
+    const pw2 = player.w + 20;
+    const alpha = 0.5 + Math.sin(Date.now()*0.01)*0.3;
+    gCtx.strokeStyle=`rgba(255,230,50,${alpha})`; gCtx.lineWidth=2.5;
+    for(let row=0;row<=4;row++){
+      gCtx.beginPath(); gCtx.moveTo(px,py2+row*14); gCtx.lineTo(px+pw2,py2+row*14); gCtx.stroke();
+    }
+    for(let col=0;col<=4;col++){
+      gCtx.beginPath(); gCtx.moveTo(px+col*(pw2/4),py2); gCtx.lineTo(px+col*(pw2/4),py2+56); gCtx.stroke();
+    }
+    // Time remaining bar
+    const frac = SCORCHA.playerEnsnareTimer / 2000;
+    gCtx.fillStyle='rgba(255,200,0,0.7)';
+    gCtx.fillRect(player.x-camera.x, player.y-camera.y-14, player.w*frac, 4);
+  }
+
+  gCtx.restore();
+}
+
+// Hook Scorcha into main game loop — called from gameLoop
+function maybeInitScorchaForEpisode() {
+  if(!window.currentStoryEpisode) return;
+  const epId = window.currentStoryEpisode.id;
+  if(!isBadGuyEpisode(epId)) return;
+  if(!SCORCHA.active) initScorcha(epId);
+}
+
 function animateCoinTransfer(fromElId, toElId, amount, onDone){
   const fromEl = document.getElementById(fromElId);
   const toEl = document.getElementById(toElId);
@@ -7389,6 +7994,10 @@ if (!restoreUserSession()) {
   <div class="story-panel">
     <h2 id="storyEpisodeTitle">🌋 Episode 1</h2>
     <div id="storyRescueItem" class="story-rescue">🏆 Rescue: ???</div>
+    <!-- World map animation showing next 4 episode pins -->
+    <div style="width:100%;margin:10px 0;border-radius:10px;overflow:hidden;border:1.5px solid #2a2a4a;">
+      <canvas id="storyMapAnimCanvas" style="width:100%;display:block;background:#060e1a;" height="130"></canvas>
+    </div>
     <div id="storySummary" class="story-summary-box"></div>
     <div id="storyConnectionHint" class="story-connection"></div>
     <div style="display:flex; flex-wrap:wrap; margin-top:14px;">
@@ -7600,6 +8209,175 @@ function checkAndRestorePowerupSession() {
         bodyWf: 0.90, bodyHf: 0.53, bodyR: 4, neckWf: 0.60, neckPx: 1,
         torchXf: 0.18, torchYf: 0.38, torchRf: 0.17, shirtColor: '#4a9eff'
       };
+    }
+
+    // Adapter: draw player character using game's own drawCharacterFromConfig.
+    // Signature matches the animation file's drawChar(ctx, x, y, simpleCfg, alpha, flip, funny)
+    // simpleCfg = {skin, shirt, pants, eye, size, big} from animation file
+    function drawAnimChar(ctx, x, y, aCfg, alpha=1, flip=false, funny=false) {
+      const charCfg = getSafeCharConfig();
+      const hw = (aCfg && aCfg.size) ? aCfg.size : 36;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      if (flip) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
+      if (typeof drawCharacterFromConfig === 'function') {
+        // Override colours from anim config if provided (for crew members etc)
+        const overrideCfg = Object.assign({}, charCfg);
+        if (aCfg && aCfg.shirt) overrideCfg.shirtColor = aCfg.shirt;
+        // funny face: pass as jumping=true for slight variation
+        drawCharacterFromConfig(ctx, x, y, hw, overrideCfg, 100, funny, charCfg.ph > 90);
+      } else {
+        // Fallback simple character
+        ctx.fillStyle = (aCfg && aCfg.shirt) || '#4a9eff';
+        ctx.fillRect(x-hw*0.25, y-hw*0.8, hw*0.5, hw*0.5);
+        ctx.fillStyle = (aCfg && aCfg.skin) || '#f0c27f';
+        ctx.beginPath(); ctx.arc(x, y-hw*0.95, hw*0.28, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Crew member draw: these have their own colour configs (not the player)
+    function drawCrewChar(ctx, x, y, crewCfg, alpha=1, flip=false) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      if (flip) { ctx.translate(x, 0); ctx.scale(-1, 1); ctx.translate(-x, 0); }
+      const hw = 30;
+      if (typeof drawCharacterFromConfig === 'function') {
+        const cc = Object.assign({}, getSafeCharConfig(), { shirtColor: crewCfg.shirt });
+        drawCharacterFromConfig(ctx, x, y, hw, cc, 100, false, false);
+      } else {
+        ctx.fillStyle = crewCfg.shirt || '#888';
+        ctx.fillRect(x-10, y-30, 20, 20);
+        ctx.fillStyle = crewCfg.skin || '#f0c27f';
+        ctx.beginPath(); ctx.arc(x, y-38, 10, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function animLerp(a, b, t){ return a + (b-a)*t; }
+    function animEio(t){ return t<.5 ? 2*t*t : -1+(4-2*t)*t; }
+    function animLabel(ctx, title, sub, W){
+      ctx.fillStyle='rgba(255,224,102,.9)';
+      ctx.font=`bold ${Math.max(10,14*(W/800))}px Arial Black,sans-serif`;
+      ctx.textAlign='left'; ctx.fillText(title,12,22);
+      ctx.font=`${Math.max(8,10*(W/800))}px monospace`;
+      ctx.fillStyle='rgba(255,153,68,.8)'; ctx.fillText(sub,12,38);
+    }
+    function animProgBar(ctx, W, H, t, color){
+      ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,H-3,W,3);
+      ctx.fillStyle=color; ctx.fillRect(0,H-3,W*t,3);
+    }
+
+    // ── WORLD MAP ANIMATION: zooms to current episode pin + shows next 3 ──
+    let _mapAnimId = null;
+    function startMapAnim(ep) {
+      if (_mapAnimId) cancelAnimationFrame(_mapAnimId);
+      const cv = document.getElementById('storyMapAnimCanvas');
+      if (!cv) return;
+      cv.width = cv.offsetWidth || 460;
+      const W = cv.width, H = cv.height || 130;
+
+      // Simplified land grid (72x36 dot grid)
+      const LAND = new Set();
+      const addRect = (c0,c1,r0,r1) => {for(let cc=c0;cc<=c1;cc++)for(let rr=r0;rr<=r1;rr++)LAND.add(`${cc},${rr}`);};
+      addRect(10,22,5,18); addRect(12,20,18,28); // Americas
+      addRect(28,40,4,14); addRect(28,38,14,26); // Europe/Africa
+      addRect(36,58,4,14); addRect(42,56,14,18); addRect(46,55,17,21); // Asia
+      addRect(46,54,21,26); // Australia
+      addRect(35,62,3,7);   // Russia
+
+      // Convert lat/lng to grid coords: lng→col (0-72), lat→row (0-36)
+      function latLngToGrid(lat, lng) {
+        return { c: Math.round(((lng + 180) / 360) * 72), r: Math.round(((90 - lat) / 180) * 36) };
+      }
+
+      // Get next 4 episodes starting from current
+      const startId = ep.id;
+      const pins = [];
+      for (let i = 0; i < 4; i++) {
+        const e = STORY_EPISODES[startId + i];
+        if (!e) break;
+        const g = latLngToGrid(e.lat, e.lng);
+        pins.push({ g, ep: e, idx: i });
+      }
+
+      // Focus pin is the current episode
+      const focusPin = pins[0];
+      const focusPctX = focusPin.g.c / 72;
+      const focusPctY = focusPin.g.r / 36;
+
+      const start = performance.now(), DUR = 4200;
+
+      function fr(now) {
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        const eased = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+        const ctx = cv.getContext('2d');
+        ctx.clearRect(0,0,W,H);
+        ctx.fillStyle = '#060e1a'; ctx.fillRect(0,0,W,H);
+
+        const zoom = 1 + eased * 3.2;
+        const fx = focusPctX * W, fy = focusPctY * H;
+        ctx.save();
+        ctx.translate(fx*(1-zoom), fy*(1-zoom));
+        ctx.scale(zoom, zoom);
+
+        const sw = W / 72, sh = H / 36;
+        for (let r = 0; r < 36; r++) for (let cc = 0; cc < 72; cc++) {
+          ctx.fillStyle = LAND.has(`${cc},${r}`) ? '#2a5a2a' : '#0a1828';
+          ctx.fillRect(cc*sw+.5, r*sh+.5, sw*.75, sh*.75);
+        }
+
+        // Draw all 4 pins
+        pins.forEach(({ g, ep: pinEp, idx }) => {
+          const px = g.c * sw + sw/2, py = g.r * sh + sh/2;
+          const isCurrent = idx === 0;
+          const pr = (isCurrent ? 5 : 3.5) / zoom;
+          const pulse = Math.sin(ms / 250 + idx * 1.5) * 0.4;
+          ctx.shadowBlur = (isCurrent ? 16 : 8) / zoom;
+          ctx.shadowColor = isCurrent ? '#ff4400' : '#ffe066';
+          ctx.fillStyle = isCurrent ? '#ff3333' : '#ffe066';
+          ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI*2); ctx.fill();
+          if (isCurrent) {
+            ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 1.5/zoom; ctx.stroke();
+            // Pulse ring
+            ctx.globalAlpha = .5 - .5*(ms%700/700);
+            ctx.strokeStyle='#ff4400'; ctx.lineWidth=1.2/zoom;
+            ctx.beginPath(); ctx.arc(px, py, (pr+4+pulse)/1, 0, Math.PI*2); ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+          ctx.shadowBlur = 0;
+        });
+        ctx.restore();
+
+        // Episode labels (fade in after zoom settles)
+        if (eased > .4) {
+          const la = Math.min(1, (eased-.4)/.35);
+          // Current episode name
+          ctx.globalAlpha = la;
+          ctx.fillStyle = '#ff6644';
+          ctx.font = `bold ${Math.max(8,11*(W/460))}px Arial Black,sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(`📍 ${ep.name}`, W/2, H*.82);
+          // Next episodes as small dots legend
+          if (pins.length > 1) {
+            ctx.fillStyle = '#ffe066aa';
+            ctx.font = `${Math.max(7,9*(W/460))}px monospace`;
+            ctx.fillText(`+ ${pins.length-1} more target${pins.length>2?'s':''}`, W/2, H*.93);
+          }
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle='rgba(255,224,102,.8)';
+        ctx.font=`bold ${Math.max(8,10*(W/460))}px Arial Black,sans-serif`;
+        ctx.textAlign='left'; ctx.fillText('MISSION LOCATION',10,14);
+
+        if (t < 1) _mapAnimId = requestAnimationFrame(fr);
+        // Animation plays once and stops — no loop/restart
+      }
+      _mapAnimId = requestAnimationFrame(fr);
+    }
+
+    function stopMapAnim() {
+      if (_mapAnimId) { cancelAnimationFrame(_mapAnimId); _mapAnimId = null; }
     }
 
     // Load / save progress
@@ -8054,79 +8832,498 @@ function closeStoryMap(goingToMenu) {
 
     // Pre‑game story screen
     function showStoryPreScreen(ep) {
-      // World Map music continues through the pre-screen panel — no switch here
-      // (WorldMap.mp3 is already playing from showStoryWorldMap)
       document.getElementById('storyEpisodeTitle').innerHTML = `🌋 ${ep.name} · ${ep.location}`;
       document.getElementById('storyRescueItem').innerHTML = `🏆 RESCUE: ${ep.rescue}`;
       document.getElementById('storySummary').innerHTML = `📖 ${ep.summary}`;
       document.getElementById('storyConnectionHint').innerHTML = `⚡ ${ep.connection} &nbsp;&nbsp; Target: ${ep.targetPlats} platforms`;
       const overlay = document.getElementById('storyPreScreen');
       overlay.style.display = 'flex';
+      // Start world map zoom animation for this episode (shows next 4 pins)
+      setTimeout(() => startMapAnim(ep), 80);
       document.getElementById('storyStartBtn').onclick = () => {
+        stopMapAnim();
         overlay.style.display = 'none';
         showStartAnimation(ep);
       };
       document.getElementById('storyCancelBtn').onclick = () => {
+        stopMapAnim();
         overlay.style.display = 'none';
         showStoryWorldMap();
       };
     }
 
-    // Start animation (rescue + eruption)
+    // Start animation — ACT 1: INTO THE VOLCANO → FIND ARTIFACT → ERUPTION IMMINENT
     function showStartAnimation(ep) {
-      // WorldMap.mp3 continues playing — map → pre-screen → animation is one continuous track
+      // Episodes 4,5,6 get unique start animations at 2× duration
+      if(ep.id === 4) { showStartAnim_Ep4(ep); return; }
+      if(ep.id === 5) { showStartAnim_Ep5(ep); return; }
+      if(ep.id === 6) { showStartAnim_Ep6(ep); return; }
+
       const animDiv = document.getElementById('startAnimOverlay');
-      const canvas = document.getElementById('startAnimCanvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = Math.min(window.innerWidth * 0.8, 700);
-      canvas.height = 300;
-      let startTime = performance.now();
-      let duration = 2800;
+      const canvas  = document.getElementById('startAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const start = performance.now(), DUR = 6200;
       let skipped = false;
+      const aC = { size: 36, big: false };
 
       function finishStartAnim() {
-        if (skipped) return;
-        skipped = true;
+        if (skipped) return; skipped = true;
         storyAnimSkipCallback = null;
         cancelAnimationFrame(animFrameId);
         animDiv.style.display = 'none';
         startStoryGameLevel(ep);
       }
-
-      // Register the skip callback so Space bar can call it
       storyAnimSkipCallback = finishStartAnim;
 
-      function drawStartFrame(now) {
+      function fr(now) {
         if (skipped) return;
-        const elapsed = Math.min(1, (now - startTime) / duration);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#4a2a1a';
-        ctx.fillRect(0, canvas.height-80, canvas.width, 80);
-        ctx.fillStyle = '#c2621a';
-        for(let i=0;i<8;i++) ctx.fillRect(40+i*90, canvas.height-100, 20, 60);
-        const charX = canvas.width/2, charY = canvas.height-70 - Math.sin(elapsed*Math.PI)*12;
-        const charCfg = getSafeCharConfig();
-        if (typeof drawCharacterFromConfig === 'function') {
-          ctx.save();
-          drawCharacterFromConfig(ctx, charX, charY, 40, charCfg, 100, false, false);
-          ctx.restore();
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0, 0, W, H);
+
+        if (ms < 2100) {
+          const p = Math.min(1, ms / 2000), ep2 = animEio(p);
+          const wg = ctx.createLinearGradient(0,0,0,H);
+          wg.addColorStop(0,'#3a1a08'); wg.addColorStop(1,'#0e0604');
+          ctx.fillStyle = wg; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle = '#4a2510';
+          for(let i=0;i<10;i++){ctx.fillRect(0,i*32,55+i*3,24);ctx.fillRect(W-55-i*3,i*32+12,55+i*3,24);}
+          const glg = ctx.createRadialGradient(W/2,H+30,5,W/2,H+30,W*.65);
+          glg.addColorStop(0,`rgba(255,100,0,${.5+Math.sin(ms/300)*.15})`);glg.addColorStop(1,'transparent');
+          ctx.fillStyle=glg; ctx.fillRect(0,H*.6,W,H*.4);
+          const charX = W/2+Math.sin(ms/600)*12*(1-ep2*.8);
+          const charY = animLerp(H*.12, H*.62, ep2)+Math.sin(ms/110)*3*(1-ep2);
+          ctx.save(); ctx.globalAlpha=.12+Math.sin(ms/400)*.05;
+          const hg=ctx.createRadialGradient(charX,charY-30,0,charX,charY-30,110);
+          hg.addColorStop(0,'#fff'); hg.addColorStop(1,'rgba(255,255,200,0)');
+          ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(charX,charY-30,110,0,Math.PI*2); ctx.fill(); ctx.restore();
+          drawAnimChar(ctx, charX, charY, aC);
+          animLabel(ctx,'ACT I · INTO THE VOLCANO','DESCENDING TO ARTIFACT CHAMBER...',W);
+
+        } else if (ms < 4200) {
+          const p = Math.min(1,(ms-2000)/2200), ep2 = animEio(p);
+          const cg = ctx.createRadialGradient(W*.55,H*.55,25,W*.55,H*.55,W*.5);
+          cg.addColorStop(0,'#1a1208'); cg.addColorStop(1,'#050305');
+          ctx.fillStyle=cg; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#2a1a08'; ctx.fillRect(0,H*.72,W,H*.28);
+          ctx.strokeStyle='#ff6600'; ctx.lineWidth=2; ctx.shadowBlur=8; ctx.shadowColor='#ff4400';
+          for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(W*.1+i*W*.18,H*.72);ctx.lineTo(W*.15+i*W*.18,H*.9);ctx.stroke();}
+          ctx.shadowBlur=0;
+          const px2=W*.55, py2=H*.68;
+          ctx.fillStyle='#4a3a28'; ctx.fillRect(px2-18,py2-28,36,28); ctx.fillRect(px2-28,py2,56,7);
+          const glow=.7+Math.sin(ms/200)*.3;
+          ctx.save(); ctx.shadowBlur=30*glow; ctx.shadowColor='#44ffdd';
+          ctx.fillStyle=`rgba(80,255,220,.9)`;
+          const as=13+animEio(Math.max(0,ep2-.5)*2)*6;
+          ctx.beginPath();ctx.moveTo(px2,py2-28-as);ctx.lineTo(px2+as*.7,py2-28);ctx.lineTo(px2,py2-28+as*.5);ctx.lineTo(px2-as*.7,py2-28);ctx.closePath();ctx.fill();ctx.restore();
+          const charX2 = animLerp(W*.22, px2-45, ep2);
+          drawAnimChar(ctx, charX2, H*.65, aC);
+          if(ep2>.7){ ctx.save(); ctx.globalAlpha=(ep2-.7)/.3; ctx.fillStyle='#44ffddbb'; ctx.font=`bold ${Math.max(9,12*(W/800))}px Arial Black,sans-serif`; ctx.textAlign='center'; ctx.fillText(ep.rescue, W*.55, py2-50); ctx.restore(); }
+          animLabel(ctx,'ACT II · THE ARTIFACT CHAMBER', ep2>.8?'ARTIFACT SECURED!':'ARTIFACT DETECTED...',W);
+
         } else {
-          ctx.fillStyle = '#f0c27f'; ctx.fillRect(charX-15, charY-25, 30, 40);
+          const p = Math.min(1,(ms-4200)/2000), ep2 = animEio(p);
+          const eg = ctx.createLinearGradient(0,0,0,H);
+          eg.addColorStop(0,`rgb(${Math.floor(animLerp(18,75,ep2))},5,5)`);
+          eg.addColorStop(1,`rgb(${Math.floor(animLerp(35,130,ep2))},18,4)`);
+          ctx.fillStyle=eg; ctx.fillRect(0,0,W,H);
+          for(let i=0;i<5;i++){const sy=H*.38-ep2*(i*28+38);ctx.save();ctx.globalAlpha=Math.max(0,.4-ep2*.3+i*.05);ctx.fillStyle=`rgb(${38+i*7},${28+i*4},${28+i*4})`;ctx.beginPath();ctx.arc(W*.28+i*W*.09,sy,22+ep2*18+i*4,0,Math.PI*2);ctx.fill();ctx.restore();}
+          for(let i=0;i<7;i++){const lx=W*.15+i*(W*.7/6);const lh=(.13+Math.sin(ms/140+i)*.07+ep2*.28)*H;const ll=ctx.createLinearGradient(lx,H,lx,H-lh);ll.addColorStop(0,'#ff8800');ll.addColorStop(.5,'#ff4400');ll.addColorStop(1,'rgba(180,25,0,0)');ctx.fillStyle=ll;ctx.fillRect(lx-7,H-lh,14,lh);}
+          const cx3=animLerp(W*.18,W*.83,ep2), bob=Math.abs(Math.sin(ms/115))*5;
+          ctx.save(); ctx.translate(cx3,H*.62+bob); ctx.rotate(-.18);
+          drawAnimChar(ctx,0,0,aC);
+          ctx.restore();
+          ctx.save(); ctx.shadowBlur=18; ctx.shadowColor='#44ffdd'; ctx.fillStyle='#44ffddbb';
+          ctx.beginPath();ctx.moveTo(cx3,H*.62+bob-52);ctx.lineTo(cx3+9,H*.62+bob-43);ctx.lineTo(cx3,H*.62+bob-36);ctx.lineTo(cx3-9,H*.62+bob-43);ctx.closePath();ctx.fill();ctx.restore();
+          if(Math.sin(ms/145)>0){ctx.fillStyle='rgba(255,70,0,.9)';ctx.font=`bold ${Math.max(11,15*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('⚠ ERUPTION IMMINENT ⚠',W/2,H*.1);}
+          const cd=Math.ceil(3-ep2*3); if(cd>0){ctx.fillStyle='#ff6600';ctx.font=`bold ${Math.max(30,44*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.globalAlpha=.25+Math.abs(Math.sin(ms/280))*.4;ctx.fillText(cd,W*.86,H*.5);ctx.globalAlpha=1;}
+          animLabel(ctx,'ACT III · ERUPTION IMMINENT','EVACUATE — LAVA SURGE INCOMING',W);
         }
-        ctx.font = '28px Arial';
-        ctx.fillStyle = '#ffdd88';
-        ctx.fillText(ep.rescue.split(' ')[0], charX+18, charY-20);
-        if (elapsed > 0.5) {
-          for(let p=0;p<15;p++) {
-            ctx.fillStyle = `rgba(255, ${80+Math.random()*100}, 0, ${0.5+Math.random()*0.5})`;
-            ctx.beginPath(); ctx.arc(canvas.width/2 + (Math.random()-0.5)*80, canvas.height-100 + Math.random()*120, 4, 0, Math.PI*2); ctx.fill();
-          }
-        }
-        if (elapsed < 1) { animFrameId = requestAnimationFrame(drawStartFrame); }
-        else { finishStartAnim(); }
+
+        animProgBar(ctx, W, H, t, '#ffe066');
+        ctx.fillStyle='rgba(255,255,255,.3)'; ctx.font='9px monospace'; ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8);
+        ctx.textAlign='left';
+        if (t < 1) animFrameId = requestAnimationFrame(fr);
+        else finishStartAnim();
       }
       animDiv.style.display = 'flex';
-      animFrameId = requestAnimationFrame(drawStartFrame);
+      animFrameId = requestAnimationFrame(fr);
+    }
+
+    // ── EP4 START: Erta Ale — permanent lava lake, serpent rescue (2× = 12.4s) ──
+    function showStartAnim_Ep4(ep) {
+      const animDiv = document.getElementById('startAnimOverlay');
+      const canvas  = document.getElementById('startAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const DUR = 12400;  // 2× base duration
+      const start = performance.now();
+      let skipped = false;
+      const aC = { size: 36, big: false };
+      function finish() { if(skipped)return; skipped=true; storyAnimSkipCallback=null; cancelAnimationFrame(animFrameId); animDiv.style.display='none'; startStoryGameLevel(ep); }
+      storyAnimSkipCallback = finish;
+      function fr(now) {
+        if(skipped) return;
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0,0,W,H);
+        // ACT I (0–4000ms): Aerial approach to Erta Ale at night
+        if(ms < 4000) {
+          const p=Math.min(1,ms/4000), ep2=animEio(p);
+          // Night sky fading to orange glow as we descend
+          const sg=ctx.createLinearGradient(0,0,0,H);
+          sg.addColorStop(0,`rgb(${Math.floor(animLerp(2,60,ep2))},${Math.floor(animLerp(2,10,ep2))},${Math.floor(animLerp(18,4,ep2))})`);
+          sg.addColorStop(1,`rgb(${Math.floor(animLerp(10,140,ep2))},${Math.floor(animLerp(5,40,ep2))},4)`);
+          ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+          // Stars fading as lava glow rises
+          for(let i=0;i<30;i++){ctx.fillStyle=`rgba(255,255,255,${Math.max(0,(1-ep2*1.8))*(.4+Math.sin(ms/400+i)*.3)})`;ctx.fillRect((i*137)%W,(i*97)%(H*.5),1.5,1.5);}
+          // Lava lake glow expanding from bottom
+          const lg=ctx.createRadialGradient(W*.5,H*1.1,10,W*.5,H*1.1,W*(.5+ep2*.4));
+          lg.addColorStop(0,`rgba(255,${Math.floor(animLerp(80,140,ep2))},0,${.5+ep2*.4})`);
+          lg.addColorStop(0.5,`rgba(220,40,0,${.3+ep2*.2})`);
+          lg.addColorStop(1,'transparent');
+          ctx.fillStyle=lg; ctx.fillRect(0,0,W,H);
+          // Volcano silhouette growing from bottom
+          const volcH = animLerp(H*.15, H*.55, ep2);
+          ctx.fillStyle='#0a0400';
+          ctx.beginPath(); ctx.moveTo(W*.5-volcH*.9, H); ctx.lineTo(W*.5, H-volcH); ctx.lineTo(W*.5+volcH*.9, H); ctx.closePath(); ctx.fill();
+          // Lava lake surface ripple at volcano mouth
+          const lakeY = H - volcH + 8;
+          ctx.fillStyle=`rgba(255,80,0,${.6+Math.sin(ms/220)*.2})`;
+          ctx.beginPath();
+          for(let x=0;x<=W;x+=12){ctx.lineTo(x, lakeY + Math.sin(x*0.04+ms*0.005)*5+Math.sin(x*0.02-ms*0.003)*3);}
+          ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+          // Helicopter descending
+          const hx=animLerp(W*.75, W*.5, ep2), hy=animLerp(H*.05, H*.35, ep2);
+          ctx.fillStyle='#3355aa'; ctx.beginPath(); ctx.ellipse(hx,hy+8,28,11,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#223388'; ctx.beginPath(); ctx.moveTo(hx+28,hy+5); ctx.lineTo(hx+48,hy+2); ctx.lineTo(hx+48,hy+14); ctx.lineTo(hx+28,hy+13); ctx.closePath(); ctx.fill();
+          // Rotor
+          ctx.strokeStyle='#aaaacc'; ctx.lineWidth=2.5;
+          ctx.save(); ctx.translate(hx,hy-2); ctx.rotate(ms*0.05);
+          ctx.beginPath(); ctx.moveTo(-34,0); ctx.lineTo(34,0); ctx.moveTo(0,-34); ctx.lineTo(0,34); ctx.stroke(); ctx.restore();
+          // Rope down
+          if(ep2>.5){ctx.strokeStyle='#c8a86b'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(hx,hy+19); ctx.lineTo(hx, hy+19+(ep2-.5)*2*60); ctx.stroke();}
+          animLabel(ctx,'ACT I · AERIAL APPROACH','DESCENDING TO ERTA ALE LAVA LAKE...',W);
+        }
+        // ACT II (4000–8200ms): Walking the lava lake edge for the serpent
+        else if(ms < 8200) {
+          const p=Math.min(1,(ms-4000)/4200), ep2=animEio(p);
+          // Intense orange-red scene
+          const bg=ctx.createLinearGradient(0,0,0,H);
+          bg.addColorStop(0,'#180500'); bg.addColorStop(1,'#3a0c00');
+          ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+          // Permanent lava lake fills bottom half — very active
+          const lavaBase = H*.55;
+          ctx.fillStyle='#881800';
+          ctx.fillRect(0,lavaBase,W,H-lavaBase);
+          // Lava surface with multiple waves
+          ctx.fillStyle='#ff4400';
+          ctx.beginPath(); ctx.moveTo(0,lavaBase);
+          for(let x=0;x<=W;x+=8){ctx.lineTo(x,lavaBase+Math.sin(x*0.035+ms*0.006)*8+Math.sin(x*0.015-ms*0.004)*5);}
+          ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+          // Bright lava patches
+          for(let i=0;i<5;i++){const bx=((i*W*.22+ms*0.12*(i%2?1:-1))%W+W)%W;const by=lavaBase+15+Math.sin(ms*0.004+i)*10;const br=12+Math.sin(ms*0.007+i)*5;ctx.fillStyle=`rgba(255,${140+i*20},0,0.5)`;ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);ctx.fill();}
+          // Rock ledge player walks on
+          const ledgeY = H*.52;
+          ctx.fillStyle='#1a0800'; ctx.fillRect(0,ledgeY,W,H*.03);
+          ctx.fillStyle='#2a1200'; ctx.fillRect(0,ledgeY,W,6);
+          // Serpent artifact in middle — glowing
+          const serpX = W*.55, serpY = ledgeY - 20;
+          const sg2 = Math.sin(ms*0.005);
+          ctx.save(); ctx.shadowBlur=20+sg2*10; ctx.shadowColor='#ff6600';
+          // Serpent coil shape
+          ctx.strokeStyle=`rgba(255,${150+sg2*50},0,0.9)`; ctx.lineWidth=6; ctx.lineCap='round';
+          ctx.beginPath();
+          for(let a=0;a<Math.PI*4;a+=0.15){const r=(8-a*.6)*Math.max(0.1,1);ctx.lineTo(serpX+Math.cos(a+ms*0.002)*r, serpY+Math.sin(a+ms*0.002)*r*(0.5));}
+          ctx.stroke();
+          ctx.fillStyle='#ffaa00'; ctx.beginPath(); ctx.arc(serpX,serpY-12,5,0,Math.PI*2); ctx.fill(); // head
+          ctx.restore();
+          // Artifact name fading in
+          if(ep2>.6){ctx.save();ctx.globalAlpha=(ep2-.6)/.4;ctx.fillStyle='#ff8844';ctx.font=`bold ${Math.max(8,11*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText(ep.rescue, W*.55, serpY-35);ctx.restore();}
+          // Player walking toward serpent
+          const charX = animLerp(W*.1, W*.42, ep2);
+          drawAnimChar(ctx, charX, ledgeY, aC);
+          // Heat shimmer lines
+          for(let i=0;i<8;i++){ctx.strokeStyle=`rgba(255,100,0,${.04+Math.sin(ms*0.008+i)*.03})`;ctx.lineWidth=1;ctx.beginPath();const hsx=(i*W/7+ms*0.08*(i%2?1:-1))%W;ctx.moveTo(hsx,lavaBase-10);ctx.bezierCurveTo(hsx+15,lavaBase-40,hsx-15,lavaBase-70,hsx+5,lavaBase-100);ctx.stroke();}
+          animLabel(ctx,'ACT II · THE PERMANENT LAVA LAKE','APPROACHING THE GATE OF HELL SERPENT...',W);
+        }
+        // ACT III (8200–12400ms): Grab serpent, eruption surge, flee
+        else {
+          const p=Math.min(1,(ms-8200)/4200), ep2=animEio(p);
+          const bg2=ctx.createLinearGradient(0,0,0,H);
+          bg2.addColorStop(0,`rgb(${Math.floor(animLerp(24,100,ep2))},5,5)`);
+          bg2.addColorStop(1,`rgb(${Math.floor(animLerp(58,180,ep2))},20,5)`);
+          ctx.fillStyle=bg2; ctx.fillRect(0,0,W,H);
+          // Lava surging upward
+          const surgeY = animLerp(H*.55, H*.3, ep2);
+          ctx.fillStyle='#cc2200'; ctx.fillRect(0,surgeY,W,H-surgeY);
+          ctx.fillStyle='#ff5500';
+          ctx.beginPath(); ctx.moveTo(0,surgeY);
+          for(let x=0;x<=W;x+=10){ctx.lineTo(x,surgeY+Math.sin(x*0.04+ms*0.01)*12+Math.sin(x*0.02-ms*0.007)*6);}
+          ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+          // Lava fountains
+          for(let i=0;i<4;i++){const fx=W*.15+i*W*.23;const fh=(0.15+Math.sin(ms/120+i)*.08+ep2*.2)*H;const fl=ctx.createLinearGradient(fx,surgeY,fx,surgeY-fh);fl.addColorStop(0,'#ff8800');fl.addColorStop(0.6,'#ff3300');fl.addColorStop(1,'transparent');ctx.fillStyle=fl;ctx.fillRect(fx-8,surgeY-fh,16,fh);}
+          // Player running with serpent held high
+          const runX = animLerp(W*.42, W*.88, ep2);
+          const runBob = Math.abs(Math.sin(ms/110))*6;
+          ctx.save(); ctx.translate(runX, H*.45+runBob); ctx.rotate(ep2*-.12);
+          drawAnimChar(ctx, 0, 0, aC);
+          ctx.restore();
+          // Serpent glow above player
+          ctx.save(); ctx.shadowBlur=22; ctx.shadowColor='#ff6600';
+          ctx.strokeStyle=`rgba(255,160,0,0.9)`; ctx.lineWidth=5; ctx.lineCap='round';
+          const sx3=runX, sy3=H*.45+runBob-48;
+          ctx.beginPath();
+          for(let a=0;a<Math.PI*3;a+=0.2){const r=(5-a*.4)*Math.max(0.1,1);ctx.lineTo(sx3+Math.cos(a+ms*0.006)*r,sy3+Math.sin(a+ms*0.006)*r*.5);}
+          ctx.stroke(); ctx.restore();
+          // Warning flash
+          if(Math.sin(ms/130)>0.3){ctx.fillStyle='rgba(255,60,0,.8)';ctx.font=`bold ${Math.max(10,14*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('⚠ LAVA SURGE — EVACUATE! ⚠',W/2,H*.09);}
+          animLabel(ctx,'ACT III · LAVA SURGE','SERPENT SECURED — OUTRUN THE SURGE!',W);
+        }
+        animProgBar(ctx, W, H, t, '#ffe066');
+        ctx.fillStyle='rgba(255,255,255,.3)'; ctx.font='9px monospace'; ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8); ctx.textAlign='left';
+        if(t<1) animFrameId=requestAnimationFrame(fr); else finish();
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(fr);
+    }
+
+    // ── EP5 START: Cerro Negro — ash boarding on black sand, sigil hunt (2× = 12.4s) ──
+    function showStartAnim_Ep5(ep) {
+      const animDiv = document.getElementById('startAnimOverlay');
+      const canvas  = document.getElementById('startAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const DUR = 12400;
+      const start = performance.now();
+      let skipped = false;
+      const aC = { size: 36, big: false };
+      function finish() { if(skipped)return; skipped=true; storyAnimSkipCallback=null; cancelAnimationFrame(animFrameId); animDiv.style.display='none'; startStoryGameLevel(ep); }
+      storyAnimSkipCallback = finish;
+      function fr(now) {
+        if(skipped) return;
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0,0,W,H);
+        // ACT I (0–4000ms): Eclipse sky over black ash cone
+        if(ms < 4000) {
+          const p=Math.min(1,ms/4000), ep2=animEio(p);
+          // Dark eclipse sky
+          const bg=ctx.createLinearGradient(0,0,0,H);
+          bg.addColorStop(0,'#080310'); bg.addColorStop(0.5,'#120820'); bg.addColorStop(1,'#1a0c08');
+          ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+          // Eclipse corona
+          const ecX=animLerp(W*.75, W*.5, ep2), ecY=H*.2;
+          const corona=ctx.createRadialGradient(ecX,ecY,18,ecX,ecY,80+ep2*30);
+          corona.addColorStop(0,'rgba(40,20,0,0)'); corona.addColorStop(0.4,`rgba(200,100,0,${.3+Math.sin(ms/400)*.1})`); corona.addColorStop(1,'transparent');
+          ctx.fillStyle=corona; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#0a0408'; ctx.beginPath(); ctx.arc(ecX,ecY,18,0,Math.PI*2); ctx.fill(); // moon disk
+          // Stars visible during eclipse
+          for(let i=0;i<25;i++){ctx.fillStyle=`rgba(255,255,255,${.3+Math.sin(ms/300+i)*.25})`;ctx.fillRect((i*173)%W,(i*113)%(H*.6),1.5,1.5);}
+          // Black ash cone silhouette
+          const coneH = animLerp(H*.2, H*.5, ep2);
+          ctx.fillStyle='#060208';
+          ctx.beginPath();ctx.moveTo(W*.5-coneH*1.1,H);ctx.lineTo(W*.5,H-coneH);ctx.lineTo(W*.5+coneH*1.1,H);ctx.closePath();ctx.fill();
+          // Ash falling
+          for(let i=0;i<20;i++){const ax=((i*W*.07+ms*0.04*(i%3?1:-1))%W+W)%W;const ay=(i*37+ms*0.08)%(H+20)-10;ctx.fillStyle='rgba(80,70,80,0.4)';ctx.beginPath();ctx.arc(ax,ay,1.5+Math.random(),0,Math.PI*2);ctx.fill();}
+          // Small sulphur glow at cone tip
+          ctx.save();ctx.shadowBlur=16+Math.sin(ms/300)*8;ctx.shadowColor='#aacc00';ctx.fillStyle='rgba(180,220,0,0.6)';ctx.beginPath();ctx.arc(W*.5,H-coneH,4,0,Math.PI*2);ctx.fill();ctx.restore();
+          animLabel(ctx,'ACT I · ECLIPSE APPROACH','CERRO NEGRO UNDER TOTAL ECLIPSE...',W);
+        }
+        // ACT II (4000–8200ms): Ash-boarding down the cone, scanning for sigil
+        else if(ms < 8200) {
+          const p=Math.min(1,(ms-4000)/4200), ep2=animEio(p);
+          const bg2=ctx.createLinearGradient(0,0,0,H);
+          bg2.addColorStop(0,'#0c0810'); bg2.addColorStop(1,'#1a1008');
+          ctx.fillStyle=bg2; ctx.fillRect(0,0,W,H);
+          // Ash slope
+          ctx.fillStyle='#1a1218';
+          ctx.beginPath();ctx.moveTo(0,H);ctx.lineTo(W*.15,H*.3);ctx.lineTo(W,H*.55);ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+          ctx.fillStyle='#221a1e';
+          ctx.beginPath();ctx.moveTo(0,H);ctx.lineTo(W*.15,H*.3);ctx.lineTo(W*.25,H*.3);ctx.lineTo(W*.05,H);ctx.closePath();ctx.fill();
+          // Ash texture
+          for(let i=0;i<15;i++){ctx.fillStyle='rgba(50,40,50,0.5)';ctx.fillRect((i*67)%W,H*.3+(i*43)%(H*.7),3+i%4,1);}
+          // Sigil slab in mid-slope
+          const slabX=W*.5, slabY=animLerp(H*.8, H*.55, ep2);
+          ctx.fillStyle='#100c14';ctx.fillRect(slabX-35,slabY-15,70,25);
+          // Magnetic anomaly glow pulsing
+          const mag=Math.sin(ms*0.006)*0.5+0.5;
+          ctx.save();ctx.shadowBlur=14+mag*16;ctx.shadowColor='#8844ff';
+          ctx.strokeStyle=`rgba(160,80,255,${0.4+mag*.5})`;ctx.lineWidth=2;
+          // Draw sigil symbol
+          ctx.beginPath();ctx.moveTo(slabX-12,slabY-8);ctx.lineTo(slabX+12,slabY-8);ctx.moveTo(slabX,slabY-8);ctx.lineTo(slabX,slabY+8);ctx.moveTo(slabX-8,slabY+4);ctx.lineTo(slabX+8,slabY+4);ctx.stroke();
+          ctx.restore();
+          // Player boarding down the slope
+          const boardX=animLerp(W*.08, slabX-40, ep2);
+          const boardY=animLerp(H*.28, H*.5, ep2)+Math.sin(ms/90)*4;
+          ctx.save();ctx.translate(boardX,boardY);ctx.rotate(.25+Math.sin(ms/180)*.05);
+          drawAnimChar(ctx,0,0,aC);
+          // Board under feet
+          ctx.fillStyle='#2a1800';ctx.beginPath();ctx.roundRect(-20,36,55,8,3);ctx.fill();
+          ctx.restore();
+          // Ash spray behind boarder
+          for(let i=0;i<6;i++){ctx.fillStyle=`rgba(60,50,60,${0.3-i*.04})`;ctx.beginPath();ctx.arc(boardX-15-i*8,boardY+30+Math.sin(ms/100+i)*5,3+i,0,Math.PI*2);ctx.fill();}
+          if(ep2>.6){ctx.save();ctx.globalAlpha=(ep2-.6)/.4;ctx.fillStyle='#aa88ff';ctx.font=`bold ${Math.max(8,10*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText(ep.rescue,slabX,slabY-30);ctx.restore();}
+          animLabel(ctx,'ACT II · ASH BOARDING','SCANNING FOR THE MAGNETIC SIGIL...',W);
+        }
+        // ACT III (8200–12400ms): Eclipse peaks, decode sigil, volcanic surge
+        else {
+          const p=Math.min(1,(ms-8200)/4200), ep2=animEio(p);
+          const bg3=ctx.createLinearGradient(0,0,0,H);
+          bg3.addColorStop(0,`rgb(${Math.floor(animLerp(12,80,ep2))},8,${Math.floor(animLerp(16,4,ep2))})`);
+          bg3.addColorStop(1,`rgb(${Math.floor(animLerp(26,140,ep2))},12,8)`);
+          ctx.fillStyle=bg3;ctx.fillRect(0,0,W,H);
+          // Ash cone erupting
+          for(let i=0;i<6;i++){const lx=W*.3+i*W*.08;const lh=(.1+Math.sin(ms/110+i)*.06+ep2*.22)*H;const ll=ctx.createLinearGradient(lx,H*.4,lx,H*.4-lh);ll.addColorStop(0,'#884400');ll.addColorStop(.6,'#552200');ll.addColorStop(1,'transparent');ctx.fillStyle=ll;ctx.fillRect(lx-5,H*.4-lh,10,lh);}
+          // Ash cloud billowing
+          for(let i=0;i<5;i++){const cx4=W*.3+i*W*.09+Math.sin(ms/400+i)*15;const cy4=H*.4-ep2*(i*22+30);ctx.save();ctx.globalAlpha=Math.max(0,.35-ep2*.18+i*.04);ctx.fillStyle=`rgb(${45+i*6},${35+i*4},${48+i*5})`;ctx.beginPath();ctx.arc(cx4,cy4,28+ep2*20+i*6,0,Math.PI*2);ctx.fill();ctx.restore();}
+          // Player running right with sigil held
+          const runX2=animLerp(W*.35,W*.82,ep2);
+          const bob2=Math.abs(Math.sin(ms/100))*5;
+          ctx.save();ctx.translate(runX2,H*.6+bob2);ctx.rotate(ep2*-.08);
+          drawAnimChar(ctx,0,0,aC);ctx.restore();
+          // Sigil glow above player head
+          ctx.save();ctx.shadowBlur=18+Math.sin(ms*0.006)*8;ctx.shadowColor='#8844ff';
+          ctx.strokeStyle=`rgba(180,100,255,0.9)`;ctx.lineWidth=2.5;
+          ctx.beginPath();ctx.moveTo(runX2-10,H*.6+bob2-48);ctx.lineTo(runX2+10,H*.6+bob2-48);
+          ctx.moveTo(runX2,H*.6+bob2-48);ctx.lineTo(runX2,H*.6+bob2-34);
+          ctx.moveTo(runX2-6,H*.6+bob2-38);ctx.lineTo(runX2+6,H*.6+bob2-38);ctx.stroke();ctx.restore();
+          if(Math.sin(ms/140)>0){ctx.fillStyle='rgba(180,100,255,.8)';ctx.font=`bold ${Math.max(10,13*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('⚠ CERRO NEGRO ERUPTING ⚠',W/2,H*.08);}
+          animLabel(ctx,'ACT III · ECLIPSE ERUPTION','SIGIL DECODED — EVACUATE THE ASH CONE!',W);
+        }
+        animProgBar(ctx, W, H, t, '#ffe066');
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8);ctx.textAlign='left';
+        if(t<1) animFrameId=requestAnimationFrame(fr); else finish();
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(fr);
+    }
+
+    // ── EP6 START: Ol Doinyo Lengai — Mountain of God, natrocarbonatite star (2× = 12.4s) ──
+    function showStartAnim_Ep6(ep) {
+      const animDiv = document.getElementById('startAnimOverlay');
+      const canvas  = document.getElementById('startAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const DUR = 12400;
+      const start = performance.now();
+      let skipped = false;
+      const aC = { size: 36, big: false };
+      function finish() { if(skipped)return; skipped=true; storyAnimSkipCallback=null; cancelAnimationFrame(animFrameId); animDiv.style.display='none'; startStoryGameLevel(ep); }
+      storyAnimSkipCallback = finish;
+      function fr(now) {
+        if(skipped) return;
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0,0,W,H);
+        // ACT I (0–4000ms): African savanna dawn — Lengai in distance
+        if(ms < 4000) {
+          const p=Math.min(1,ms/4000), ep2=animEio(p);
+          // Dawn sky gradient
+          const dg=ctx.createLinearGradient(0,0,0,H);
+          dg.addColorStop(0,`rgb(${Math.floor(animLerp(8,80,ep2))},${Math.floor(animLerp(5,35,ep2))},${Math.floor(animLerp(20,15,ep2))})`);
+          dg.addColorStop(0.5,`rgb(${Math.floor(animLerp(60,200,ep2))},${Math.floor(animLerp(20,80,ep2))},10)`);
+          dg.addColorStop(1,`rgb(${Math.floor(animLerp(80,240,ep2))},${Math.floor(animLerp(35,130,ep2))},20)`);
+          ctx.fillStyle=dg;ctx.fillRect(0,0,W,H);
+          // Sun rising
+          const sunY=animLerp(H*.85,H*.3,ep2);
+          const sunG=ctx.createRadialGradient(W*.15,sunY,0,W*.15,sunY,60+ep2*20);
+          sunG.addColorStop(0,`rgba(255,${180+ep2*75},0,0.9)`);sunG.addColorStop(0.4,`rgba(255,${100+ep2*80},0,0.5)`);sunG.addColorStop(1,'transparent');
+          ctx.fillStyle=sunG;ctx.fillRect(0,0,W,H);
+          // Savanna silhouette
+          ctx.fillStyle='#0c0800';
+          ctx.fillRect(0,H*.72,W,H*.28);
+          // Acacia trees silhouette
+          for(let i=0;i<5;i++){const tx=W*.05+i*W*.22;const ty=H*.65+Math.sin(i)*8;ctx.fillStyle='#0a0600';ctx.fillRect(tx-2,ty,5,H*.1);ctx.beginPath();ctx.arc(tx,ty,14+i*3,0,Math.PI*2);ctx.fill();}
+          // Lengai cone in background — white (natrocarbonatite = white lava!)
+          const lgH=animLerp(H*.05,H*.38,ep2);
+          ctx.fillStyle='#1a1810';
+          ctx.beginPath();ctx.moveTo(W*.6-lgH*.7,H*.72);ctx.lineTo(W*.6,H*.72-lgH);ctx.lineTo(W*.6+lgH*.7,H*.72);ctx.closePath();ctx.fill();
+          // White lava glow at tip (unique!)
+          ctx.save();ctx.shadowBlur=12+Math.sin(ms/350)*6;ctx.shadowColor='#eeeedd';
+          ctx.fillStyle=`rgba(230,225,200,${.4+Math.sin(ms/350)*.2})`;
+          ctx.beginPath();ctx.arc(W*.6,H*.72-lgH,5,0,Math.PI*2);ctx.fill();ctx.restore();
+          // Stars fading
+          for(let i=0;i<20;i++){ctx.fillStyle=`rgba(255,255,255,${Math.max(0,1-ep2*1.5)*(.4+Math.sin(ms/400+i)*.25)})`;ctx.fillRect((i*137)%W,(i*97)%(H*.4),1.5,1.5);}
+          animLabel(ctx,'ACT I · MOUNTAIN OF GOD','APPROACHING OL DOINYO LENGAI AT DAWN...',W);
+        }
+        // ACT II (4000–8200ms): Climbing Lengai, white lava rivers
+        else if(ms < 8200) {
+          const p=Math.min(1,(ms-4000)/4200), ep2=animEio(p);
+          // White/grey volcanic scene — unique natrocarbonatite
+          const bg2=ctx.createLinearGradient(0,0,0,H);
+          bg2.addColorStop(0,'#0a0a0c');bg2.addColorStop(1,'#1e1c16');
+          ctx.fillStyle=bg2;ctx.fillRect(0,0,W,H);
+          // White lava river channels (unique: carbonatite lava is white/grey)
+          for(let i=0;i<3;i++){const rx=W*(.2+i*.28);const rw=18+i*8;
+          const rg=ctx.createLinearGradient(rx,0,rx+rw,0);
+          rg.addColorStop(0,'rgba(200,200,180,0.15)');rg.addColorStop(0.5,`rgba(220,215,190,${.25+Math.sin(ms/300+i)*.1})`);rg.addColorStop(1,'rgba(200,200,180,0.15)');
+          ctx.fillStyle=rg;ctx.fillRect(rx,H*.2,rw,H*.8);}
+          // Rock face texture
+          ctx.strokeStyle='rgba(40,36,30,0.6)';ctx.lineWidth=1;
+          for(let i=0;i<12;i++){ctx.beginPath();ctx.moveTo(i*W/11,H*.15);ctx.lineTo(i*W/11+15,H*.8);ctx.stroke();}
+          // Natrocarbonatite star artifact embedded in rock
+          const starX=W*.58, starY=H*.45;
+          ctx.save();ctx.shadowBlur=20+Math.sin(ms*0.005)*10;ctx.shadowColor='#ddddaa';
+          ctx.fillStyle=`rgba(220,218,180,${.7+Math.sin(ms*0.005)*.3})`;
+          // 8-pointed star
+          ctx.save();ctx.translate(starX,starY);ctx.rotate(ms*0.001);
+          ctx.beginPath();
+          for(let a=0;a<8;a++){const ang=a*Math.PI/4;const r1=a%2===0?14:6;ctx.lineTo(Math.cos(ang)*r1,Math.sin(ang)*r1);}
+          ctx.closePath();ctx.fill();ctx.restore();ctx.restore();
+          if(ep2>.55){ctx.save();ctx.globalAlpha=(ep2-.55)/.45;ctx.fillStyle='#dddcaa';ctx.font=`bold ${Math.max(8,10*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText(ep.rescue,starX,starY-28);ctx.restore();}
+          // Player climbing toward star
+          const climbX=animLerp(W*.15,starX-40,ep2);
+          const climbY=animLerp(H*.7,H*.42,ep2)+Math.sin(ms/160)*3;
+          drawAnimChar(ctx,climbX,climbY,aC);
+          // White lava drips from above
+          for(let i=0;i<5;i++){const dx=((i*W*.22+ms*0.06*(i%2?1:-1))%W+W)%W;const dy=(i*55+ms*0.12)%(H*.5);ctx.fillStyle=`rgba(210,205,180,${0.25+Math.sin(ms*0.005+i)*.15})`;ctx.beginPath();ctx.arc(dx,dy,2+Math.sin(ms*0.008+i),0,Math.PI*2);ctx.fill();}
+          animLabel(ctx,'ACT II · WHITE LAVA RIVERS','NATROCARBONATITE LAVA GLOWS UNIQUE...',W);
+        }
+        // ACT III (8200–12400ms): Star secured, summit surge, divine escape
+        else {
+          const p=Math.min(1,(ms-8200)/4200), ep2=animEio(p);
+          const bg3=ctx.createLinearGradient(0,0,0,H);
+          bg3.addColorStop(0,`rgb(${Math.floor(animLerp(10,70,ep2))},8,${Math.floor(animLerp(14,6,ep2))})`);
+          bg3.addColorStop(1,`rgb(${Math.floor(animLerp(30,150,ep2))},20,8)`);
+          ctx.fillStyle=bg3;ctx.fillRect(0,0,W,H);
+          // White lava surging
+          const wlY=animLerp(H*.75,H*.35,ep2);
+          ctx.fillStyle='rgba(160,155,130,0.8)';ctx.fillRect(0,wlY,W,H-wlY);
+          ctx.fillStyle='rgba(210,205,180,0.9)';
+          ctx.beginPath();ctx.moveTo(0,wlY);
+          for(let x=0;x<=W;x+=10){ctx.lineTo(x,wlY+Math.sin(x*0.04+ms*0.008)*10+Math.sin(x*0.02-ms*0.005)*5);}
+          ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+          // Divine light beams from summit (Engai — god of Maasai)
+          for(let i=0;i<8;i++){const a=(i/8)*Math.PI-.5;ctx.save();ctx.globalAlpha=(.08+Math.sin(ms/500+i)*.05)*ep2;ctx.strokeStyle='#ffe8a0';ctx.lineWidth=22-i*2;ctx.beginPath();ctx.moveTo(W*.5,H*.1);ctx.lineTo(W*.5+Math.cos(a)*W*.6,H*.1+Math.sin(a)*H*.9);ctx.stroke();ctx.restore();}
+          // Player running with glowing star
+          const rx3=animLerp(W*.2,W*.85,ep2);
+          const bob3=Math.abs(Math.sin(ms/100))*5;
+          ctx.save();ctx.translate(rx3,H*.5+bob3);ctx.rotate(ep2*-.08);drawAnimChar(ctx,0,0,aC);ctx.restore();
+          // 8-pointed star held up
+          ctx.save();ctx.shadowBlur=25;ctx.shadowColor='#eeeeaa';
+          ctx.fillStyle=`rgba(220,215,170,0.95)`;
+          ctx.save();ctx.translate(rx3,H*.5+bob3-52);ctx.rotate(ms*0.003);
+          ctx.beginPath();for(let a=0;a<8;a++){const ang=a*Math.PI/4;const r1=a%2===0?12:5;ctx.lineTo(Math.cos(ang)*r1,Math.sin(ang)*r1);}
+          ctx.closePath();ctx.fill();ctx.restore();ctx.restore();
+          if(Math.sin(ms/135)>0.2){ctx.fillStyle='rgba(220,200,100,.9)';ctx.font=`bold ${Math.max(10,14*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('🌟 ENGAI BLESSES YOUR ESCAPE! 🌟',W/2,H*.08);}
+          animLabel(ctx,'ACT III · DIVINE ESCAPE','STAR SECURED — THE MOUNTAIN OF GOD ERUPTS!',W);
+        }
+        animProgBar(ctx, W, H, t, '#ffe066');
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8);ctx.textAlign='left';
+        if(t<1) animFrameId=requestAnimationFrame(fr); else finish();
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(fr);
     }
 
 function startStoryGameLevel(ep) {
@@ -8225,62 +9422,451 @@ window.gameWin = function() {
 
     // Escape animation (glider out) – now with finalPlatforms param
     function showEscapeAnimation(ep, finalPlatforms, allDone) {
+      // Episodes 4,5,6 get unique escape animations at 2× duration
+      if(ep.id === 4) { showEscapeAnim_Ep4(ep, finalPlatforms, allDone); return; }
+      if(ep.id === 5) { showEscapeAnim_Ep5(ep, finalPlatforms, allDone); return; }
+      if(ep.id === 6) { showEscapeAnim_Ep6(ep, finalPlatforms, allDone); return; }
+
       if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
       const escapeTitleEl = document.getElementById('escapeAnimTitle');
       if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
       const escapeSubEl = document.getElementById('escapeAnimSubtitle');
-      if(escapeSubEl) escapeSubEl.textContent = `🪂 Escaped ${ep.name}! Artifact recovered!`;
+      if(escapeSubEl) escapeSubEl.textContent = `Escaped ${ep.name}! Crew awaits!`;
       const animDiv = document.getElementById('escapeAnimOverlay');
-      const canvas = document.getElementById('escapeAnimCanvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = Math.min(window.innerWidth*0.8, 800);
-      canvas.height = 400;
-      let startTime = performance.now();
-      let duration = 3300;
+      const canvas  = document.getElementById('escapeAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const start = performance.now(), DUR = 7200;
       let skipped = false;
+      const aC = { size: 36 };
+      // Crew members with distinct colours
+      const crew = [
+        {x:W*.14, skin:'#cc4444', shirt:'#8833aa', name:'IGOR'},
+        {x:W*.28, skin:'#e8c090', shirt:'#228844', name:'MIRA'},
+        {x:W*.72, skin:'#d4a060', shirt:'#cc6622', name:'SAL'},
+        {x:W*.86, skin:'#ffd0a0', shirt:'#4444aa', name:'JETS'},
+      ];
 
       function finishEscapeAnim() {
-        if (skipped) return;
-        skipped = true;
+        if (skipped) return; skipped = true;
         storyAnimSkipCallback = null;
         cancelAnimationFrame(animFrameId);
         animDiv.style.display = 'none';
         showEndStats(ep, finalPlatforms, allDone);
       }
-
-      // Register the skip callback so Space bar can call it
       storyAnimSkipCallback = finishEscapeAnim;
 
-      function drawEscape(now) {
+      function fr(now) {
         if (skipped) return;
-        let t = Math.min(1, (now - startTime) / duration);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#832a0a';
-        ctx.fillRect(0, canvas.height-70, canvas.width, 70);
-        for(let i=0;i<12;i++) ctx.fillRect(20+i*70, canvas.height-120, 30, 70);
-        ctx.fillStyle = '#ff8811';
-        for(let i=0;i<30;i++) ctx.fillRect(20+Math.random()*canvas.width, canvas.height-130+Math.random()*100, 8, 8);
-        const glideX = canvas.width/2 + (t-0.5)*canvas.width*0.7;
-        const glideY = canvas.height-80 - t*120;
-        const charCfg = getSafeCharConfig();
-        if (typeof drawCharacterFromConfig === 'function') {
-          ctx.save();
-          drawCharacterFromConfig(ctx, glideX, glideY, 38, charCfg, 100, false, false);
-          ctx.restore();
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0, 0, W, H);
+
+        if (ms < 2300) {
+          // ── ACT I: GLIDER ESCAPE ──
+          const p = Math.min(1, ms/2300), ep2 = animEio(p);
+          const sg = ctx.createLinearGradient(0,0,0,H);
+          sg.addColorStop(0,`rgb(${Math.floor(animLerp(75,18,ep2))},${Math.floor(animLerp(18,28,ep2))},${Math.floor(animLerp(75,80,ep2))})`);
+          sg.addColorStop(1,`rgb(${Math.floor(animLerp(170,55,ep2))},${Math.floor(animLerp(55,38,ep2))},${Math.floor(animLerp(18,75,ep2))})`);
+          ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+          ctx.save(); ctx.globalAlpha=(1-ep2)*.65;
+          const eg=ctx.createRadialGradient(0,H*.6,0,0,H*.6,W*.55);eg.addColorStop(0,'#ff6600');eg.addColorStop(1,'transparent');
+          ctx.fillStyle=eg; ctx.fillRect(0,0,W,H); ctx.restore();
+          for(let i=0;i<4;i++){const cx2=((W*.8-ep2*W*.3+i*W*.27)%(W*1.2))-W*.1;ctx.save();ctx.globalAlpha=.3;ctx.fillStyle='#aac0e0';ctx.beginPath();ctx.arc(cx2,H*.14+i*14,22+i*9,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(cx2+28,H*.11+i*14,18+i*7,0,Math.PI*2);ctx.fill();ctx.restore();}
+          const charX=animLerp(W*.04,W*.64,ep2), charY=animLerp(H*.12,H*.5,Math.sin(ep2*Math.PI*.55));
+          ctx.save();ctx.fillStyle='#ff9944';ctx.strokeStyle='#cc5500';ctx.lineWidth=2;ctx.beginPath();ctx.arc(charX,charY-52,38,Math.PI,0);ctx.fill();ctx.stroke();
+          ctx.strokeStyle='#cc5500';ctx.lineWidth=1;[-32,0,32].forEach(ox=>{ctx.beginPath();ctx.moveTo(charX+ox,charY-52+4);ctx.lineTo(charX+ox*.25,charY-28);ctx.stroke();}); ctx.restore();
+          drawAnimChar(ctx,charX,charY,aC);
+          ctx.save();ctx.shadowBlur=14;ctx.shadowColor='#44ffdd';ctx.fillStyle='#44ffddbb';ctx.beginPath();ctx.moveTo(charX+10,charY-46);ctx.lineTo(charX+18,charY-38);ctx.lineTo(charX+10,charY-31);ctx.lineTo(charX+2,charY-38);ctx.closePath();ctx.fill();ctx.restore();
+          animLabel(ctx,'ACT I · GLIDER ESCAPE','OUTRUNNING THE LAVA SURGE...',W);
+
+        } else if (ms < 4600) {
+          // ── ACT II: ARTIFACT SECURED ──
+          const p=Math.min(1,(ms-2300)/2300), ep2=animEio(p);
+          const ng=ctx.createLinearGradient(0,0,0,H);ng.addColorStop(0,'#04040e');ng.addColorStop(1,'#0a1235');ctx.fillStyle=ng;ctx.fillRect(0,0,W,H);
+          for(let i=0;i<50;i++){const sx=(i*137.5)%W,sy=(i*97.3)%(H*.85);ctx.fillStyle=`rgba(255,255,255,${.25+Math.sin(ms/500+i)*.25})`;ctx.fillRect(sx,sy,1.5,1.5);}
+          const charX2=W*.5,charY2=H*.6,as=22+ep2*22;
+          ctx.save();ctx.shadowBlur=55+ep2*20;ctx.shadowColor='#44ffdd';ctx.fillStyle='rgba(80,255,220,.85)';
+          ctx.translate(charX2,charY2-48);ctx.rotate(Math.sin(ms/380)*.14);
+          ctx.beginPath();ctx.moveTo(0,-as);ctx.lineTo(as*.7,0);ctx.lineTo(0,as*.5);ctx.lineTo(-as*.7,0);ctx.closePath();ctx.fill();
+          ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,as*.3,0,Math.PI*2);ctx.fill();ctx.restore();
+          for(let r=0;r<12;r++){const a=(r/12)*Math.PI*2+ms/750;const rl=(38+Math.sin(ms/300+r)*14)*ep2;ctx.strokeStyle=`rgba(80,255,220,${.12+Math.sin(ms/300+r)*.08})`;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(charX2+Math.cos(a)*16,charY2-48+Math.sin(a)*16);ctx.lineTo(charX2+Math.cos(a)*(16+rl),charY2-48+Math.sin(a)*(16+rl));ctx.stroke();}
+          drawAnimChar(ctx,charX2,charY2,aC);
+          if(ep2>.4){const sa=Math.min(1,(ep2-.4)/.28);ctx.save();ctx.translate(W*.5,H*.12);ctx.rotate(-.04);ctx.globalAlpha=sa;ctx.fillStyle='#27ae6028';ctx.strokeStyle='#27ae60';ctx.lineWidth=2;const tw=W*.8;ctx.fillRect(-tw/2,-22,tw,44);ctx.strokeRect(-tw/2,-22,tw,44);ctx.fillStyle='#44ff88';ctx.font=`bold ${Math.max(10,15*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('ARTIFACT SECURED — MISSION COMPLETE',0,7);ctx.restore();}
+          animLabel(ctx,'ACT II · ARTIFACT SECURED',ep.rescue,W);
+
         } else {
-          ctx.fillStyle = '#d6a56e'; ctx.fillRect(glideX-14, glideY-24, 28, 35);
+          // ── ACT III: CREW APPLAUSE ──
+          const p=Math.min(1,(ms-4600)/2600), ep2=animEio(p);
+          const cg3=ctx.createLinearGradient(0,0,0,H);cg3.addColorStop(0,'#08122e');cg3.addColorStop(1,'#102510');ctx.fillStyle=cg3;ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#1e3c1e';ctx.fillRect(0,H*.72,W,H*.28);
+          ctx.fillStyle='#16301a';for(let i=0;i<11;i++)ctx.fillRect(i*(W/10),H*.72,W/11-1,4);
+          for(let i=0;i<28;i++){const sx=(i*173)%W,sy=(i*113)%(H*.65);ctx.fillStyle=`rgba(255,255,255,${.35+Math.sin(ms/580+i)*.3})`;ctx.fillRect(sx,sy,1.5,1.5);}
+          const cols=['#ffe066','#ff9944','#44ff88','#4a9eff','#ff6688'];
+          for(let i=0;i<28;i++){const cx4=(i*173+ms*.07)%W,cy4=(i*97+ms*.11)%H;ctx.fillStyle=cols[i%5];ctx.save();ctx.translate(cx4,cy4);ctx.rotate(ms/190+i);ctx.fillRect(-2.5,-4.5,5,9);ctx.restore();}
+          const plY=animLerp(H*.15,H*.67,Math.min(1,ep2*1.5));
+          if(ep2<.45){const df=1-ep2/.45;ctx.save();ctx.globalAlpha=df;ctx.fillStyle='#ff9944';ctx.beginPath();ctx.arc(W*.5,plY-46*df-26,36*df,Math.PI,0);ctx.fill();ctx.restore();}
+          drawAnimChar(ctx,W*.5,plY,aC,1,false,ep2>.55);
+          crew.forEach((cm,i)=>{
+            const fr2=i>=2,dl=i*.11,cp=Math.max(0,Math.min(1,(ep2-dl)/(1-dl)));
+            const ce=animEio(cp);const sx2=fr2?W*1.1:-W*.1,tx=animLerp(sx2,cm.x,ce);
+            if(cp>0) drawCrewChar(ctx,tx,H*.67,cm,1,fr2);
+            if(cp>.75&&ep2>.55){ctx.strokeStyle=cm.skin;ctx.lineWidth=3.5;const cl=Math.sin(ms/145+i*1.2);ctx.beginPath();ctx.moveTo(tx-7,H*.67-20);ctx.lineTo(tx-7+cl*11,H*.67-27+Math.abs(cl)*7);ctx.moveTo(tx+7,H*.67-20);ctx.lineTo(tx+7-cl*11,H*.67-27+Math.abs(cl)*7);ctx.stroke();}
+            if(cp>.55){ctx.fillStyle='rgba(255,224,102,.8)';ctx.font=`${Math.max(7,9*(W/800))}px monospace`;ctx.textAlign='center';ctx.fillText(cm.name,tx,H*.67+11);}
+          });
+          if(ep2>.45){const ba=Math.min(1,(ep2-.45)*3);ctx.save();ctx.globalAlpha=ba;ctx.fillStyle='rgba(8,22,8,.88)';ctx.fillRect(W*.08,H*.04,W*.84,46);ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.strokeRect(W*.08,H*.04,W*.84,46);ctx.fillStyle='#44ff88';ctx.font=`bold ${Math.max(10,16*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('MISSION COMPLETE · VOLCANO SAVED',W/2,H*.04+30);ctx.restore();}
+          if(ep2>.65){const cl2=Math.sin(ms/145)>.65?'👏 👏 👏':'';ctx.fillStyle='rgba(255,224,102,.55)';ctx.font=`${Math.max(12,17*(W/800))}px Arial`;ctx.textAlign='center';ctx.fillText(cl2,W/2,H*.93);}
+          animLabel(ctx,'ACT III · CREW CELEBRATION','VOLCANO CHRONICLES COMPLETE',W);
         }
-        ctx.font = '32px Arial';
-        ctx.fillStyle = 'white';
-        ctx.fillText('🪂', glideX+12, glideY-12);
-        if (t < 1) { animFrameId = requestAnimationFrame(drawEscape); }
-        else { finishEscapeAnim(); }
+
+        animProgBar(ctx,W,H,t,'#27ae60');
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8); ctx.textAlign='left';
+        if (t < 1) animFrameId = requestAnimationFrame(fr);
+        else finishEscapeAnim();
       }
       animDiv.style.display = 'flex';
-      animFrameId = requestAnimationFrame(drawEscape);
+      animFrameId = requestAnimationFrame(fr);
     }
-	
-	
+
+    // ── EP4 ESCAPE: Erta Ale — helicopter extraction over lava lake (2× = 14.4s) ──
+    function showEscapeAnim_Ep4(ep, finalPlatforms, allDone) {
+      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      const escapeTitleEl = document.getElementById('escapeAnimTitle');
+      if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
+      const escapeSubEl = document.getElementById('escapeAnimSubtitle');
+      if(escapeSubEl) escapeSubEl.textContent = `Escaped Erta Ale! Gate of Hell sealed!`;
+      const animDiv = document.getElementById('escapeAnimOverlay');
+      const canvas  = document.getElementById('escapeAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const DUR = 14400;
+      const start = performance.now();
+      let skipped = false;
+      const aC = { size: 36 };
+      const crew = [{x:W*.14,skin:'#cc4444',shirt:'#8833aa',name:'IGOR'},{x:W*.28,skin:'#e8c090',shirt:'#228844',name:'MIRA'},{x:W*.72,skin:'#d4a060',shirt:'#cc6622',name:'SAL'},{x:W*.86,skin:'#ffd0a0',shirt:'#4444aa',name:'JETS'}];
+      function finish() { if(skipped)return; skipped=true; storyAnimSkipCallback=null; cancelAnimationFrame(animFrameId); animDiv.style.display='none'; showEndStats(ep, finalPlatforms, allDone); }
+      storyAnimSkipCallback = finish;
+      function fr(now) {
+        if(skipped) return;
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0,0,W,H);
+        // ACT I (0–4800ms): Helicopter rope extraction over active lava lake
+        if(ms < 4800) {
+          const p=Math.min(1,ms/4800), ep2=animEio(p);
+          const bg=ctx.createLinearGradient(0,0,0,H);
+          bg.addColorStop(0,`rgb(${Math.floor(animLerp(80,18,ep2))},${Math.floor(animLerp(15,22,ep2))},5)`);
+          bg.addColorStop(1,`rgb(${Math.floor(animLerp(180,50,ep2))},${Math.floor(animLerp(50,30,ep2))},10)`);
+          ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+          // Lava lake below, fading as we ascend
+          const lavaAlpha=Math.max(0,1-ep2*1.1);
+          ctx.save();ctx.globalAlpha=lavaAlpha;
+          ctx.fillStyle='#880e00';ctx.fillRect(0,H*.6,W,H*.4);
+          ctx.fillStyle='#ff3300';
+          ctx.beginPath();ctx.moveTo(0,H*.6);
+          for(let x=0;x<=W;x+=10){ctx.lineTo(x,H*.6+Math.sin(x*.04+ms*.006)*9+Math.sin(x*.02-ms*.004)*5);}
+          ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+          // Lava glow blobs
+          for(let i=0;i<4;i++){ctx.fillStyle=`rgba(255,${80+i*20},0,0.35)`;ctx.beginPath();ctx.arc(W*(.15+i*.23),H*.67+Math.sin(ms*.004+i)*8,18+i*5,0,Math.PI*2);ctx.fill();}
+          ctx.restore();
+          // Helicopter at top — steady
+          const hx=W*.5, hy=animLerp(H*.3, H*.08, ep2);
+          ctx.fillStyle='#334488';ctx.beginPath();ctx.ellipse(hx,hy+8,32,13,0,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#223366';ctx.beginPath();ctx.moveTo(hx+32,hy+4);ctx.lineTo(hx+55,hy+1);ctx.lineTo(hx+55,hy+15);ctx.lineTo(hx+32,hy+14);ctx.closePath();ctx.fill();
+          ctx.strokeStyle='#9999cc';ctx.lineWidth=2.5;
+          ctx.save();ctx.translate(hx,hy-3);ctx.rotate(ms*.06);ctx.beginPath();ctx.moveTo(-38,0);ctx.lineTo(38,0);ctx.moveTo(0,-38);ctx.lineTo(0,38);ctx.stroke();ctx.restore();
+          // Searchlight cone
+          const la=Math.min(1,ep2*2);
+          ctx.save();ctx.globalAlpha=la*.18;ctx.fillStyle='#ffffaa';
+          ctx.beginPath();ctx.moveTo(hx-8,hy+21);ctx.lineTo(hx+8,hy+21);ctx.lineTo(hx+55,H);ctx.lineTo(hx-55,H);ctx.closePath();ctx.fill();ctx.restore();
+          // Rescue rope descending
+          const ropeBot=animLerp(hy+21, hy+21+H*.65, Math.min(1,ep2*2));
+          ctx.strokeStyle='#c8a86b';ctx.lineWidth=2.5;ctx.setLineDash([8,5]);
+          ctx.beginPath();ctx.moveTo(hx,hy+21);ctx.lineTo(hx,ropeBot);ctx.stroke();ctx.setLineDash([]);
+          // Player ascending on rope
+          const playerY=animLerp(H*.55, hy+25, ep2);
+          drawAnimChar(ctx, hx-18, playerY, aC);
+          // Serpent artifact glow
+          ctx.save();ctx.shadowBlur=18;ctx.shadowColor='#ff8800';
+          ctx.strokeStyle='rgba(255,150,0,0.9)';ctx.lineWidth=4;ctx.lineCap='round';
+          for(let a=0;a<Math.PI*2.5;a+=0.2){const r=(6-a*.5)*Math.max(0.1,1);ctx.lineTo(hx-18+Math.cos(a+ms*.004)*r,playerY-38+Math.sin(a+ms*.004)*r*.5);}
+          ctx.stroke();ctx.restore();
+          animLabel(ctx,'ACT I · HELICOPTER EXTRACTION','ASCENDING FROM THE GATE OF HELL...',W);
+        }
+        // ACT II (4800–9600ms): Above clouds, artifact radiates, crew in chopper
+        else if(ms < 9600) {
+          const p=Math.min(1,(ms-4800)/4800), ep2=animEio(p);
+          const bg2=ctx.createLinearGradient(0,0,0,H);
+          bg2.addColorStop(0,'#060e20');bg2.addColorStop(1,'#0e1a3a');
+          ctx.fillStyle=bg2;ctx.fillRect(0,0,W,H);
+          // Stars emerging above clouds
+          for(let i=0;i<40;i++){ctx.fillStyle=`rgba(255,255,255,${(.2+Math.sin(ms/500+i)*.2)*Math.min(1,ep2*2)})`;ctx.fillRect((i*137)%W,(i*97)%(H*.7),1.5,1.5);}
+          // Cloud layer below
+          ctx.save();ctx.globalAlpha=Math.max(0,.7-ep2*.5);
+          for(let i=0;i<6;i++){ctx.fillStyle='rgba(180,140,100,0.4)';ctx.beginPath();ctx.arc(i*W*.2+Math.sin(ms*.001+i)*20,H*.72+Math.sin(ms*.0015+i*1.2)*10,35+i*12,0,Math.PI*2);ctx.fill();}
+          ctx.restore();
+          // Serpent artifact floating in centre, radiating
+          const artX=W*.5, artY=H*.42;
+          ctx.save();ctx.shadowBlur=35+Math.sin(ms*.004)*15;ctx.shadowColor='#ff8800';
+          ctx.strokeStyle=`rgba(255,${140+Math.sin(ms*.005)*50},0,0.95)`;ctx.lineWidth=6;ctx.lineCap='round';
+          ctx.beginPath();
+          for(let a=0;a<Math.PI*4;a+=0.15){const r=(10-a*.6)*Math.max(0.1,1);ctx.lineTo(artX+Math.cos(a+ms*.003)*r,artY+Math.sin(a+ms*.003)*r*.5);}
+          ctx.stroke();ctx.restore();
+          // Radiant beams
+          for(let r=0;r<10;r++){const a=(r/10)*Math.PI*2+ms/900;const rl=(30+Math.sin(ms/350+r)*20)*ep2;ctx.strokeStyle=`rgba(255,160,0,${.08+Math.sin(ms/350+r)*.06})`;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(artX+Math.cos(a)*12,artY+Math.sin(a)*12);ctx.lineTo(artX+Math.cos(a)*(12+rl),artY+Math.sin(a)*(12+rl));ctx.stroke();}
+          drawAnimChar(ctx, artX-18, H*.55, aC);
+          if(ep2>.45){const sa=Math.min(1,(ep2-.45)/.3);ctx.save();ctx.translate(W*.5,H*.12);ctx.globalAlpha=sa;ctx.fillStyle='#ff880028';ctx.strokeStyle='#ff8800';ctx.lineWidth=2;const tw=W*.82;ctx.fillRect(-tw/2,-22,tw,44);ctx.strokeRect(-tw/2,-22,tw,44);ctx.fillStyle='#ffaa44';ctx.font=`bold ${Math.max(10,14*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('GATE OF HELL SERPENT — SECURED!',0,7);ctx.restore();}
+          animLabel(ctx,'ACT II · ABOVE THE CLOUDS',ep.rescue,W);
+        }
+        // ACT III (9600–14400ms): Crew celebration — permanent lava lake sealed
+        else {
+          const p=Math.min(1,(ms-9600)/4800), ep2=animEio(p);
+          const bg3=ctx.createLinearGradient(0,0,0,H);bg3.addColorStop(0,'#06122a');bg3.addColorStop(1,'#0e2010');ctx.fillStyle=bg3;ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#1a3418';ctx.fillRect(0,H*.72,W,H*.28);
+          for(let i=0;i<28;i++){const sx=(i*173)%W,sy=(i*113)%(H*.65);ctx.fillStyle=`rgba(255,255,255,${.3+Math.sin(ms/580+i)*.28})`;ctx.fillRect(sx,sy,1.5,1.5);}
+          const cols=['#ffe066','#ff9944','#ff6644','#ff4466','#44ff88'];
+          for(let i=0;i<30;i++){const cx4=(i*173+ms*.07)%W,cy4=(i*97+ms*.11)%H;ctx.fillStyle=cols[i%5];ctx.save();ctx.translate(cx4,cy4);ctx.rotate(ms/190+i);ctx.fillRect(-2.5,-4.5,5,9);ctx.restore();}
+          const plY=animLerp(H*.15,H*.67,Math.min(1,ep2*1.5));
+          drawAnimChar(ctx,W*.5,plY,aC,1,false,ep2>.55);
+          crew.forEach((cm,i)=>{
+            const fr2=i>=2,dl=i*.11,cp=Math.max(0,Math.min(1,(ep2-dl)/(1-dl)));
+            const ce=animEio(cp);const sx2=fr2?W*1.1:-W*.1,tx=animLerp(sx2,cm.x,ce);
+            if(cp>0) drawCrewChar(ctx,tx,H*.67,cm,1,fr2);
+            if(cp>.75&&ep2>.55){ctx.strokeStyle=cm.skin;ctx.lineWidth=3.5;const cl=Math.sin(ms/145+i*1.2);ctx.beginPath();ctx.moveTo(tx-7,H*.67-20);ctx.lineTo(tx-7+cl*11,H*.67-27+Math.abs(cl)*7);ctx.moveTo(tx+7,H*.67-20);ctx.lineTo(tx+7-cl*11,H*.67-27+Math.abs(cl)*7);ctx.stroke();}
+            if(cp>.55){ctx.fillStyle='rgba(255,224,102,.8)';ctx.font=`${Math.max(7,9*(W/800))}px monospace`;ctx.textAlign='center';ctx.fillText(cm.name,tx,H*.67+11);}
+          });
+          if(ep2>.45){const ba=Math.min(1,(ep2-.45)*3);ctx.save();ctx.globalAlpha=ba;ctx.fillStyle='rgba(8,22,8,.88)';ctx.fillRect(W*.08,H*.04,W*.84,46);ctx.strokeStyle='#ff8822';ctx.lineWidth=2;ctx.strokeRect(W*.08,H*.04,W*.84,46);ctx.fillStyle='#ffaa44';ctx.font=`bold ${Math.max(10,15*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('MISSION COMPLETE · ERTA ALE SEALED',W/2,H*.04+30);ctx.restore();}
+          if(ep2>.65){const cl2=Math.sin(ms/145)>.65?'👏 👏 👏':'';ctx.fillStyle='rgba(255,180,100,.55)';ctx.font=`${Math.max(12,17*(W/800))}px Arial`;ctx.textAlign='center';ctx.fillText(cl2,W/2,H*.93);}
+          animLabel(ctx,'ACT III · CREW CELEBRATION','GATE OF HELL — PERMANENTLY SEALED',W);
+        }
+        animProgBar(ctx,W,H,t,'#27ae60');
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8);ctx.textAlign='left';
+        if(t<1) animFrameId=requestAnimationFrame(fr); else finish();
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(fr);
+    }
+
+    // ── EP5 ESCAPE: Cerro Negro — ash boarding out, sigil decoded (2× = 14.4s) ──
+    function showEscapeAnim_Ep5(ep, finalPlatforms, allDone) {
+      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      const escapeTitleEl = document.getElementById('escapeAnimTitle');
+      if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
+      const escapeSubEl = document.getElementById('escapeAnimSubtitle');
+      if(escapeSubEl) escapeSubEl.textContent = `Escaped Cerro Negro! Sigil decoded!`;
+      const animDiv = document.getElementById('escapeAnimOverlay');
+      const canvas  = document.getElementById('escapeAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const DUR = 14400;
+      const start = performance.now();
+      let skipped = false;
+      const aC = { size: 36 };
+      const crew = [{x:W*.14,skin:'#cc4444',shirt:'#8833aa',name:'IGOR'},{x:W*.28,skin:'#e8c090',shirt:'#228844',name:'MIRA'},{x:W*.72,skin:'#d4a060',shirt:'#cc6622',name:'SAL'},{x:W*.86,skin:'#ffd0a0',shirt:'#4444aa',name:'JETS'}];
+      function finish() { if(skipped)return; skipped=true; storyAnimSkipCallback=null; cancelAnimationFrame(animFrameId); animDiv.style.display='none'; showEndStats(ep, finalPlatforms, allDone); }
+      storyAnimSkipCallback = finish;
+      function fr(now) {
+        if(skipped) return;
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0,0,W,H);
+        // ACT I (0–4800ms): Ash boarding escape down Cerro Negro at speed
+        if(ms < 4800) {
+          const p=Math.min(1,ms/4800), ep2=animEio(p);
+          const bg=ctx.createLinearGradient(0,0,0,H);
+          bg.addColorStop(0,'#0a0810');bg.addColorStop(1,`rgb(${Math.floor(animLerp(18,80,ep2))},${Math.floor(animLerp(12,20,ep2))},10)`);
+          ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+          // Eclipse still fading
+          const ecAlpha=Math.max(0,1-ep2*1.4);
+          ctx.save();ctx.globalAlpha=ecAlpha;
+          const corona=ctx.createRadialGradient(W*.5,H*.18,16,W*.5,H*.18,80);
+          corona.addColorStop(0,'rgba(40,20,0,0)');corona.addColorStop(0.4,'rgba(160,80,0,0.35)');corona.addColorStop(1,'transparent');
+          ctx.fillStyle=corona;ctx.fillRect(0,0,W,H);ctx.restore();
+          // Ash slope
+          ctx.fillStyle='#1a1218';
+          ctx.beginPath();ctx.moveTo(0,H);ctx.lineTo(W*.08,H*.25);ctx.lineTo(W*.92,H*.35);ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+          // Erupting cone behind
+          const coneX=W*.5, coneH=H*.35;
+          ctx.fillStyle='#0c080e';
+          ctx.beginPath();ctx.moveTo(coneX-coneH*.8,H*.9);ctx.lineTo(coneX,H*.9-coneH);ctx.lineTo(coneX+coneH*.8,H*.9);ctx.closePath();ctx.fill();
+          // Ash eruption plumes
+          for(let i=0;i<5;i++){const cx4=coneX+(-2+i)*18;const cy4=H*.9-coneH-ep2*(i*18+20);ctx.save();ctx.globalAlpha=Math.max(0,.4-ep2*.22+i*.04);ctx.fillStyle=`rgb(${38+i*5},${30+i*3},${42+i*5})`;ctx.beginPath();ctx.arc(cx4,cy4,20+ep2*16+i*5,0,Math.PI*2);ctx.fill();ctx.restore();}
+          // Player ash-boarding across slope at high speed
+          const bx=animLerp(W*.08, W*.88, ep2);
+          const by=animLerp(H*.3, H*.55, ep2)+Math.sin(ms/80)*6;
+          ctx.save();ctx.translate(bx,by);ctx.rotate(.18+Math.sin(ms/200)*.04);
+          drawAnimChar(ctx,0,0,aC);
+          ctx.fillStyle='#1a0c00';ctx.beginPath();ctx.roundRect(-20,36,60,9,3);ctx.fill();
+          ctx.restore();
+          // Speed ash spray trail
+          for(let i=0;i<8;i++){ctx.fillStyle=`rgba(55,45,55,${.35-i*.04})`;ctx.beginPath();ctx.arc(bx-20-i*12,by+35+Math.sin(ms/80+i)*8,3+i*.5,0,Math.PI*2);ctx.fill();}
+          // Sigil glow on board
+          ctx.save();ctx.shadowBlur=14;ctx.shadowColor='#8844ff';
+          ctx.strokeStyle=`rgba(160,100,255,${.5+Math.sin(ms*.006)*.3})`;ctx.lineWidth=1.5;
+          ctx.beginPath();ctx.moveTo(bx-8,by+34);ctx.lineTo(bx+8,by+34);ctx.moveTo(bx,by+34);ctx.lineTo(bx,by+42);ctx.stroke();ctx.restore();
+          animLabel(ctx,'ACT I · ASH BOARD ESCAPE','OUTRUNNING THE PYROCLASTIC SURGE...',W);
+        }
+        // ACT II (4800–9600ms): Sigil decoding — chain reaction revealed
+        else if(ms < 9600) {
+          const p=Math.min(1,(ms-4800)/4800), ep2=animEio(p);
+          const bg2=ctx.createLinearGradient(0,0,0,H);bg2.addColorStop(0,'#06040e');bg2.addColorStop(1,'#0e0820');ctx.fillStyle=bg2;ctx.fillRect(0,0,W,H);
+          for(let i=0;i<45;i++){ctx.fillStyle=`rgba(255,255,255,${.25+Math.sin(ms/500+i)*.22})`;ctx.fillRect((i*137)%W,(i*97)%(H*.8),1.5,1.5);}
+          // Large sigil decoding in centre
+          const artX=W*.5, artY=H*.42;
+          const pulse=Math.sin(ms*.005)*.5+.5;
+          ctx.save();ctx.shadowBlur=28+pulse*20;ctx.shadowColor='#8844ff';
+          ctx.strokeStyle=`rgba(180,100,255,${.6+pulse*.35})`;ctx.lineWidth=3;
+          ctx.beginPath();ctx.moveTo(artX-22,artY-12);ctx.lineTo(artX+22,artY-12);ctx.moveTo(artX,artY-12);ctx.lineTo(artX,artY+14);ctx.moveTo(artX-14,artY+4);ctx.lineTo(artX+14,artY+4);ctx.stroke();
+          // Chain lines radiating to next volcanoes
+          for(let r=0;r<6;r++){const a=(r/6)*Math.PI*2+ms/1200;const rl=(35+Math.sin(ms/400+r)*15)*ep2;ctx.strokeStyle=`rgba(160,80,255,${.1+Math.sin(ms/400+r)*.08})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(artX+Math.cos(a)*16,artY+Math.sin(a)*16);ctx.lineTo(artX+Math.cos(a)*(16+rl),artY+Math.sin(a)*(16+rl));ctx.stroke();}
+          ctx.restore();
+          drawAnimChar(ctx, artX-18, H*.58, aC);
+          if(ep2>.4){const sa=Math.min(1,(ep2-.4)/.28);ctx.save();ctx.translate(W*.5,H*.11);ctx.globalAlpha=sa;ctx.fillStyle='#44008822';ctx.strokeStyle='#8844ff';ctx.lineWidth=2;const tw=W*.82;ctx.fillRect(-tw/2,-22,tw,44);ctx.strokeRect(-tw/2,-22,tw,44);ctx.fillStyle='#cc88ff';ctx.font=`bold ${Math.max(10,14*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('BLACK SAND SIGIL — CHAIN REACTION TRIGGERED!',0,7);ctx.restore();}
+          animLabel(ctx,'ACT II · SIGIL DECODED',ep.rescue,W);
+        }
+        // ACT III (9600–14400ms): Crew celebration under clearing skies
+        else {
+          const p=Math.min(1,(ms-9600)/4800), ep2=animEio(p);
+          const bg3=ctx.createLinearGradient(0,0,0,H);bg3.addColorStop(0,'#08122e');bg3.addColorStop(1,'#102510');ctx.fillStyle=bg3;ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#1e3c1e';ctx.fillRect(0,H*.72,W,H*.28);
+          for(let i=0;i<28;i++){ctx.fillStyle=`rgba(255,255,255,${.35+Math.sin(ms/580+i)*.3})`;ctx.fillRect((i*173)%W,(i*113)%(H*.65),1.5,1.5);}
+          const cols=['#ffe066','#cc88ff','#44ff88','#4a9eff','#ff8844'];
+          for(let i=0;i<28;i++){const cx4=(i*173+ms*.07)%W,cy4=(i*97+ms*.11)%H;ctx.fillStyle=cols[i%5];ctx.save();ctx.translate(cx4,cy4);ctx.rotate(ms/190+i);ctx.fillRect(-2.5,-4.5,5,9);ctx.restore();}
+          const plY=animLerp(H*.15,H*.67,Math.min(1,ep2*1.5));
+          drawAnimChar(ctx,W*.5,plY,aC,1,false,ep2>.55);
+          crew.forEach((cm,i)=>{
+            const fr2=i>=2,dl=i*.11,cp=Math.max(0,Math.min(1,(ep2-dl)/(1-dl)));
+            const ce=animEio(cp);const sx2=fr2?W*1.1:-W*.1,tx=animLerp(sx2,cm.x,ce);
+            if(cp>0) drawCrewChar(ctx,tx,H*.67,cm,1,fr2);
+            if(cp>.75&&ep2>.55){ctx.strokeStyle=cm.skin;ctx.lineWidth=3.5;const cl=Math.sin(ms/145+i*1.2);ctx.beginPath();ctx.moveTo(tx-7,H*.67-20);ctx.lineTo(tx-7+cl*11,H*.67-27+Math.abs(cl)*7);ctx.moveTo(tx+7,H*.67-20);ctx.lineTo(tx+7-cl*11,H*.67-27+Math.abs(cl)*7);ctx.stroke();}
+            if(cp>.55){ctx.fillStyle='rgba(255,224,102,.8)';ctx.font=`${Math.max(7,9*(W/800))}px monospace`;ctx.textAlign='center';ctx.fillText(cm.name,tx,H*.67+11);}
+          });
+          if(ep2>.45){const ba=Math.min(1,(ep2-.45)*3);ctx.save();ctx.globalAlpha=ba;ctx.fillStyle='rgba(8,22,8,.88)';ctx.fillRect(W*.08,H*.04,W*.84,46);ctx.strokeStyle='#8844ff';ctx.lineWidth=2;ctx.strokeRect(W*.08,H*.04,W*.84,46);ctx.fillStyle='#cc88ff';ctx.font=`bold ${Math.max(10,15*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('MISSION COMPLETE · CERRO NEGRO SILENT',W/2,H*.04+30);ctx.restore();}
+          if(ep2>.65){const cl2=Math.sin(ms/145)>.65?'👏 👏 👏':'';ctx.fillStyle='rgba(200,160,255,.55)';ctx.font=`${Math.max(12,17*(W/800))}px Arial`;ctx.textAlign='center';ctx.fillText(cl2,W/2,H*.93);}
+          animLabel(ctx,'ACT III · ECLIPSE LIFTS','CERRO NEGRO CHAIN REACTION — ACTIVATED',W);
+        }
+        animProgBar(ctx,W,H,t,'#27ae60');
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8);ctx.textAlign='left';
+        if(t<1) animFrameId=requestAnimationFrame(fr); else finish();
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(fr);
+    }
+
+    // ── EP6 ESCAPE: Ol Doinyo Lengai — divine star ascension, Maasai blessing (2× = 14.4s) ──
+    function showEscapeAnim_Ep6(ep, finalPlatforms, allDone) {
+      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      const escapeTitleEl = document.getElementById('escapeAnimTitle');
+      if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
+      const escapeSubEl = document.getElementById('escapeAnimSubtitle');
+      if(escapeSubEl) escapeSubEl.textContent = `Blessed by Engai! Mountain of God at peace!`;
+      const animDiv = document.getElementById('escapeAnimOverlay');
+      const canvas  = document.getElementById('escapeAnimCanvas');
+      const ctx     = canvas.getContext('2d');
+      canvas.width  = Math.min(window.innerWidth * 0.9, 800);
+      canvas.height = 260;
+      const W = canvas.width, H = canvas.height;
+      const DUR = 14400;
+      const start = performance.now();
+      let skipped = false;
+      const aC = { size: 36 };
+      const crew = [{x:W*.14,skin:'#cc4444',shirt:'#8833aa',name:'IGOR'},{x:W*.28,skin:'#e8c090',shirt:'#228844',name:'MIRA'},{x:W*.72,skin:'#d4a060',shirt:'#cc6622',name:'SAL'},{x:W*.86,skin:'#ffd0a0',shirt:'#4444aa',name:'JETS'}];
+      function finish() { if(skipped)return; skipped=true; storyAnimSkipCallback=null; cancelAnimationFrame(animFrameId); animDiv.style.display='none'; showEndStats(ep, finalPlatforms, allDone); }
+      storyAnimSkipCallback = finish;
+      function fr(now) {
+        if(skipped) return;
+        const ms = now - start, t = Math.min(1, ms / DUR);
+        ctx.clearRect(0,0,W,H);
+        // ACT I (0–4800ms): Gliding out from summit on divine wind
+        if(ms < 4800) {
+          const p=Math.min(1,ms/4800), ep2=animEio(p);
+          // Dawn sky brightening
+          const bg=ctx.createLinearGradient(0,0,0,H);
+          bg.addColorStop(0,`rgb(${Math.floor(animLerp(8,60,ep2))},${Math.floor(animLerp(5,30,ep2))},${Math.floor(animLerp(18,10,ep2))})`);
+          bg.addColorStop(0.5,`rgb(${Math.floor(animLerp(80,220,ep2))},${Math.floor(animLerp(30,130,ep2))},15)`);
+          bg.addColorStop(1,`rgb(${Math.floor(animLerp(100,255,ep2))},${Math.floor(animLerp(50,200,ep2))},40)`);
+          ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+          // White lava rivers below fading
+          ctx.save();ctx.globalAlpha=Math.max(0,1-ep2*1.3);
+          ctx.fillStyle='rgba(200,195,170,0.5)';ctx.fillRect(0,H*.65,W,H*.35);
+          ctx.restore();
+          // Savanna appearing below
+          ctx.save();ctx.globalAlpha=Math.min(1,ep2*1.5);
+          ctx.fillStyle='#1a2808';ctx.fillRect(0,H*.72,W,H*.28);
+          for(let i=0;i<5;i++){const tx=W*.05+i*W*.22;ctx.fillStyle='#0e1806';ctx.fillRect(tx-2,H*.65+i*3,5,H*.1);ctx.beginPath();ctx.arc(tx,H*.65+i*3,14+i*3,0,Math.PI*2);ctx.fill();}
+          ctx.restore();
+          // Glider with divine star glow
+          const gx=animLerp(W*.04, W*.72, ep2);
+          const gy=animLerp(H*.1, H*.45, Math.sin(ep2*Math.PI*.5));
+          ctx.fillStyle='#eecc44';ctx.strokeStyle='#cc8800';ctx.lineWidth=2;
+          ctx.beginPath();ctx.arc(gx,gy-52,42,Math.PI,0);ctx.fill();ctx.stroke();
+          [-36,0,36].forEach(ox=>{ctx.strokeStyle='#cc8800';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(gx+ox,gy-52+5);ctx.lineTo(gx+ox*.22,gy-28);ctx.stroke();});
+          drawAnimChar(ctx,gx,gy,aC);
+          // Glowing star held
+          ctx.save();ctx.shadowBlur=22;ctx.shadowColor='#ffffaa';ctx.fillStyle='rgba(220,215,160,0.95)';
+          ctx.save();ctx.translate(gx+12,gy-46);ctx.rotate(ms*.003);
+          ctx.beginPath();for(let a=0;a<8;a++){const ang=a*Math.PI/4;ctx.lineTo(Math.cos(ang)*(a%2===0?10:4),Math.sin(ang)*(a%2===0?10:4));}
+          ctx.closePath();ctx.fill();ctx.restore();ctx.restore();
+          // Divine light trail
+          for(let i=0;i<6;i++){ctx.fillStyle=`rgba(255,240,180,${.2-i*.03})`;ctx.beginPath();ctx.arc(gx-22-i*14,gy+3+Math.sin(ms/120+i)*5,3+i*.5,0,Math.PI*2);ctx.fill();}
+          animLabel(ctx,'ACT I · DIVINE WIND ESCAPE','ENGAI GUIDES YOUR FLIGHT TO SAFETY...',W);
+        }
+        // ACT II (4800–9600ms): Star radiates global eruption timeline
+        else if(ms < 9600) {
+          const p=Math.min(1,(ms-4800)/4800), ep2=animEio(p);
+          const bg2=ctx.createLinearGradient(0,0,0,H);bg2.addColorStop(0,'#04040e');bg2.addColorStop(1,'#0a1235');ctx.fillStyle=bg2;ctx.fillRect(0,0,W,H);
+          for(let i=0;i<50;i++){ctx.fillStyle=`rgba(255,255,200,${.2+Math.sin(ms/500+i)*.2})`;ctx.fillRect((i*137)%W,(i*97)%(H*.85),1.5,1.5);}
+          // Star artifact in centre, revealing global timeline
+          const artX=W*.5, artY=H*.4;
+          ctx.save();ctx.shadowBlur=40+Math.sin(ms*.004)*18;ctx.shadowColor='#ffffaa';
+          ctx.fillStyle='rgba(220,215,165,0.95)';
+          ctx.save();ctx.translate(artX,artY);ctx.rotate(ms*.002);
+          ctx.beginPath();for(let a=0;a<8;a++){const ang=a*Math.PI/4;ctx.lineTo(Math.cos(ang)*(a%2===0?20:8),Math.sin(ang)*(a%2===0?20:8));}
+          ctx.closePath();ctx.fill();ctx.restore();ctx.restore();
+          // Global timeline beams
+          for(let r=0;r<14;r++){const a=(r/14)*Math.PI*2+ms/1000;const rl=(40+Math.sin(ms/380+r)*18)*ep2;ctx.strokeStyle=`rgba(220,200,100,${.09+Math.sin(ms/380+r)*.07})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(artX+Math.cos(a)*18,artY+Math.sin(a)*18);ctx.lineTo(artX+Math.cos(a)*(18+rl),artY+Math.sin(a)*(18+rl));ctx.stroke();}
+          drawAnimChar(ctx, artX-18, H*.6, aC);
+          if(ep2>.4){const sa=Math.min(1,(ep2-.4)/.28);ctx.save();ctx.translate(W*.5,H*.11);ctx.globalAlpha=sa;ctx.fillStyle='#22220022';ctx.strokeStyle='#ffffaa';ctx.lineWidth=2;const tw=W*.82;ctx.fillRect(-tw/2,-22,tw,44);ctx.strokeRect(-tw/2,-22,tw,44);ctx.fillStyle='#eeee88';ctx.font=`bold ${Math.max(10,14*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('NATROCARBONATITE STAR — TIMELINE REVEALED!',0,7);ctx.restore();}
+          animLabel(ctx,'ACT II · STAR RADIATES',ep.rescue,W);
+        }
+        // ACT III (9600–14400ms): Crew + Maasai blessing ceremony
+        else {
+          const p=Math.min(1,(ms-9600)/4800), ep2=animEio(p);
+          // Warm golden savanna sunset
+          const bg3=ctx.createLinearGradient(0,0,0,H);bg3.addColorStop(0,'#1a1008');bg3.addColorStop(0.5,'#402808');bg3.addColorStop(1,'#1a2808');ctx.fillStyle=bg3;ctx.fillRect(0,0,W,H);
+          ctx.fillStyle='#1e3808';ctx.fillRect(0,H*.72,W,H*.28);
+          // Golden stars/fireflies
+          for(let i=0;i<25;i++){ctx.fillStyle=`rgba(255,220,100,${.3+Math.sin(ms/400+i)*.25})`;ctx.fillRect((i*173)%W,(i*97)%(H*.68),2,2);}
+          const cols2=['#ffe066','#ffcc44','#44ff88','#ffaa44','#88ffcc'];
+          for(let i=0;i<28;i++){const cx4=(i*173+ms*.07)%W,cy4=(i*97+ms*.11)%H;ctx.fillStyle=cols2[i%5];ctx.save();ctx.translate(cx4,cy4);ctx.rotate(ms/190+i);ctx.fillRect(-2.5,-4.5,5,9);ctx.restore();}
+          const plY=animLerp(H*.15,H*.67,Math.min(1,ep2*1.5));
+          drawAnimChar(ctx,W*.5,plY,aC,1,false,ep2>.55);
+          crew.forEach((cm,i)=>{
+            const fr2=i>=2,dl=i*.11,cp=Math.max(0,Math.min(1,(ep2-dl)/(1-dl)));
+            const ce=animEio(cp);const sx2=fr2?W*1.1:-W*.1,tx=animLerp(sx2,cm.x,ce);
+            if(cp>0) drawCrewChar(ctx,tx,H*.67,cm,1,fr2);
+            if(cp>.75&&ep2>.55){ctx.strokeStyle=cm.skin;ctx.lineWidth=3.5;const cl=Math.sin(ms/145+i*1.2);ctx.beginPath();ctx.moveTo(tx-7,H*.67-20);ctx.lineTo(tx-7+cl*11,H*.67-27+Math.abs(cl)*7);ctx.moveTo(tx+7,H*.67-20);ctx.lineTo(tx+7-cl*11,H*.67-27+Math.abs(cl)*7);ctx.stroke();}
+            if(cp>.55){ctx.fillStyle='rgba(255,220,100,.8)';ctx.font=`${Math.max(7,9*(W/800))}px monospace`;ctx.textAlign='center';ctx.fillText(cm.name,tx,H*.67+11);}
+          });
+          if(ep2>.45){const ba=Math.min(1,(ep2-.45)*3);ctx.save();ctx.globalAlpha=ba;ctx.fillStyle='rgba(20,16,4,.9)';ctx.fillRect(W*.08,H*.04,W*.84,46);ctx.strokeStyle='#ffffaa';ctx.lineWidth=2;ctx.strokeRect(W*.08,H*.04,W*.84,46);ctx.fillStyle='#eeee88';ctx.font=`bold ${Math.max(10,15*(W/800))}px Arial Black,sans-serif`;ctx.textAlign='center';ctx.fillText('MISSION COMPLETE · ENGAI BLESSES THE TEAM',W/2,H*.04+30);ctx.restore();}
+          if(ep2>.65){const cl2=Math.sin(ms/145)>.65?'🌟 🌟 🌟':'';ctx.fillStyle='rgba(255,230,100,.6)';ctx.font=`${Math.max(12,17*(W/800))}px Arial`;ctx.textAlign='center';ctx.fillText(cl2,W/2,H*.93);}
+          animLabel(ctx,'ACT III · ENGAI\'S BLESSING','MOUNTAIN OF GOD — SILENT AND SACRED',W);
+        }
+        animProgBar(ctx,W,H,t,'#27ae60');
+        ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';ctx.textAlign='right';
+        ctx.fillText('TAP TO SKIP',W-10,H-8);ctx.textAlign='left';
+        if(t<1) animFrameId=requestAnimationFrame(fr); else finish();
+      }
+      animDiv.style.display = 'flex';
+      animFrameId = requestAnimationFrame(fr);
+    }
+
 function showEndStats(ep, finalPlatforms, allDone) {
   console.log('[STATS] showEndStats: coins =', coins, 'allDone=', allDone);
   if (!ep) return;
