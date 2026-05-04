@@ -76,6 +76,15 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #settingsClose:hover{color:#fff;}
 .settingsSection{padding:12px 16px 6px;border-bottom:1px solid #1e1e3a;}
 .settingsSectionTitle{font-size:10px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#6677cc;margin-bottom:8px;}
+.accountInfoRow{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:#0e0e22;border-radius:8px;border:1px solid #2a2a4a;}
+.accountInfoLabel{font-size:9px;color:#8888aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1px;}
+.accountInfoValue{font-size:12px;color:#e8e0ff;font-weight:bold;word-break:break-all;}
+.accountActionBtn{width:100%;padding:7px 10px;border-radius:8px;border:none;font-size:11px;font-weight:bold;cursor:pointer;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;}
+.accountActionBtn.danger{background:#2a0a0a;color:#ff7766;border:1px solid #551111;}
+.accountActionBtn.danger:hover{background:#3a1010;border-color:#ff5544;}
+.accountActionBtn.neutral{background:#1a1a38;color:#aad4ff;border:1px solid #2a2a4a;}
+.accountActionBtn.neutral:hover{background:#22224a;border-color:#4a5fd4;}
+#sAccountMsg{font-size:10px;min-height:14px;margin-top:4px;color:#ff9944;text-align:center;}
 .settingsRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
 .settingsRow label{font-size:12px;color:#ccc;flex:1;}
 .settingsRow select{background:#1e1e38;color:#eee;border:1px solid #444;border-radius:6px;padding:3px 6px;font-size:11px;}
@@ -498,6 +507,15 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 <div id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
   <div id="settingsPanel">
     <div id="settingsHeader"><span>⚙️ Settings</span><button id="settingsClose" onclick="closeSettings()">✕</button></div>
+
+    <!-- ── ACCOUNT SECTION ── -->
+    <div class="settingsSection" id="sAccountSection">
+      <div class="settingsSectionTitle">👤 Account</div>
+      <div id="sAccountInfo">
+        <!-- Populated by updateSettingsAccount() -->
+      </div>
+      <div id="sAccountMsg"></div>
+    </div>
     <div class="settingsSection">
       <div class="settingsSectionTitle">🔊 Sound</div>
       <div class="settingsRow">
@@ -756,7 +774,6 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <button class="startBtn outline" onclick="showScreen('customLevelsScreen')">🗂 Custom Levels</button>
   <button class="startBtn outline" id="leaderboardBtn" onclick="openLeaderboard()" style="border-color:#ffe066;color:#ffe066;">🪜 Leaderboard</button>
   <button class="startBtn outline" onclick="showScreen('infoScreen','start')">ℹ️ How to Play</button>
-  <button class="startBtn outline" onclick="showScreen('authScreen')">👤 Switch Account</button>
   <canvas id="startLavaCanvas"></canvas>
   <div style="position:absolute;bottom:70px;left:0;right:0;text-align:center;pointer-events:none;"><div style="color:#555;font-size:9px;line-height:1.8;"><span style="color:#666;">Game concept by</span> <span style="color:#777;">Lance Eleninovski</span><br><span style="color:#666;">Developed by</span> <span style="color:#777;">Toni Eleninovski</span></div></div>
 </div>
@@ -5986,10 +6003,109 @@ function openSettings(){
   syncCharSliders();
   renderCharPreview();
   startCharPreviewLoop();
+  updateSettingsAccount();
 }
 function closeSettings(){
   document.getElementById('settingsOverlay').classList.remove('open');
   stopCharPreviewLoop();
+}
+
+// ── Account section in Settings ──
+function sAccountMsg(msg, col) {
+  const el = document.getElementById('sAccountMsg');
+  if (el) { el.textContent = msg; el.style.color = col || '#ff9944'; }
+}
+
+function updateSettingsAccount() {
+  const el = document.getElementById('sAccountInfo');
+  if (!el) return;
+
+  if (!currentUser) {
+    el.innerHTML = `
+      <div class="accountInfoRow" style="justify-content:center;">
+        <div style="text-align:center;color:#888;font-size:11px;">Not logged in</div>
+      </div>
+      <button class="accountActionBtn neutral" onclick="closeSettings();showScreen('authScreen');">👤 Log In / Sign Up</button>`;
+    return;
+  }
+
+  const ud = currentUser.ud;
+  const isGuest = ud.isGuest;
+  const firebaseUser = firebase.auth().currentUser;
+  const email = firebaseUser && firebaseUser.email ? firebaseUser.email : (isGuest ? 'Guest account' : '—');
+
+  el.innerHTML = `
+    <div class="accountInfoRow" style="flex-direction:column;align-items:flex-start;">
+      <div class="accountInfoLabel">Nickname</div>
+      <div class="accountInfoValue">${currentUser.name || '—'}</div>
+    </div>
+    <div class="accountInfoRow" style="flex-direction:column;align-items:flex-start;">
+      <div class="accountInfoLabel">${isGuest ? 'Guest PIN' : 'Email'}</div>
+      <div class="accountInfoValue" style="font-size:11px;">${isGuest ? ('****  (PIN set on login)') : email}</div>
+    </div>
+    <div class="accountInfoRow" style="flex-direction:column;align-items:flex-start;">
+      <div class="accountInfoLabel">Best Score</div>
+      <div class="accountInfoValue">${ud.bestScore > 0 ? '🏆 Platform ' + ud.bestScore + ' (Level ' + ud.bestLevel + ')' : 'No runs yet'}</div>
+    </div>
+    <div class="accountInfoRow" style="flex-direction:column;align-items:flex-start;">
+      <div class="accountInfoLabel">Coins</div>
+      <div class="accountInfoValue">🪙 ${ud.coins || 0} &nbsp;·&nbsp; 🐷 ${ud.piggyBank || 0} in Piggy Bank</div>
+    </div>
+    ${!isGuest ? `
+    <button class="accountActionBtn neutral" onclick="settingsChangePassword()">🔑 Change Password</button>
+    <div id="sChangePwForm" style="display:none;margin-bottom:6px;">
+      <input class="authInput" id="sNewPw" placeholder="New password (min 6 chars)" type="password" style="margin-bottom:4px;">
+      <button class="accountActionBtn neutral" style="justify-content:center;" onclick="settingsDoChangePassword()">✅ Confirm New Password</button>
+      <button class="accountActionBtn" style="background:transparent;border:none;color:#666;font-size:10px;cursor:pointer;" onclick="document.getElementById('sChangePwForm').style.display='none';">Cancel</button>
+    </div>` : ''}
+    <button class="accountActionBtn neutral" onclick="settingsSwitchAccount()">🔄 Switch Account</button>
+    <button class="accountActionBtn danger" onclick="settingsLogOut()">🚪 Log Out</button>`;
+}
+
+function settingsChangePassword() {
+  const form = document.getElementById('sChangePwForm');
+  if (form) { form.style.display = form.style.display === 'none' ? 'block' : 'none'; }
+}
+
+function settingsDoChangePassword() {
+  const pw = document.getElementById('sNewPw') ? document.getElementById('sNewPw').value : '';
+  if (!pw || pw.length < 6) { sAccountMsg('Password must be at least 6 characters.'); return; }
+  const firebaseUser = firebase.auth().currentUser;
+  if (!firebaseUser) { sAccountMsg('Not signed in.', '#ff6666'); return; }
+  firebaseUser.updatePassword(pw)
+    .then(() => {
+      sAccountMsg('✅ Password updated!', '#44ff88');
+      document.getElementById('sChangePwForm').style.display = 'none';
+    })
+    .catch(error => {
+      if (error.code === 'auth/requires-recent-login') {
+        sAccountMsg('For security, please log out and log back in before changing your password.', '#ff9944');
+      } else {
+        sAccountMsg(error.message, '#ff6666');
+      }
+    });
+}
+
+function settingsSwitchAccount() {
+  firebase.auth().signOut().catch(() => {});
+  currentUser = null;
+  localStorage.removeItem('fil_current_user');
+  closeSettings();
+  showScreen('authScreen');
+}
+
+function settingsLogOut() {
+  if (currentUser) {
+    // Save progress before logging out
+    if (currentUser.uid) syncUserProfile();
+    if (currentUser.ud.isGuest) saveGuestProgress();
+    else saveUser(currentUser.name, currentUser.ud);
+  }
+  firebase.auth().signOut().catch(() => {});
+  currentUser = null;
+  localStorage.removeItem('fil_current_user');
+  closeSettings();
+  showScreen('authScreen');
 }
 
 function toggleBgMusic(){
@@ -10995,17 +11111,17 @@ document.addEventListener('click', (e) => {
     <button class="mobileNavBtn" onclick="startVersus()" aria-label="Versus">
       <span class="mni">⚔️</span><span class="mnl">VERSUS</span>
     </button>
-    <button class="mobileNavBtn" onclick="showScreen('customLevelsScreen')" aria-label="Custom Levels">
-      <span class="mni">🗂</span><span class="mnl">LEVELS</span>
+    <button class="mobileNavBtn" onclick="loadStoryProgress();showStoryWorldMap();" aria-label="Story Mode">
+      <span class="mni">🗺️</span><span class="mnl">STORY</span>
+    </button>
+    <button class="mobileNavBtn" onclick="showScreen('customLevelsScreen')" aria-label="Level Editor">
+      <span class="mni">🗂</span><span class="mnl">EDITOR</span>
     </button>
     <button class="mobileNavBtn" onclick="openLeaderboard()" aria-label="Leaderboard">
       <span class="mni">🪜</span><span class="mnl">SCORES</span>
     </button>
     <button class="mobileNavBtn" onclick="showScreen('infoScreen','start')" aria-label="How to Play">
       <span class="mni">ℹ️</span><span class="mnl">HELP</span>
-    </button>
-    <button class="mobileNavBtn" onclick="showScreen('authScreen')" aria-label="Account">
-      <span class="mni">👤</span><span class="mnl">ACCOUNT</span>
     </button>
   </nav>
 
