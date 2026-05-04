@@ -436,6 +436,22 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 .bpTrayCard:hover .bpTrayDel{display:block;}
 #bpTrayEmpty{color:#2a4a2a;font-size:10px;padding:0 10px;white-space:nowrap;}
 
+.like-btn {
+  cursor: pointer;
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 20px;
+  background: #2a2a4a;
+  transition: 0.1s;
+}
+.like-btn.liked {
+  background: #b3002d;
+  color: white;
+}
+.like-btn:hover {
+  transform: scale(1.05);
+}
+
 </style>
 </head>
 <body>
@@ -462,7 +478,17 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <div id="zoomControl">
     <button id="zoomBtn" onclick="cycleZoom()" title="Cycle zoom level">🔍 <span id="zoomLabel">100%</span></button>
   </div>
+  <div id="notifBell" style="position:relative; margin-left:6px; cursor:pointer;">
+  <span style="font-size:20px;">🔔</span>
+  <span id="notifBadge" style="position:absolute; top:-5px; right:-8px; background:red; color:white; border-radius:10px; padding:0 5px; font-size:10px; display:none;">0</span>
+</div>
   <button id="settingsBtn" onclick="openSettings()" title="Settings">⚙️</button>
+</div>
+
+<div id="notifPanel" style="display:none; position:fixed; top:50px; right:10px; width:260px; background:#1a1a3e; border:1px solid #4a5fd4; border-radius:8px; z-index:10000; padding:10px; max-height:300px; overflow-y:auto; box-shadow:0 4px 12px black;">
+  <div style="font-weight:bold; color:#ffe066; margin-bottom:8px;">🔔 Notifications</div>
+  <div id="notifList"></div>
+  <button id="clearNotifsBtn" style="margin-top:8px; background:#333; border:none; color:#ccc; padding:4px; border-radius:6px; width:100%; cursor:pointer;">Clear all</button>
 </div>
 
 <!-- SETTINGS PANEL -->
@@ -1433,6 +1459,7 @@ let isMobile = ('ontouchstart' in window);
 
 // ═══ Guest login ═══
 function guestLogin(){
+  startNotificationListener();
   const guestData = {passHash:'', coins: parseInt(localStorage.getItem('guestCoins')||0), bestScore: parseInt(localStorage.getItem('guestBest')||0), bestLevel:1, jumpBoosts:0, parachutes:0, isGuest:true};
   currentUser = {name:'Guest', ud: guestData};
   localStorage.setItem('fil_current_user', JSON.stringify(currentUser));
@@ -1476,6 +1503,7 @@ function doSignup(){
   saveUser(u,ud);loginAs(u,ud);
 }
 function loginAs(name,ud){
+  startNotificationListener();
   if(!ud.jumpBoosts)ud.jumpBoosts=0;if(!ud.parachutes)ud.parachutes=0;if(!ud.piggyBank)ud.piggyBank=0;
   currentUser={name,ud};renderSavedUsers();
   localStorage.setItem('fil_current_user', JSON.stringify({name, ud}));
@@ -7922,46 +7950,114 @@ function fmtTime(secs) {
 // Function to upload a high score to the community leaderboard
 function syncScoreToCommunity(mode, name, platforms, timeSecs) {
   if (!firebaseDB) return;
-  const ref = firebaseDB.ref(`community/${mode}`);
-  const newScore = {
-    name: name.slice(0, 20),            // Limit name length
-    platforms: platforms,
-    secs: Math.round(timeSecs),
-    date: new Date().toISOString().slice(0,10)
-  };
-  ref.push(newScore);
+  const userRef = firebaseDB.ref(`community/${mode}/${name}`);
+  
+  userRef.once('value').then(snapshot => {
+    const existing = snapshot.val();
+    // Only update if this is a new best score or first time
+    if (!existing || platforms > existing.platforms) {
+      userRef.set({
+        name: name,
+        platforms: platforms,
+        secs: Math.round(timeSecs),
+        date: new Date().toISOString().slice(0,10),
+        likes: existing ? existing.likes || 0 : 0,
+        likedBy: existing ? existing.likedBy || {} : {}
+      });
+    }
+  });
 }
 
 // Function to load and display the community top 10
 async function loadCommunityScores(subMode) {
   if (!firebaseDB) return;
-  
   const container = document.getElementById('lbContent');
   if (!container) return;
-  
-  const ref = firebaseDB.ref(`community/${subMode}`);
-  const snapshot = await ref.once('value');
+
+  const snapshot = await firebaseDB.ref(`community/${subMode}`).once('value');
   const scores = [];
-  snapshot.forEach(child => scores.push(child.val()));
-  
-  // Sort: highest platforms first, then fastest time
-  scores.sort((a,b) => b.platforms - a.platforms || a.secs - b.secs);
+  snapshot.forEach(child => {
+    scores.push({ username: child.key, ...child.val() });
+  });
+
+  // Sort by platforms descending
+  scores.sort((a,b) => b.platforms - a.platforms);
   const top10 = scores.slice(0,10);
-  
+
+  // Get current user's name (or 'Guest')
+  const currentUserName = currentUser ? currentUser.name : 'Guest';
+
   let html = `<div class="lbBucket">
-    <div class="lbBucketTitle">🏆 COMMUNITY TOP 10 – ${subMode.toUpperCase()}</div>`;
-  top10.forEach((s, i) => {
-    const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : `${i+1}`;
+    <div class="lbBucketTitle">🏆 COMMUNITY TOP 10 – ${subMode.toUpperCase()} &nbsp; ❤️ = likes</div>`;
+  
+  for (let s of top10) {
+    const likedByCurrent = s.likedBy && s.likedBy[currentUserName] === true;
+    const likeButtonHtml = likedByCurrent
+      ? `<span class="like-btn liked" data-username="${s.username}" data-mode="${subMode}" data-score="${s.platforms}">❤️ ${s.likes}</span>`
+      : `<span class="like-btn" data-username="${s.username}" data-mode="${subMode}" data-score="${s.platforms}">🤍 ${s.likes}</span>`;
+    
     html += `<div class="lbRow">
-      <div class="lbRank">${medal}</div>
+      <div class="lbRank">${top10.indexOf(s)+1}</div>
       <div class="lbName">${escapeHtml(s.name)}</div>
       <div class="lbStat">📊 ${s.platforms} plt</div>
       <div class="lbStat">⏱ ${fmtTime(s.secs)}</div>
+      <div class="lbStat">${likeButtonHtml}</div>
       <div class="lbDate">${s.date || '-'}</div>
     </div>`;
-  });
-  html += `</div><div class="lbEmpty">(scores auto‑sync when you win)</div>`;
+  }
+  html += `</div><div class="lbEmpty">(Click 🤍 to like a score – the owner gets a notification)</div>`;
   container.innerHTML = html;
+
+  // Attach click handlers to like buttons
+  document.querySelectorAll('.like-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const owner = btn.dataset.username;
+      const mode = btn.dataset.mode;
+      const platforms = parseInt(btn.dataset.score);
+      likeScore(owner, mode, platforms);
+    });
+  });
+}
+
+async function likeScore(owner, mode, platforms) {
+  if (!firebaseDB) return;
+  const currentUserName = currentUser ? currentUser.name : 'Guest';
+  if (currentUserName === owner) {
+    showNotif("You can't like your own score 😅");
+    return;
+  }
+
+  const scoreRef = firebaseDB.ref(`community/${mode}/${owner}`);
+  const scoreSnap = await scoreRef.once('value');
+  const scoreData = scoreSnap.val();
+  if (!scoreData) return;
+
+  // Check if already liked
+  if (scoreData.likedBy && scoreData.likedBy[currentUserName]) {
+    showNotif("You already liked this score ❤️");
+    return;
+  }
+
+  // Update likes and likedBy map
+  const updates = {};
+  updates.likes = (scoreData.likes || 0) + 1;
+  updates[`likedBy/${currentUserName}`] = true;
+  await scoreRef.update(updates);
+
+  // Create notification for the score owner
+  const notifRef = firebaseDB.ref(`notifications/${owner}`).push();
+  await notifRef.set({
+    from: currentUserName,
+    mode: mode,
+    platforms: platforms,
+    timestamp: Date.now(),
+    read: false
+  });
+
+  showNotif(`❤️ You liked ${owner}'s score!`);
+  // Refresh the community display to show updated like count
+  loadCommunityScores(mode);
 }
 
 // Helper function to prevent XSS attacks
@@ -8059,6 +8155,7 @@ function restoreUserSession() {
       const { name, ud } = JSON.parse(saved);
       if (ud.isGuest || getUser(name)) {
         currentUser = { name, ud };
+		startNotificationListener();
         // --- FIX: Initialize all game vars from saved user data on page load/F5 ---
         coins       = ud.coins      || 0;
         jumpBoosts  = Math.min(ud.jumpBoosts  || 0, 20);
@@ -10490,6 +10587,84 @@ window.updateHUD = function() {
       document.getElementById('closeMapBtn')?.addEventListener('click', () => closeStoryMap(true));
     });
   })();
+  
+  let notifListener = null;
+
+function startNotificationListener() {
+  if (!firebaseDB || !currentUser) return;
+  const userId = currentUser.name;
+  const notifRef = firebaseDB.ref(`notifications/${userId}`);
+  if (notifListener) notifListener.off();
+  notifListener = notifRef;
+  notifRef.on('value', (snapshot) => {
+    const notifs = [];
+    snapshot.forEach(child => {
+      notifs.push({ id: child.key, ...child.val() });
+    });
+    // Sort by newest first
+    notifs.sort((a,b) => b.timestamp - a.timestamp);
+    const unreadCount = notifs.filter(n => !n.read).length;
+    const badge = document.getElementById('notifBadge');
+    if (badge) {
+      badge.textContent = unreadCount;
+      badge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+    }
+    // Store latest notifs for later display
+    window._latestNotifs = notifs;
+  });
+}
+
+function showNotificationsPanel() {
+  const panel = document.getElementById('notifPanel');
+  const listDiv = document.getElementById('notifList');
+  if (!listDiv) return;
+  const notifs = window._latestNotifs || [];
+  if (notifs.length === 0) {
+    listDiv.innerHTML = '<div style="color:#888; text-align:center;">No notifications</div>';
+  } else {
+    listDiv.innerHTML = notifs.map(n => `
+      <div class="notif-item" data-id="${n.id}" style="padding:6px; border-bottom:1px solid #2a2a4a; ${n.read ? 'opacity:0.6;' : ''}">
+        <div><strong>${escapeHtml(n.from)}</strong> liked your ${n.mode} score of ${n.platforms} platforms</div>
+        <div style="font-size:9px; color:#aaa;">${new Date(n.timestamp).toLocaleString()}</div>
+        ${!n.read ? '<button class="mark-read-btn" style="font-size:9px; background:none; border:1px solid #4a5fd4; border-radius:4px; margin-top:4px; cursor:pointer;">✓ Mark read</button>' : ''}
+      </div>
+    `).join('');
+    // Attach mark-read handlers
+    document.querySelectorAll('.mark-read-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const itemDiv = btn.closest('.notif-item');
+        const notifId = itemDiv.dataset.id;
+        await firebaseDB.ref(`notifications/${currentUser.name}/${notifId}`).update({ read: true });
+        btn.remove();
+        itemDiv.style.opacity = '0.6';
+      });
+    });
+  }
+  panel.style.display = 'block';
+}
+
+// Clear all notifications
+document.getElementById('clearNotifsBtn')?.addEventListener('click', async () => {
+  if (!firebaseDB || !currentUser) return;
+  await firebaseDB.ref(`notifications/${currentUser.name}`).remove();
+  showNotificationsPanel(); // refresh
+});
+
+// Toggle panel when bell clicked
+document.getElementById('notifBell')?.addEventListener('click', () => {
+  const panel = document.getElementById('notifPanel');
+  if (panel.style.display === 'block') panel.style.display = 'none';
+  else showNotificationsPanel();
+});
+
+// Close panel when clicking outside
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('notifPanel');
+  const bell = document.getElementById('notifBell');
+  if (panel && panel.style.display === 'block' && !panel.contains(e.target) && !bell.contains(e.target)) {
+    panel.style.display = 'none';
+  }
+});
 </script>
 
 <!--
