@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Floor Is Lava v74</title>
+<title>Floor Is Lava</title>
 
 <!-- Standard Browser Icon -->
 <link rel="icon" type="image/png" href="icon.png">
@@ -2311,15 +2311,18 @@ gameCanvas.addEventListener('touchstart', e => {
     return; // suppress jump entirely
   }
 
-  // v50: Half jump vs Full jump zones
-  // 30 pixels * currentZoom ensures the physical space on screen remains consistent regardless of zoom
-  const bufferOffset = 60 * currentZoom;
-  const halfJumpThreshold = (player.h * currentZoom * 0.5) + bufferOffset;
-  
-  const isHalfJump = (dy > -halfJumpThreshold && Math.abs(dy) > Math.abs(dx) * 0.5);
+  // Half jump zone: anything from player feet up to ~2.5 player heights above the player's head.
+  // This covers "two player heads of space" above the player top, and also catches
+  // side taps that are low enough — no angle condition needed below this ceiling.
+  // player.h in world units converted to screen: player.h * currentZoom
+  // player feet (dy=0) to player head = player.h * currentZoom (dy = -player.h * currentZoom)
+  // two heads above that = another 2 * player.h * currentZoom
+  // So half-jump ceiling = 3 * player.h * currentZoom above feet = -3 * player.h * currentZoom
+  const halfJumpCeiling = -(player.h * currentZoom * 3.0);
+  const isHalfJump = dy > halfJumpCeiling;   // tap is below the ceiling → half jump
 
   if (!isHalfJump) {
-    // Normal jump / directional movement zone
+    // Normal jump / directional movement zone (tap is high up)
     if(dx > 40) player.vx = 2.5; else if(dx < -40) player.vx = -2.5;
   }
   
