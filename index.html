@@ -2155,7 +2155,7 @@ function updateHUD(){
 // ═══ POWERS ═══
 function activateJumpBoost(){ return jumpBoosts > 0; }
 function activateSkip(){
-  if(skipUses <= 0){showNotif('No skips! Buy in shop.');return;}
+  if(skipUses <= 0){triggerQuickBuyIfEmpty('skip');return;}
   skipUses--;
   if(skipUses <= 0) triggerQuickBuyIfEmpty('skip');
   const sa = Math.random() < 0.5 ? 1 : 2;
@@ -6542,7 +6542,9 @@ function fireSelectedSlot(){
   dialPendingFire = false;
   
   if (slot.getCount() <= 0) {
-    showNotif('None left! Buy in shop.');
+    // Map dial slot key to QB_CONFIG key and show the quick-buy popup
+    const qbKey = {boost:'boost', skip:'skip', book:'book', lavaShip:'ship'}[slot.key] || slot.key;
+    triggerQuickBuyIfEmpty(qbKey);
     updateWheelDial();
     return;
   }
@@ -6585,7 +6587,8 @@ document.addEventListener('click',e=>{
   // Centre — fire immediately
   const slot=DIAL_SLOTS[selectedSlot];
   if(!slot || slot.getCount()<=0){
-    showNotif('None! Buy in shop.');
+    const qbKey = {boost:'boost', skip:'skip', book:'book', lavaShip:'ship'}[slot?.key] || slot?.key;
+    if(qbKey) triggerQuickBuyIfEmpty(qbKey);
     return;
   }
 
@@ -6611,7 +6614,8 @@ document.getElementById('powerWheel').addEventListener('touchend',e=>{
     // Centre → fire immediately
     const slot = DIAL_SLOTS[selectedSlot];
     if(!slot || slot.getCount() <= 0){
-      showNotif('None! Buy in shop.');
+      const qbKey = {boost:'boost', skip:'skip', book:'book', lavaShip:'ship'}[slot?.key] || slot?.key;
+      if(qbKey) triggerQuickBuyIfEmpty(qbKey);
       return;
     }
 
