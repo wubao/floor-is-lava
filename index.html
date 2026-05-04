@@ -15,6 +15,26 @@
 <!-- PWA Manifest & Theme -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ffe066">
+
+<!-- Firebase SDKs (compat version for simplicity) -->
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
+<!-- Initialize Firebase with YOUR config -->
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDUG5MetRa7YYYg3TRu0MluaSm_CL5vtsE",
+    authDomain: "floorislavaleaderboard.firebaseapp.com",
+    databaseURL: "https://floorislavaleaderboard-default-rtdb.firebaseio.com",
+    projectId: "floorislavaleaderboard",
+    storageBucket: "floorislavaleaderboard.firebasestorage.app",
+    messagingSenderId: "847518709085",
+    appId: "1:847518709085:web:918807292b46a56043a4b4"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const firebaseDB = firebase.database();
+</script>
+
 <style>
 /* ═══════════════════════════════════════════════════
    FLOOR IS LAVA v51
@@ -704,6 +724,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button class="lbTab active" id="lbTabClimt" onclick="showLbTab('climber')">🧗 Climber</button>
       <button class="lbTab" id="lbTabFrogg" onclick="showLbTab('frogger')">🐸 Frogger</button>
       <button class="lbTab" id="lbTabStory" onclick="showLbTab('story')">🌋 Story</button>
+	  <button class="lbTab" id="lbTabCommunity" onclick="showLbTab('community')">🌍 Community</button>
     </div>
     <div id="lbContent"></div>
   </div>
@@ -1688,10 +1709,10 @@ function makePlatform(y, index, prevX, prevW){
 
   return {x, y: y - extraGap, w, h: PLATFORM_H, color, index, hasCoin: color==='green',
     origY: y - extraGap, pulled: false, isGap,
-    tipping: canTip ? 'idle' : null,
+    tipping: canTip ? 'waiting' : null,
     tipDir,
     tipAngle: 0,
-    tipTimer: canTip ? 3000 + Math.random() * 8000 : 0,
+    tipTimer: 0,
     tipShakeTimer: 0,
     tipPivotX: 0, tipPivotY: 0,
     iceUsed: false,
@@ -2413,6 +2434,15 @@ function updateTippingPlatforms(dt){
   for(const p of platforms){
     if(!p.tipping || p.tipping === 'landed') continue;
 
+    // WAITING: activate timer only when player is within 12 platforms vertically
+    if(p.tipping === 'waiting'){
+      if(Math.abs(p.y - player.y) < 5 * PLATFORM_GAP){
+        p.tipping = 'idle';
+        p.tipTimer = 100 + Math.random() * 600; // 500–2000ms from when player gets close
+      }
+      continue;
+    }
+
     // IDLE: count down to shake
     if(p.tipping === 'idle'){
       p.tipTimer -= dt * 16.67;
@@ -2437,28 +2467,43 @@ function updateTippingPlatforms(dt){
       continue;
     }
 
-    // FALLING: rotate around pivot until 90 degrees (Math.PI/2)
+    // FALLING: rotate over 1.2 seconds (π/4 radians total)
+    // At 60fps dt≈1: need (π/4) / (1200ms / 16.67ms_per_frame) ≈ 0.000654 rad per dt unit
     if(p.tipping === 'falling'){
-      // Rotate ~90 degrees at a speed that feels gravity-driven
-      const fallSpeed = 0.003 * dt; // radians per ms
-      // Left pivot = platform falls clockwise (positive angle)
-      // Right pivot = platform falls counter-clockwise (negative angle)
+      const fallSpeed = 0.000654 * dt * 16.67; // rad per frame — completes in ~1.2s
       const dir = p.tipDir === 'left' ? 1 : -1;
       p.tipAngle += dir * fallSpeed;
 
-      // Check if player is hit during fall — but not during vine/lava ship flight
-      const tipInvulnerable = lavaShipActive ||
+      // ── PUSH PLAYER on collision (vine/lava-ship = invulnerable, no interaction) ──
+      const flightInvulnerable = lavaShipActive ||
         (anim.active && (anim.type === 'vineSwing' || anim.type === 'vineLaunch'));
-      if(!tipInvulnerable && checkTipKillsPlayer(p)){
-        gameEnd(false); return;
-      }
+		if(!flightInvulnerable && checkTipKillsPlayer(p)){
+		  // Half force for Scorcha-tipped platforms (annoying but not deadly)
+		  const pushDir = p.tipDir === 'left' ? 1 : -1;
+		  const isScorchaTip = p.tipFromScorcha === true;
+		  
+		  // Normal push distance: 420-500px → vx ≈ 23-28
+		  // Half push distance: 210-250px → vx ≈ 12-14
+		  if (isScorchaTip) {
+			const pushDist = 220 + Math.random() * 40;  // 220-260px (half)
+			player.vx = pushDir * (pushDist / 18);      // ≈ 12-14.5
+			player.vy = -1.2;                          // gentler upward nudge
+		  } else {
+			const pushDist = 420 + Math.random() * 80;  // 420-500px (normal)
+			player.vx = pushDir * (pushDist / 18);      // ≈ 23-28
+			player.vy = -2;                            // normal upward
+		  }
+		  player.onGround = false;
+		  // Clear sticky/purple state so physics don't fight the push
+		  onSticky = false; stickyTimer = 0; stickyPlatform = null;
+		  if(onPurple){ onPurple=false; purpleTimer=0; purplePlatform=null; document.getElementById('purpleWarning').style.opacity='0'; }
+		  showNotif(isScorchaTip ? '🌀 Scorcha tipped you! (slowed push)' : '💥 Platform tipped you!');
+		}
 
-      // Landed at 90 degrees
+      // Landed at π/4
       if(Math.abs(p.tipAngle) >= Math.PI / 4){
         p.tipAngle = dir * Math.PI / 4;
         p.tipping = 'landed';
-        // Update p.x/p.y to reflect final position (now vertical, acts as ramp)
-        // For gameplay we keep the pivot and angle — collision uses transformed coords
       }
     }
   }
@@ -2495,7 +2540,7 @@ function updateStalagmites(dt){
 
   // Spawn stalagmites on platforms near lava that don't have them yet
   for(const p of platforms){
-    if(p.tipping && p.tipping !== 'idle') continue;
+    if(p.tipping && p.tipping !== 'idle' && p.tipping !== 'waiting') continue;
     if(p.isGap) continue;
     if(p.crumbleState === 'gone') continue;  // skip disintegrated crumble platforms
     const distToLava = lavaWorldY - p.y; // positive = lava is below platform
@@ -2804,7 +2849,7 @@ function gameLoop(ts){
   if(onSticky && !player.onGround && player.vy < -2){ onSticky=false; stickyTimer=0; stickyPlatform=null; }
   for(const p of platforms){
     // Skip platforms that are no longer in their original horizontal position
-    if(p.tipping && p.tipping !== 'idle') continue;
+    if(p.tipping && p.tipping !== 'idle' && p.tipping !== 'waiting') continue;
 
     // ── SWING PLATFORM: custom surface collision ──
     if(p.swingData && p.swingData.platCX !== undefined){
@@ -3171,7 +3216,7 @@ if (platformCount > 180 && platformCount < 200) {
 const climberExtraAbove = (typeof gameMode !== 'undefined' && gameMode === 'climber') ? 1000 * PLATFORM_GAP : 0;
   const totalExtraAbove = Math.max(versusExtraAbove, climberExtraAbove);
   platforms = platforms.filter(p => {
-    if(p.tipping && p.tipping !== 'idle') return true;               // never cull active tipping platforms
+    if(p.tipping && p.tipping !== 'idle' && p.tipping !== 'waiting') return true;               // never cull active tipping platforms
     if(totalExtraAbove > 0 && p.y < highestActiveY - totalExtraAbove) return false;
     if(p.y < playerWorldY) return true;                              // above player — always keep
     if(p.y <= playerWorldY + PLATFORM_HISTORY_BELOW) return true;   // below player — keep history
@@ -3481,12 +3526,50 @@ function drawPlatform(p, sx, sy){
     for(let i=0;i<3;i++){gCtx.beginPath();gCtx.arc(sx+p.w*0.2+i*p.w*0.3,sy+PLATFORM_H/2,5,0,Math.PI*2);gCtx.fill();}
     gCtx.font='10px Arial';gCtx.textAlign='center';gCtx.fillText('💀',sx+p.w/2,sy+13);
   }
+
+  // ── TIPPING PLATFORM idle indicator — subtle pivot wedge + ⚠ icon ──
+  if(p.tipping === 'idle' || p.tipping === 'waiting'){
+    const cx2 = sx + p.w/2;
+    const cy2 = sy + p.h/2 + 1;
+    // Small pivot triangle hinting which side it will fall from
+    const tipSide = p.tipDir === 'left' ? sx + 6 : sx + p.w - 6;
+    gCtx.save();
+    gCtx.globalAlpha = 0.38 + Math.sin(Date.now() * 0.0025) * 0.12; // gentle pulse
+    // Tiny wedge at the pivot edge
+    gCtx.fillStyle = '#ffaa00';
+    gCtx.beginPath();
+    gCtx.moveTo(tipSide, sy);
+    gCtx.lineTo(tipSide + (p.tipDir === 'left' ? 8 : -8), sy);
+    gCtx.lineTo(tipSide, sy + p.h);
+    gCtx.closePath();
+    gCtx.fill();
+    // ⚠ icon centred on platform
+    gCtx.globalAlpha = 0.55 + Math.sin(Date.now() * 0.003) * 0.15;
+    gCtx.font = `bold ${Math.max(9, Math.min(11, p.w * 0.07))}px Arial`;
+    gCtx.textAlign = 'center';
+    gCtx.fillStyle = '#ffcc44';
+    gCtx.fillText('⚠', cx2, cy2 + 4);
+    gCtx.restore();
+  }
   if(p.color === 'ice'){
     gCtx.fillStyle = 'rgba(255,255,255,0.5)';
     gCtx.font = '12px Arial';
     gCtx.textAlign = 'center';
     gCtx.fillText('❄️', sx + p.w / 2, sy + p.h / 2);
   }
+  
+	  // Special Scorcha rescue platform: semi‑transparent dark with shiny border
+	if (p.isScorchaRescue) {
+	  gCtx.fillStyle = '#2a2a3a';  // lighter black than background (#0d0d2b)
+	  gCtx.beginPath(); gCtx.roundRect(sx, sy, p.w, p.h, 6); gCtx.fill();
+	  gCtx.strokeStyle = '#88aaff';
+	  gCtx.lineWidth = 1.5;
+	  gCtx.beginPath(); gCtx.roundRect(sx+2, sy+2, p.w-4, p.h-4, 4); gCtx.stroke();
+	  // Shiny effect (small white highlight)
+	  gCtx.fillStyle = 'rgba(255,255,200,0.3)';
+	  gCtx.beginPath(); gCtx.roundRect(sx+4, sy+4, p.w-8, 4, 2); gCtx.fill();
+	  return; // skip normal platform drawing
+	}
 
   // ── STICKY PLATFORM: goo blobs on top ──
   if(p.color === 'sticky'){
@@ -3903,11 +3986,16 @@ function gameWin() {
 
   const practiceMode = isCustomPlayMode();
 
-  if (!practiceMode) {
+if (!practiceMode) {
     saveScore();
     lastGameWon = true;
     handleCoinsAndPowerUps('win');
-  }
+    // ── Upload to community leaderboard ──
+    if (!versusMode && currentUser) {
+        const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
+        syncScoreToCommunity(mode, currentUser.name, platformCount, levelTimerSecs);
+    }
+}
 
   updateHUD();
 
@@ -6422,9 +6510,13 @@ function endVersus(won, reason) {
 
   let penaltyMsgText = '';
 
-  if (won) {
+if (won) {
     handleCoinsAndPowerUps('win');
-  } else {
+    // ── Upload to community leaderboard ──
+    if (currentUser) {
+        syncScoreToCommunity('versus', currentUser.name, platformCount, levelTimerSecs);
+    }
+} else {
     // Deduct 30 coins from current wallet (lost forever, not to piggy)
     const penalty = 30;
     const deducted = Math.min(penalty, coins);
@@ -6666,6 +6758,39 @@ const SCORCHA_POWER_COMBOS = [
   [1,2,3,4],
 ];
 
+// Creates a temporary rescue platform under Scorcha to prevent falling
+function scorchaCreateRescuePlatform() {
+  // Avoid duplicate rescue platforms
+  if (window._scorchaRescuePlatform) return;
+  
+  // Determine y-position: player's current platform Y (or player's feet Y)
+  let targetY = null;
+  for (let p of platforms) {
+    if (p.index === player.currentPlatformIndex) {
+      targetY = p.y;
+      break;
+    }
+  }
+  if (targetY === null) targetY = player.y + player.h - 10; // fallback
+  
+  // Center the platform under Scorcha
+  const platX = Math.max(0, Math.min(SCORCHA.x + 20 - 50, WORLD_W - 100));
+  const rescuePlat = {
+    x: platX,
+    y: targetY,
+    w: 100,
+    h: PLATFORM_H,
+    color: 'scorchaRescue',    // special color for drawing
+    index: -1,
+    isScorchaRescue: true,
+    lifeTimer: 5000,           // auto-remove after 5 seconds
+    scorchaOnly: true          // only Scorcha can land on it? optional, but player can also stand
+  };
+  platforms.push(rescuePlat);
+  window._scorchaRescuePlatform = rescuePlat;
+  showNotif('🔥 Scorcha summons a dark platform!');
+}
+
 function scorchaEpisodePowers(storyEpId) {
   // bad-guy episodes are every 3rd (ep 3,6,9,12,...) → bad-guy index 0,1,2,...
   const bgIdx = Math.floor((storyEpId - 3) / 3);
@@ -6687,7 +6812,7 @@ function initScorcha(storyEpId) {
   SCORCHA.powers = scorchaEpisodePowers(storyEpId);
   SCORCHA.power = SCORCHA.powers[0];
   SCORCHA._powerIdx = 0;
-  SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random() * 26); // 25-50
+  SCORCHA.platformsUntilReturn = 35 + Math.floor(Math.random() * 26); // 35-60
   SCORCHA.netActive = false;
   SCORCHA.playerEnsnared = false;
   SCORCHA.playerEnsnareTimer = 0;
@@ -6747,6 +6872,11 @@ function updateScorcha(dt) {
 
   // ── PHASE: HIDDEN — wait for platform count ──
   if(SCORCHA.phase === 'hidden'){
+	  if (window._scorchaRescuePlatform) {
+	  const idx = platforms.findIndex(p => p === window._scorchaRescuePlatform);
+	  if (idx !== -1) platforms.splice(idx, 1);
+	  window._scorchaRescuePlatform = null;
+	}
     if(typeof SCORCHA._lastPlatCount === 'undefined') SCORCHA._lastPlatCount = platformCount;
     const diff = platformCount - SCORCHA._lastPlatCount;
     if(diff > 0){ SCORCHA.platformsUntilReturn -= diff; SCORCHA._lastPlatCount = platformCount; }
@@ -6782,10 +6912,21 @@ function updateScorcha(dt) {
         break;
       }
     }
+		// ── RESCUE PLATFORM: if Scorcha is still falling and near player's platform Y ──
+	if (!SCORCHA.onGround && SCORCHA.phase === 'dropping') {
+	  const playerPlatY = (() => {
+		for (let p of platforms) if (p.index === player.currentPlatformIndex) return p.y;
+		return player.y + player.h;
+	  })();
+	  // If Scorcha's feet are within 50px of the player's platform Y, create rescue platform
+	  if (Math.abs((SCORCHA.y + 50) - playerPlatY) < 60 && !window._scorchaRescuePlatform) {
+		scorchaCreateRescuePlatform();
+	  }
+	}
     // If Scorcha falls too far below player, abort
     if(SCORCHA.y - camera.y > getZoomedCanvasH() + 300){
       SCORCHA.phase = 'hidden';
-      SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random()*26);
+      SCORCHA.platformsUntilReturn = 35 + Math.floor(Math.random() * 26);
       SCORCHA._lastPlatCount = platformCount;
     }
     return;
@@ -6803,10 +6944,21 @@ function updateScorcha(dt) {
     if(SCORCHA.x + 40 > WORLD_W-10){ SCORCHA.x = WORLD_W-50; SCORCHA.vx = -Math.abs(SCORCHA.vx)*0.5; }
 
     SCORCHA.onGround = false;
+		// ── RESCUE PLATFORM: if Scorcha is still falling and near player's platform Y ──
+	if (!SCORCHA.onGround && SCORCHA.phase === 'dropping') {
+	  const playerPlatY = (() => {
+		for (let p of platforms) if (p.index === player.currentPlatformIndex) return p.y;
+		return player.y + player.h;
+	  })();
+	  // If Scorcha's feet are within 50px of the player's platform Y, create rescue platform
+	  if (Math.abs((SCORCHA.y + 50) - playerPlatY) < 60 && !window._scorchaRescuePlatform) {
+		scorchaCreateRescuePlatform();
+	  }
+	}
     // Platform collision (same as bots)
     for(const p of platforms){
       if(p.crumbleState === 'gone') continue;
-      if(p.tipping && p.tipping !== 'idle') continue;
+      if(p.tipping && p.tipping !== 'idle' && p.tipping !== 'waiting') continue;
       if(SCORCHA.vy >= 0 &&
          SCORCHA.y + 50 > p.y && SCORCHA.y + 50 < p.y + p.h + Math.abs(SCORCHA.vy)*dt + 8 &&
          SCORCHA.x + 36 > p.x + 4 && SCORCHA.x + 4 < p.x + p.w - 4){
@@ -6819,7 +6971,7 @@ function updateScorcha(dt) {
     // Fell into lava — abort
     if(lavaWorldY <= SCORCHA.y + 50){
       SCORCHA.phase = 'hidden';
-      SCORCHA.platformsUntilReturn = 25 + Math.floor(Math.random()*26);
+      SCORCHA.platformsUntilReturn = 35 + Math.floor(Math.random() * 26);
       SCORCHA._lastPlatCount = platformCount;
       return;
     }
@@ -6843,7 +6995,7 @@ function updateScorcha(dt) {
           p.y < player.y + PLATFORM_GAP * 2 &&
           p.y > player.y - PLATFORM_GAP * 6 &&
           p.crumbleState !== 'gone' &&
-          (!p.tipping || p.tipping === 'idle')
+          (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting')
         ).sort((a, b) => b.y - a.y); // highest y = lowest visual = closest above player
 
         let target = null;
@@ -6899,6 +7051,18 @@ function updateScorcha(dt) {
       scorchaNextPower();
     }
   }
+  
+	  // At the end of updateScorcha(dt) function, before the final return:
+	if (window._scorchaRescuePlatform) {
+	  const rescue = window._scorchaRescuePlatform;
+	  rescue.lifeTimer -= dt * 16.67;
+	  // Also remove if Scorcha is above it and not landing (i.e., jumped off)
+	  if (rescue.lifeTimer <= 0 || (SCORCHA.y + 50 < rescue.y - 30)) {
+		const idx = platforms.findIndex(p => p === rescue);
+		if (idx !== -1) platforms.splice(idx, 1);
+		window._scorchaRescuePlatform = null;
+	  }
+	}
 }
 
 // Check if Scorcha can use her power on the current or nearby platforms, returns true if used
@@ -6908,11 +7072,15 @@ function scorchaCheckAndUsePower() {
   if(!cp) return false;
 
   if(pow === 1){
+    // Max 2 tipping platforms per Scorcha visit
+    if((SCORCHA._tipCount || 0) >= 3) return false;
     // Tip the platform Scorcha just landed on (if it's above player)
     if(cp.tipping === null && cp.y < player.y){
       cp.tipping = 'shaking'; cp.tipTimer = 0; cp.tipShakeTimer = 800;
+      cp.tipFromScorcha = true;
       cp.tipDir = Math.random()<0.5?'left':'right';
       cp.tipPivotX = cp.x + cp.w/2; cp.tipPivotY = cp.y + cp.h;
+      SCORCHA._tipCount = (SCORCHA._tipCount || 0) + 1;
       showNotif('🌀 Scorcha tips a platform!');
       return true;
     }
@@ -6920,8 +7088,10 @@ function scorchaCheckAndUsePower() {
     const t = platforms.find(p => p.tipping === null && p.y < player.y && p.y > player.y - PLATFORM_GAP*3);
     if(t){
       t.tipping = 'shaking'; t.tipTimer = 0; t.tipShakeTimer = 800;
+      t.tipFromScorcha = true;
       t.tipDir = Math.random()<0.5?'left':'right';
       t.tipPivotX = t.x + t.w/2; t.tipPivotY = t.y + t.h;
+      SCORCHA._tipCount = (SCORCHA._tipCount || 0) + 1;
       showNotif('🌀 Scorcha tips a platform!');
       return true;
     }
@@ -6991,7 +7161,7 @@ function scorchaStartDrop() {
     p.y < player.y - PLATFORM_GAP * 3 &&
     p.y > player.y - PLATFORM_GAP * 8 &&
     p.crumbleState !== 'gone' &&
-    (!p.tipping || p.tipping === 'idle')
+    (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting')
   );
   let targetPlat = null;
   if(candidates.length > 0){
@@ -7020,6 +7190,7 @@ function scorchaStartEscape() {
   SCORCHA.ropeX = SCORCHA.x + 20;
   SCORCHA.ropeTopY = SCORCHA.y - PLATFORM_GAP * 20;
   SCORCHA.escapeTimer = 0;
+  SCORCHA._tipCount = 0; // reset tip counter for next visit
   // Drift left or right
   SCORCHA.vx = (Math.random()<0.5 ? -1 : 1) * (1.5 + Math.random()*1.5);
 }
@@ -7720,22 +7891,87 @@ let currentLbTab = 'climber';
 
 function showLbTab(tab) {
   currentLbTab = tab;
-  ['Climt','Frogg','Story'].forEach(t => {
+  // Update active tab styling
+  ['Climt','Frogg','Story','Community'].forEach(t => {
     const id = 'lbTab' + t;
     const el = document.getElementById(id);
     if(el) el.classList.toggle('active',
-      (tab==='climber'&&t==='Climt')||(tab==='frogger'&&t==='Frogg')||(tab==='story'&&t==='Story'));
+      (tab==='climber'&&t==='Climt')||(tab==='frogger'&&t==='Frogg')||(tab==='story'&&t==='Story')||(tab==='community'&&t==='Community'));
   });
   const el = document.getElementById('lbContent');
   if(!el) return;
-  if(tab === 'story') { el.innerHTML = renderLbStory(); }
-  else               { el.innerHTML = renderLbNormal(tab); }
+  if(tab === 'story') {
+    el.innerHTML = renderLbStory();
+  } else if(tab === 'community') {
+    // For the community tab, we'll load scores for a default mode, e.g., 'climber'
+    // You can add three small buttons inside the community tab to allow switching later.
+    loadCommunityScores('climber');
+  } else {
+    el.innerHTML = renderLbNormal(tab);
+  }
 }
 
 function fmtTime(secs) {
   const s = Math.round(secs);
   const m = Math.floor(s/60), r = s%60;
   return m>0 ? `${m}m ${String(r).padStart(2,'0')}s` : `${r}s`;
+}
+
+// ── COMMUNITY LEADERBOARD FUNCTIONS ──
+
+// Function to upload a high score to the community leaderboard
+function syncScoreToCommunity(mode, name, platforms, timeSecs) {
+  if (!firebaseDB) return;
+  const ref = firebaseDB.ref(`community/${mode}`);
+  const newScore = {
+    name: name.slice(0, 20),            // Limit name length
+    platforms: platforms,
+    secs: Math.round(timeSecs),
+    date: new Date().toISOString().slice(0,10)
+  };
+  ref.push(newScore);
+}
+
+// Function to load and display the community top 10
+async function loadCommunityScores(subMode) {
+  if (!firebaseDB) return;
+  
+  const container = document.getElementById('lbContent');
+  if (!container) return;
+  
+  const ref = firebaseDB.ref(`community/${subMode}`);
+  const snapshot = await ref.once('value');
+  const scores = [];
+  snapshot.forEach(child => scores.push(child.val()));
+  
+  // Sort: highest platforms first, then fastest time
+  scores.sort((a,b) => b.platforms - a.platforms || a.secs - b.secs);
+  const top10 = scores.slice(0,10);
+  
+  let html = `<div class="lbBucket">
+    <div class="lbBucketTitle">🏆 COMMUNITY TOP 10 – ${subMode.toUpperCase()}</div>`;
+  top10.forEach((s, i) => {
+    const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : `${i+1}`;
+    html += `<div class="lbRow">
+      <div class="lbRank">${medal}</div>
+      <div class="lbName">${escapeHtml(s.name)}</div>
+      <div class="lbStat">📊 ${s.platforms} plt</div>
+      <div class="lbStat">⏱ ${fmtTime(s.secs)}</div>
+      <div class="lbDate">${s.date || '-'}</div>
+    </div>`;
+  });
+  html += `</div><div class="lbEmpty">(scores auto‑sync when you win)</div>`;
+  container.innerHTML = html;
+}
+
+// Helper function to prevent XSS attacks
+function escapeHtml(str) {
+  return str.replace(/[&<>]/g, function(m) {
+    if(m === '&') return '&amp;';
+    if(m === '<') return '&lt;';
+    if(m === '>') return '&gt;';
+    return m;
+  });
 }
 
 function renderLbNormal(mode) {
@@ -9987,6 +10223,7 @@ window.gameWin = function() {
     }
 
 function showEndStats(ep, finalPlatforms, allDone) {
+  const epTimeSecs = Math.round(window.levelTimerSecs || 0);
   console.log('[STATS] showEndStats: coins =', coins, 'allDone=', allDone);
   if (!ep) return;
   const target = ep.targetPlats || 0;
@@ -10068,7 +10305,12 @@ function showEndStats(ep, finalPlatforms, allDone) {
         myCoinsBox.style.borderColor = '#ffe066';
         setTimeout(() => { myCoinsBox.style.transform = 'scale(1)'; }, 200);
       }
-      if (window.updateHUD) window.updateHUD();
+    if (window.updateHUD) window.updateHUD();
+
+    // ── Upload to community leaderboard ──
+    if (currentUser && currentUser.name) {
+        syncScoreToCommunity('story', currentUser.name, finalPlatforms, epTimeSecs);
+    }
 
       continueBtn.disabled = false;
       continueBtn.style.opacity = '1';
