@@ -8812,15 +8812,12 @@ if (document.getElementById('startScreen') && document.getElementById('startScre
   startDemo();
 }
 
-// Try to restore logged-in user (guest or registered)
-if (!restoreUserSession()) {
-  showScreen('authScreen');
-} else {
-  // startNotificationListener is now defined — safe to call
-  if (typeof startNotificationListener === 'function' && currentUser) {
-    startNotificationListener();
-  }
-}
+// ── Session restore deferred to DOMContentLoaded (in story script block below) ──
+// Reason: restoreUserSession calls loadSettings → applySettings → updateHUD,
+// which is defined in the second <script> block. Running it here (end of first
+// script block) would throw "updateHUD is not defined".
+// The data-loading calls above (dbLoad, lbLoad, etc.) are safe here because
+// they only touch localStorage and don't call any game-display functions.
 </script>
 
 <!-- ========== VOLCANO RUSH STORY MODE – v49 ========== -->
@@ -11262,6 +11259,23 @@ document.addEventListener('click', (e) => {
     panel.style.display = 'none';
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// ██ SESSION RESTORE — runs here so ALL functions (updateHUD, story
+//    vars, etc.) are guaranteed to be defined before we call into them.
+//    Previously this ran at the end of the first <script> block, causing
+//    "updateHUD is not defined" because updateHUD is declared in this
+//    second <script> block.
+// ══════════════════════════════════════════════════════════════════════
+(function initSession() {
+  if (!restoreUserSession()) {
+    showScreen('authScreen');
+  } else {
+    if (typeof startNotificationListener === 'function' && currentUser) {
+      startNotificationListener();
+    }
+  }
+})();
 </script>
 
 <!--
