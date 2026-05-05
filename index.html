@@ -393,15 +393,16 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #versusResult p{color:#ccc;font-size:12px;margin-bottom:14px;text-align:center;white-space:pre-line;padding:0 20px;}
 .vrBtn{border:none;border-radius:10px;padding:8px 18px;font-size:12px;font-weight:bold;cursor:pointer;margin:3px;}
 /* AD MODAL */
-#adModal{display:none;position:fixed;inset:0;background:#000d;z-index:9000;align-items:center;justify-content:center;}
-#adModal.show{display:flex;}
-#adPanel{background:linear-gradient(160deg,#1a2a1a,#0e1a0e);border:2px solid #27ae60;border-radius:16px;padding:22px 20px;width:min(300px,92%);color:#fff;text-align:center;}
-#adPanel h2{color:#ffe066;font-size:16px;margin-bottom:8px;}
-#adPanel p{color:#aaa;font-size:11px;margin-bottom:12px;line-height:1.5;}
-#adCountdown{font-size:34px;font-weight:bold;color:#27ae60;margin-bottom:10px;}
-#adWatchBtn{background:#27ae60;color:#fff;border:none;border-radius:9px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer;width:100%;margin-bottom:6px;}
-#adWatchBtn:disabled{background:#2a5a2a;color:#888;cursor:default;}
-#adSkipBtn{background:transparent;color:#666;border:1px solid #333;border-radius:8px;padding:6px;font-size:11px;cursor:pointer;width:100%;}
+#rewardPopup{display:none;position:fixed;inset:0;background:#000d;z-index:9000;align-items:center;justify-content:center;}
+#rewardPopup.show{display:flex;}
+#rewardPanel{background:linear-gradient(160deg,#1a2a1a,#0e1a0e);border:2px solid #27ae60;border-radius:16px;padding:22px 20px;width:min(300px,92%);color:#fff;text-align:center;}
+#rewardPanel h2{color:#ffe066;font-size:16px;margin-bottom:8px;}
+#rewardPanel p{color:#aaa;font-size:11px;margin-bottom:12px;line-height:1.5;}
+#rewardCountdown{font-size:34px;font-weight:bold;color:#27ae60;margin-bottom:10px;}
+#rewardWatchBtn{background:#27ae60;color:#fff;border:none;border-radius:9px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer;width:100%;margin-bottom:6px;}
+#rewardWatchBtn:disabled{background:#2a5a2a;color:#888;cursor:default;}
+#rewardSkipBtn{background:transparent;color:#666;border:1px solid #333;border-radius:8px;padding:6px;font-size:11px;cursor:pointer;width:100%;}
+#rewardCloseBtn{background:transparent;color:#444;border:1px solid #2a2a2a;border-radius:8px;padding:5px;font-size:10px;cursor:pointer;width:100%;margin-top:4px;}
 
 /* EDITOR */
 #editorScreen{background:#0d0d1e;}
@@ -993,7 +994,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button class="goBtn" style="background:linear-gradient(135deg,#4aaa44,#267022);color:#fff;" onclick="openVersusRPS()">🎲 RPS — Save Coins!</button>
     </div>
 	<div class="goButtons" id="vrAdRow" style="display:none;">
-      <button class="goBtn" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;" onclick="openGameOverAd()">📺 Watch Ad — Reclaim Piggy Coins!</button>
+      <button class="goBtn" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;" onclick="openCoinReclaimPopup()">📺 Watch Ad — Reclaim Piggy Coins!</button>
     </div>
     <div class="goButtons">
       <button class="vrBtn" style="background:#9c27b0;color:#fff;" onclick="startVersus()">⚔️ Rematch</button>
@@ -1022,7 +1023,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button class="goBtn" id="rpsBtn" onclick="openRPS()">🎲 RPS — Save Coins!</button>
     </div>
     <div class="goButtons">
-      <button class="goBtn" id="goAdBtn" onclick="openGameOverAd()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Reclaim Piggy Coins!</button>
+      <button class="goBtn" id="goAdBtn" onclick="openCoinReclaimPopup()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Reclaim Piggy Coins!</button>
     </div>
     <div class="goButtons">
       <button class="goBtn" id="restartBtn" onclick="restartGameAfterStory()">▶ Play Again</button>
@@ -1053,7 +1054,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <button id="rpsGo" onclick="doRPS()">GO!</button>
     <div id="rpsResult"></div>
 	<div id="rpsAdRow" style="display:none;justify-content:center;margin-bottom:6px;">
-      <button class="goBtn" onclick="openRpsLossAd()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Reclaim Coins!</button>
+      <button class="goBtn" onclick="openRpsLossReward()" style="background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;">📺 Watch Ad — Reclaim Coins!</button>
     </div>
     <div id="rpsButtons" style="display:none">
       <button class="goBtn" id="restartBtn2" onclick="restartGame()">▶ Play Again</button>
@@ -1083,7 +1084,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <h3>🔤 Word Scramble</h3>
       <p>Unscramble 3 game-themed words to claim your coins!</p>
     </div>
-    <div class="miniGameCard" id="piggyAdCard" onclick="startPiggyAd()" style="border-color:#27ae60;cursor:pointer;">
+    <div class="miniGameCard" id="piggyRewardCard" onclick="startPiggyReward()" style="border-color:#27ae60;cursor:pointer;">
       <h3 style="color:#27ae60;">📺 Watch an Ad</h3>
       <p>Watch a short ad to instantly claim all your piggy bank coins!</p>
     </div>
@@ -8028,238 +8029,255 @@ function animateCoinTransfer(fromElId, toElId, amount, onDone){
   }
 }
 
-let adCoinsAtRisk=0, adTimer=null, adCountVal=5;
+let pendingRewardCoins=0, rewardTimer=null, rewardCountVal=5;
 let piggyAttemptUnlocked=false;
 let piggyAttemptUsed=false;
 nightMode=false;
   nightVisiblePlatforms.clear();
 
-function showAdModal(coinsAtRisk){
-  adCoinsAtRisk=coinsAtRisk; adCountVal=5;
-  document.getElementById('adCoinAmt').textContent=coinsAtRisk;
-  document.getElementById('adCountdown').textContent=5;
-  document.getElementById('adWatchBtn').disabled=true;
-  document.getElementById('adWatchBtn').textContent='Watching... (5s)';
-  document.getElementById('adModal').classList.add('show');
+function showRewardPopup(coinsAtRisk){
+  pendingRewardCoins=coinsAtRisk; rewardCountVal=5;
+  document.getElementById('rewardCoinAmt').textContent=coinsAtRisk;
+  document.getElementById('rewardCountdown').textContent=5;
+  document.getElementById('rewardWatchBtn').disabled=true;
+  document.getElementById('rewardWatchBtn').textContent='Watching... (5s)';
+  document.getElementById('rewardPopup').classList.add('show');
   // ── ADMOB INTEGRATION POINT ──
   // Replace clearInterval/setInterval below with:
   // AdMob.prepareRewardVideoAd({adId:'YOUR_AD_UNIT_ID'}).then(()=>AdMob.showRewardVideoAd())
-  // AdMob.addListener('onRewarded', finishAd)
-  clearInterval(adTimer);
-  adTimer=setInterval(()=>{
-    adCountVal--;
-    document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
-    if(adCountVal<=0){
-      clearInterval(adTimer);
-      document.getElementById('adWatchBtn').disabled=false;
-      document.getElementById('adWatchBtn').textContent='Collect My '+adCoinsAtRisk+' Coins!';
+  // AdMob.addListener('onRewarded', finishReward)
+  clearInterval(rewardTimer);
+  rewardTimer=setInterval(()=>{
+    rewardCountVal--;
+    document.getElementById('rewardCountdown').textContent=Math.max(0,rewardCountVal);
+    if(rewardCountVal<=0){
+      clearInterval(rewardTimer);
+      document.getElementById('rewardWatchBtn').disabled=false;
+      document.getElementById('rewardWatchBtn').textContent='Collect My '+pendingRewardCoins+' Coins!';
     } else {
-      document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
+      document.getElementById('rewardWatchBtn').textContent='Watching... ('+rewardCountVal+'s)';
     }
   },1000);
 }
 
-let adFromPiggy=false;
-let adFromGameOver=false;
-let adFromRpsLoss=false;
+let rewardFromPiggy=false;
+let rewardFromGameOver=false;
+let rewardFromRpsLoss=false;
 let lastGameWon=false; // set true by gameWin(), cleared by restartGame()/goToMenu()/gameEnd()
 
 
-function openGameOverAd(){
-  // Guard: prevent double-fire
-  if(document.getElementById('adModal').classList.contains('show')) return;
+// ── Shared popup launcher — used by all three entry points ─────────────────
+// Handles: force-reset of stuck popup, ad-blocker detection, countdown timer.
+function _showRewardPopup(coinsAtRisk, skipBtnVisible) {
+  const popup = document.getElementById('rewardPopup');
 
+  // Force-reset if the popup is somehow already marked open (stuck state)
+  if (popup.classList.contains('show')) {
+    console.warn('[Reward] Popup was already open — force-resetting.');
+    clearInterval(rewardTimer);
+    popup.classList.remove('show');
+  }
+
+  rewardCountVal = 5;
+  document.getElementById('rewardCoinAmt').textContent   = coinsAtRisk;
+  document.getElementById('rewardCountdown').textContent = 5;
+  document.getElementById('rewardWatchBtn').disabled     = true;
+  document.getElementById('rewardWatchBtn').textContent  = 'Watching... (5s)';
+  document.getElementById('rewardSkipBtn').style.display = skipBtnVisible ? '' : 'none';
+  popup.classList.add('show');
+
+  // ── Ad-blocker detection ───────────────────────────────────────────────
+  // Give the browser one frame to apply styles, then check visibility.
+  setTimeout(() => {
+    const style = window.getComputedStyle(popup);
+    const blocked = style.display === 'none' || style.visibility === 'hidden'
+                 || style.opacity === '0' || popup.offsetParent === null && style.position !== 'fixed';
+    if (blocked) {
+      popup.classList.remove('show');
+      clearInterval(rewardTimer);
+      pendingTxClear();
+      rewardFromGameOver = false; rewardFromPiggy = false; rewardFromRpsLoss = false;
+      pendingRewardCoins = 0;
+      // Show non-ad fallback message and reveal mini-games
+      showNotif('⚠️ Ad blocker detected — use mini-games below to reclaim coins.');
+      const goAdBtn = document.getElementById('goAdBtn');
+      if (goAdBtn) goAdBtn.style.opacity = '0.4';
+      const miniLink = document.getElementById('piggyMiniLink');
+      if (miniLink) miniLink.style.display = 'block';
+      console.warn('[Reward] Popup hidden by ad blocker — fallback shown.');
+    }
+  }, 120);
+
+  // ── Countdown timer ────────────────────────────────────────────────────
+  clearInterval(rewardTimer);
+  rewardTimer = setInterval(() => {
+    rewardCountVal--;
+    document.getElementById('rewardCountdown').textContent = Math.max(0, rewardCountVal);
+    if (rewardCountVal <= 0) {
+      clearInterval(rewardTimer);
+      document.getElementById('rewardWatchBtn').disabled    = false;
+      document.getElementById('rewardWatchBtn').textContent = 'Claim My ' + pendingRewardCoins + ' Coins!';
+    } else {
+      document.getElementById('rewardWatchBtn').textContent = 'Watching... (' + rewardCountVal + 's)';
+    }
+  }, 1000);
+}
+
+function openCoinReclaimPopup(){
   // Coins are still in My Coins (_deathTxCoins) — NOT in piggy yet.
-  // We don't need to move anything; just record the amount and show the ad.
   const heldCoins = _deathTxCoins;
   if(heldCoins <= 0){
     // Fallback: check piggy in case we're coming from a different path
     const pig = getPiggyBank();
     if(pig <= 0){ showNotif('No coins to reclaim!'); return; }
-    // Piggy-path: treat like startPiggyAd
-    adFromPiggy = true;
-    adCoinsAtRisk = pig;
+    // Piggy-path: treat like startPiggyReward
+    rewardFromPiggy = true;
+    pendingRewardCoins = pig;
   } else {
-    adFromGameOver = true;
-    adCoinsAtRisk  = heldCoins;
+    rewardFromGameOver = true;
+    pendingRewardCoins  = heldCoins;
   }
+  // Create pending record before showing popup
+  pendingTxCreate('ad-claim', pendingRewardCoins, { source: 'game-over' });
+  _showRewardPopup(pendingRewardCoins, false);
+}
 
-  // Create pending ad-claim transaction (piggy still untouched)
-  pendingTxCreate('ad-claim', adCoinsAtRisk, { source: 'game-over' });
+async function finishReward() {
+  clearInterval(rewardTimer);
+  document.getElementById('rewardPopup').classList.remove('show');
+  const amt = pendingRewardCoins;
+  pendingRewardCoins = 0;
 
-  adCountVal = 5;
-  document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent = 5;
-  document.getElementById('adWatchBtn').disabled = true;
-  document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display = 'none';
-  document.getElementById('adModal').classList.add('show');
-  clearInterval(adTimer);
-  adTimer = setInterval(() => {
-    adCountVal--;
-    document.getElementById('adCountdown').textContent = Math.max(0, adCountVal);
-    if(adCountVal <= 0){
-      clearInterval(adTimer);
-      document.getElementById('adWatchBtn').disabled = false;
-      document.getElementById('adWatchBtn').textContent = 'Claim My ' + adCoinsAtRisk + ' Coins!';
+  try {
+    if (rewardFromGameOver) {
+      rewardFromGameOver = false;
+      deathTxResolveKeep();
+      if (currentUser) {
+        currentUser.ud.coins = coins;
+        dbSave();
+        syncUserProfile(3).catch(() => {});
+      }
+      pendingTxClear();
+      updateHUD();
+      updatePiggyDisplay();
+      showNotif('📺 Reward watched! Coins kept — back to the game!');
+      setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
+
+    } else if (rewardFromRpsLoss) {
+      rewardFromRpsLoss = false;
+      await piggyToCoinsCommit(amt, 'rps-loss-reward');
+      showNotif('📺 Reward watched! Coins reclaimed — back to the game!');
+      setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
+
+    } else if (rewardFromPiggy) {
+      rewardFromPiggy = false;
+      await piggyToCoinsCommit(amt, 'piggy-screen-reward');
+      showNotif('📺 Reward watched! Claimed ' + amt + ' coins!');
+      showScreen('startScreen');
+      if (currentUser) {
+        document.getElementById('bestScoreDisplay').textContent =
+          currentUser.ud.bestScore > 0
+            ? '🏆 Best: Platform ' + currentUser.ud.bestScore + ' (Level ' + currentUser.ud.bestLevel + ')'
+            : 'No runs yet!';
+      }
+      setTimeout(() => animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', amt, () => updatePiggyDisplay()), 400);
+
     } else {
-      document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
+      // Generic/legacy path
+      pendingTxCreate('ad-claim', amt, { source: 'generic' });
+      coins += amt;
+      if (currentUser) { currentUser.ud.coins = coins; dbSave(); }
+      if (currentUser) { currentUser.ud.piggyBank = 0; dbSave(); syncUserProfile(3).catch(() => {}); }
+      else { db.piggyBank = 0; dbSave(); }
+      pendingTxClear();
+      updateHUD();
+      updatePiggyDisplay();
+      showNotif('📺 Reward watched! Kept ' + amt + ' coins!');
     }
-  }, 1000);
-}
-
-async function finishAd() {
-  clearInterval(adTimer);
-  document.getElementById('adModal').classList.remove('show');
-  const amt = adCoinsAtRisk;
-  adCoinsAtRisk = 0;
-
-  if (adFromGameOver) {
-    // ── Game-over path: coins were NEVER moved to piggy ──
-    // They're still in My Coins (_deathTxCoins). Just confirm the hold and restart.
-    adFromGameOver = false;
-    deathTxResolveKeep();  // clears the death tx; coins stay where they are
-    // Coins are already correct in memory — just sync and restart
-    if (currentUser) {
-      currentUser.ud.coins = coins;
-      dbSave();
-      syncUserProfile(3).catch(() => {});
-    }
+  } catch(e) {
+    console.error('[finishReward] Error during reward grant:', e);
+    // Always clean up — coins are safe in pending tx; next page load will recover
+    document.getElementById('rewardPopup').classList.remove('show');
+    clearInterval(rewardTimer);
     pendingTxClear();
-    updateHUD();
-    updatePiggyDisplay();
-    showNotif('📺 Ad watched! Coins kept — back to the game!');
-    setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
-
-  } else if (adFromRpsLoss) {
-    // ── RPS-loss path: coins are in piggy, move them to wallet ──
-    adFromRpsLoss = false;
-    await piggyToCoinsCommit(amt, 'rps-loss-ad');
-    showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
-    setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
-
-  } else if (adFromPiggy) {
-    // ── Piggy screen path: move piggy coins to wallet ──
-    adFromPiggy = false;
-    await piggyToCoinsCommit(amt, 'piggy-screen-ad');
-    showNotif('📺 Ad watched! Claimed ' + amt + ' coins!');
-    showScreen('startScreen');
-    if (currentUser) {
-      document.getElementById('bestScoreDisplay').textContent =
-        currentUser.ud.bestScore > 0
-          ? '🏆 Best: Platform ' + currentUser.ud.bestScore + ' (Level ' + currentUser.ud.bestLevel + ')'
-          : 'No runs yet!';
-    }
-    setTimeout(() => animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', amt, () => updatePiggyDisplay()), 400);
-
-  } else {
-    // ── Generic/legacy ad ──
-    pendingTxCreate('ad-claim', amt, { source: 'generic' });
-    coins += amt;
-    if (currentUser) { currentUser.ud.coins = coins; dbSave(); }
-    if (currentUser) { currentUser.ud.piggyBank = 0; dbSave(); syncUserProfile(3).catch(() => {}); }
-    else { db.piggyBank = 0; dbSave(); }
-    pendingTxClear();
-    updateHUD();
-    updatePiggyDisplay();
-    showNotif('📺 Ad watched! Kept ' + amt + ' coins!');
+    rewardFromGameOver = false; rewardFromPiggy = false; rewardFromRpsLoss = false;
+    showNotif('⚠️ Something went wrong. Your coins are safe — please refresh.');
   }
 }
 
-async function skipAd(){
-  clearInterval(adTimer);
-  document.getElementById('adModal').classList.remove('show');
+async function skipReward(){
+  clearInterval(rewardTimer);
+  document.getElementById('rewardPopup').classList.remove('show');
 
-  if (adFromGameOver) {
-    // Player skipped the ad on the death screen — commit: move held coins to piggy
-    adFromGameOver = false;
-    const moved = await deathTxCommit();
-    showNotif('🐷 ' + (moved || 0) + ' coins moved to Piggy Bank');
-    const gpEl = document.getElementById('goPiggy');
-    if (gpEl) gpEl.textContent = getPiggyBank();
-    updateHUD();
-    updatePiggyDisplay();
-  } else {
-    // Piggy-screen or RPS-loss path: restore the at-risk amount back to piggy
-    const pig = getPiggyBank() + adCoinsAtRisk;
-    await setPiggyBank(pig);
-    if (currentUser) { currentUser.ud.coins = 0; dbSave(); await syncUserProfile(); }
-    showNotif('🐷 Coins stay in Piggy Bank');
-    const gpEl = document.getElementById('goPiggy');
-    if (gpEl) gpEl.textContent = pig;
-    updateHUD();
-    updatePiggyDisplay();
+  try {
+    if (rewardFromGameOver) {
+      rewardFromGameOver = false;
+      const moved = await deathTxCommit();
+      showNotif('🐷 ' + (moved || 0) + ' coins moved to Piggy Bank');
+      const gpEl = document.getElementById('goPiggy');
+      if (gpEl) gpEl.textContent = getPiggyBank();
+      updateHUD();
+      updatePiggyDisplay();
+    } else {
+      // Piggy-screen or RPS-loss path: restore the at-risk amount back to piggy
+      const pig = getPiggyBank() + pendingRewardCoins;
+      await setPiggyBank(pig);
+      if (currentUser) { currentUser.ud.coins = 0; dbSave(); await syncUserProfile(); }
+      showNotif('🐷 Coins stay in Piggy Bank');
+      const gpEl = document.getElementById('goPiggy');
+      if (gpEl) gpEl.textContent = pig;
+      updateHUD();
+      updatePiggyDisplay();
+    }
+  } catch(e) {
+    console.error('[skipReward] Error during skip:', e);
+    // Clean up — coins are safe via pending tx
+    document.getElementById('rewardPopup').classList.remove('show');
+    clearInterval(rewardTimer);
+    pendingTxClear();
+    showNotif('⚠️ Something went wrong. Your coins are safe — please refresh.');
   }
 
   pendingTxClear();
-  adCoinsAtRisk = 0;
-  adFromPiggy = false; adFromGameOver = false; adFromRpsLoss = false;
+  pendingRewardCoins = 0;
+  rewardFromPiggy = false; rewardFromGameOver = false; rewardFromRpsLoss = false;
 }
 
 
-async function startPiggyAd() {
-  if (document.getElementById('adModal').classList.contains('show')) return;
+// Emergency close — handles any stuck popup state (network error, ad blocker, etc.)
+// Coins are never lost: pending transaction recovery handles the next page load.
+function forceCloseRewardPopup() {
+  clearInterval(rewardTimer);
+  const popup = document.getElementById('rewardPopup');
+  if (popup) popup.classList.remove('show');
+  pendingTxClear();
+  rewardFromGameOver = false; rewardFromPiggy = false; rewardFromRpsLoss = false;
+  pendingRewardCoins = 0;
+  showNotif('🔒 Closed. Your coins are safe — check Piggy Bank.');
+  updateHUD();
+  updatePiggyDisplay();
+}
+
+async function startPiggyReward() {
   const pig = getPiggyBank();
   if (pig <= 0) { showNotif('Piggy Bank is empty!'); return; }
 
-  adFromPiggy    = true;
-  adCoinsAtRisk  = pig;
+  rewardFromPiggy   = true;
+  pendingRewardCoins = pig;
 
   // Create pending record BEFORE touching any balances
-  // Piggy is NOT zeroed here — it's only zeroed inside piggyToCoinsCommit
-  // after the coins have been credited to My Coins.
   pendingTxCreate('ad-claim', pig, { source: 'piggy-screen' });
-
-  adCountVal = 5;
-  document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent = 5;
-  document.getElementById('adWatchBtn').disabled = true;
-  document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display = 'none';
-  document.getElementById('adModal').classList.add('show');
-  updatePiggyDisplay();
-
-  clearInterval(adTimer);
-  adTimer = setInterval(() => {
-    adCountVal--;
-    document.getElementById('adCountdown').textContent = Math.max(0, adCountVal);
-    if (adCountVal <= 0) {
-      clearInterval(adTimer);
-      document.getElementById('adWatchBtn').disabled = false;
-      document.getElementById('adWatchBtn').textContent = 'Claim My ' + adCoinsAtRisk + ' Coins!';
-    } else {
-      document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
-    }
-  }, 1000);
+  _showRewardPopup(pig, false);
 }
 
-function openRpsLossAd(){
-  if(document.getElementById('adModal').classList.contains('show')) return;
+function openRpsLossReward(){
   const pig = getPiggyBank();
   if(pig <= 0){ showNotif('Nothing to reclaim!'); return; }
-  adFromRpsLoss  = true;
-  adCoinsAtRisk  = pig;
+  rewardFromRpsLoss  = true;
+  pendingRewardCoins  = pig;
   // Create pending record BEFORE touching any balances
   pendingTxCreate('ad-claim', pig, { source: 'rps-loss' });
-  adCountVal = 5;
-  document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent = 5;
-  document.getElementById('adWatchBtn').disabled = true;
-  document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display = 'none';
-  document.getElementById('adModal').classList.add('show');
-  clearInterval(adTimer);
-  adTimer = setInterval(() => {
-    adCountVal--;
-    document.getElementById('adCountdown').textContent = Math.max(0, adCountVal);
-    if(adCountVal <= 0){
-      clearInterval(adTimer);
-      document.getElementById('adWatchBtn').disabled = false;
-      document.getElementById('adWatchBtn').textContent = 'Claim My ' + adCoinsAtRisk + ' Coins!';
-    } else {
-      document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
-    }
-  }, 1000);
+  _showRewardPopup(pig, false);
 }
 
 // ----- DEMO ANIMATION (start screen interactive moves) -----
@@ -11516,16 +11534,16 @@ document.addEventListener('click', (e) => {
   </div>
 </div>
 
-<!-- AD MODAL — outside all screens so it shows over piggyScreen too -->
+<!-- COIN REWARD POPUP — outside all screens so it shows over piggyScreen too -->
 
-
-<div id="adModal">
-    <div id="adPanel">
-      <h2>📺 Watch Ad to Keep Coins?</h2>
-      <p>You lost Rock Paper Scissors.<br>Watch a short ad to keep your <b id="adCoinAmt" style="color:#ffe066;">0</b> coins — or skip and they go to your Piggy Bank.</p>
-      <div id="adCountdown">5</div>
-      <button id="adWatchBtn" onclick="finishAd()" disabled>Watching... (5s)</button>
-      <button id="adSkipBtn" onclick="skipAd()">Skip — Send to Piggy Bank</button>
+<div id="rewardPopup">
+    <div id="rewardPanel">
+      <h2>🎁 Keep Your Coins?</h2>
+      <p>Watch a short video to keep your <b id="rewardCoinAmt" style="color:#ffe066;">0</b> coins — or skip and they move to your Piggy Bank.</p>
+      <div id="rewardCountdown">5</div>
+      <button id="rewardWatchBtn" onclick="finishReward()" disabled>Watching... (5s)</button>
+      <button id="rewardSkipBtn" onclick="skipReward()">Skip — Send to Piggy Bank</button>
+      <button id="rewardCloseBtn" onclick="forceCloseRewardPopup()" style="background:transparent;color:#555;border:1px solid #333;border-radius:8px;padding:5px;font-size:11px;cursor:pointer;width:100%;margin-top:4px;">✕ Close (coins stay safe)</button>
     </div>
   </div>
   <!-- ── MOBILE STICKY BOTTOM NAV ── shown on startScreen on short/touch devices -->
