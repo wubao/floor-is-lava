@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Floor Is Lava</title>
 
@@ -2329,14 +2330,9 @@ gameCanvas.addEventListener('touchstart', e => {
     return; // suppress jump entirely
   }
 
-  // Half jump zone: anything from player feet up to ~2.5 player heights above the player's head.
-  // This covers "two player heads of space" above the player top, and also catches
-  // side taps that are low enough — no angle condition needed below this ceiling.
-  // player.h in world units converted to screen: player.h * currentZoom
-  // player feet (dy=0) to player head = player.h * currentZoom (dy = -player.h * currentZoom)
-  // two heads above that = another 2 * player.h * currentZoom
-  // So half-jump ceiling = 3 * player.h * currentZoom above feet = -3 * player.h * currentZoom
-  const halfJumpCeiling = -(player.h * currentZoom * 3.0);
+  // Half jump zone: feet up to ~1 player height above the player's head.
+  // 2.0 × player.h: 1× for the body, 1× for one head above = roughly bottom of the second platform.
+  const halfJumpCeiling = -(player.h * currentZoom * 2.0);
   const isHalfJump = dy > halfJumpCeiling;   // tap is below the ceiling → half jump
 
   if (!isHalfJump) {
@@ -2657,6 +2653,7 @@ function updateCrumblePlatforms(dt){
         p.crumbleState = 'crumbling';
         p.crumbleTimer = CRUMBLE_FALL_MS;
         p.crumbleVY = 0;
+        p._crumbleHitPlayer = false; // only knock player once per fall
       }
     }
     if(p.crumbleState === 'crumbling'){
@@ -2664,6 +2661,22 @@ function updateCrumblePlatforms(dt){
       p.crumbleVY = (p.crumbleVY || 0) + 1.2 * dt;
       p.y += p.crumbleVY * dt;
       p.crumbleShakeX = (Math.random() - 0.5) * 8;
+
+      // ── Crumble-collision: knock player down while platform is still visible ──
+      if(!p._crumbleHitPlayer){
+        const px = p.x + (p.crumbleShakeX || 0);
+        const overlapX = player.x + player.w > px && player.x < px + p.w;
+        const overlapY = player.y + player.h >= p.y - 2 && player.y < p.y + p.h + 14;
+        if(overlapX && overlapY){
+          p._crumbleHitPlayer = true;
+          // Knock player off — gentle-to-mid downward push
+          player.vy = Math.max(player.vy, 4.5);
+          player.onGround = false;
+          player.currentPlatformIndex = -1;
+          showNotif('💥 Crumbling platform hit you!');
+        }
+      }
+
       if(p.crumbleTimer <= 0){
         p.crumbleState = 'gone';
         if(player.currentPlatformIndex === p.index){
@@ -3182,6 +3195,11 @@ if (p.color === 'ice' && !p.iceUsed) {
 			  showNotif(isCustomPlayMode() ? '🌋 Level ' + level + '! (practice)' : '🌋 Level ' + level + '! +50 coins 🪙');
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
+            // Story mode safety: if endPlatform drifted from the locked target, snap it back
+            if (window.currentStoryEpisode && window.storyLockedEndPlatform && endPlatform !== window.storyLockedEndPlatform) {
+              console.warn('[STORY] endPlatform drifted to', endPlatform, '— snapping back to', window.storyLockedEndPlatform);
+              endPlatform = window.storyLockedEndPlatform;
+            }
             if(endPlatform > 0 && platformCount >= endPlatform){
               console.warn('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform
                 +' storyEp='+(window.currentStoryEpisode?window.currentStoryEpisode.name:'none')
@@ -9221,6 +9239,8 @@ function checkAndRestorePowerupSession() {
         });
       } catch(e) {}
     }
+    // Expose to global scope so the navbar button and other callers can reach it
+    window.loadStoryProgress = loadStoryProgress;
     function saveStoryProgress() {
       storyProgress.completedEpisodes = STORY_EPISODES.filter(ep => ep.completed).map(ep => ep.id);
       localStorage.setItem('volcanoRushStory', JSON.stringify(storyProgress));
@@ -9254,22 +9274,25 @@ function setStoryTargetPlatforms(target) {
   }
   console.log("[STORY] Saved originalEndPlatform =", originalEndPlatform);
 
-  // Lock endPlatform via Object.defineProperty so nothing can overwrite it
-  // (loadSettings, setEndPlatformFromSettings, etc.) while story mode is active.
+  // Set both the local variable AND lock window.endPlatform
+  endPlatform = target;
+  window.storyLockedEndPlatform = target;   // reference for the win check guard
+
   try {
     Object.defineProperty(window, 'endPlatform', {
       configurable: true,
       get: () => target,
       set: (v) => {
         console.warn('[STORY] Blocked attempt to set endPlatform to', v, '— story target is', target);
+        // Also reset the local variable in case something bypassed the property
+        endPlatform = target;
       }
     });
   } catch(e) {
-    // Fallback: just set it directly
     endPlatform = target;
   }
 
-  // Keep the hidden selector in sync visually
+  // Keep selectors in sync visually and disabled
   const sel = document.getElementById('endPlatformSel');
   if (sel) {
     originalSelectorValue = sel.value;
@@ -9277,16 +9300,15 @@ function setStoryTargetPlatforms(target) {
     sel.disabled = true;
     sel.style.opacity = '0.5';
   }
-  // Also guard the settings selector
   const sSel = document.getElementById('sEndPlatSel');
   if (sSel) { sSel.disabled = true; sSel.style.opacity = '0.5'; }
 
-  const newValue = window.endPlatform;
-  console.log("[STORY] Target locked at", target, "— endPlatform reads as", newValue);
+  console.log("[STORY] Target locked at", target, "— endPlatform reads as", endPlatform);
 }
 
 function restoreEndPlatform() {
   console.log("[STORY] Restoring endPlatform to", originalEndPlatform);
+  window.storyLockedEndPlatform = null;
 
   // Remove the property lock and restore normal get/set behaviour
   try {
