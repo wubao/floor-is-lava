@@ -1499,9 +1499,19 @@ let currentUser = null, infoReturnScreen = 'startScreen', currentMode = 'play', 
 // Call this after every change to currentUser.ud (coins, power-ups, settings, etc.)
 async function syncUserProfile(retries = 2) {
   if (!currentUser || !currentUser.uid) return false;
+
+  // Safety: never write NaN or undefined for critical financial fields.
+  // If a field is corrupted, either keep the existing value or skip the write.
+  const safeUd = { ...currentUser.ud };
+  if (typeof safeUd.coins !== 'number' || isNaN(safeUd.coins))       { safeUd.coins = 0; }
+  if (typeof safeUd.piggyBank !== 'number' || isNaN(safeUd.piggyBank)){ safeUd.piggyBank = 0; }
+  // Keep currentUser.ud in sync with the sanitised values
+  currentUser.ud.coins     = safeUd.coins;
+  currentUser.ud.piggyBank = safeUd.piggyBank;
+
   for (let i = 0; i <= retries; i++) {
     try {
-      await firebaseDB.ref(`users/${currentUser.uid}`).update(currentUser.ud);
+      await firebaseDB.ref(`users/${currentUser.uid}`).update(safeUd);
       return true;
     } catch (e) {
       console.warn(`syncUserProfile attempt ${i} failed:`, e);
@@ -1756,14 +1766,18 @@ function renderSavedUsers(){
   });
 }
 function getPiggyBank() {
-  let val = currentUser ? (currentUser.ud.piggyBank || 0) : (db.piggyBank || 0);
-  console.log('[getPiggyBank] returning', val, 'currentUser exists?', !!currentUser);
+  const val = currentUser ? (currentUser.ud.piggyBank || 0) : (db.piggyBank || 0);
   return val;
 }
 async function setPiggyBank(v) {
+  // Safety: never write NaN, undefined, or negative values
+  if (typeof v !== 'number' || isNaN(v) || v < 0) {
+    console.warn('[setPiggyBank] Rejected invalid value:', v, '— piggy bank unchanged');
+    return;
+  }
   if (currentUser) {
     currentUser.ud.piggyBank = v;
-    await syncUserProfile();   // wait for Firebase
+    await syncUserProfile();
   } else {
     db.piggyBank = v;
     dbSave();
@@ -6058,7 +6072,11 @@ function applySettings(s){
   if(zl) zl.textContent = Math.round(z * 100) + '%';
 
   // End platform — don't overwrite if story mode has it locked
-  if (!currentStoryEpisode && !storyLockedEndPlatform) {
+  // Use typeof guards: these vars are declared later in the script; on first page load
+  // applySettings runs before they exist, so we must not throw a ReferenceError here.
+  const _storyEp   = (typeof currentStoryEpisode   !== 'undefined') ? currentStoryEpisode   : null;
+  const _storyLock = (typeof storyLockedEndPlatform !== 'undefined') ? storyLockedEndPlatform : null;
+  if (!_storyEp && !_storyLock) {
     endPlatform = s.endPlatform ?? 1000;
     const ep = document.getElementById('endPlatformSel');
     if(ep) ep.value = String(endPlatform);
@@ -7876,6 +7894,9 @@ let lastGameWon=false; // set true by gameWin(), cleared by restartGame()/goToMe
 
 
 function openGameOverAd(){
+  // Guard: if the ad modal is already open, ignore this call entirely.
+  // Without this, a second click zeroes the piggy bank while the first ad is still running.
+  if(document.getElementById('adModal').classList.contains('show')) return;
   // After death, coins are 0 — they're in the piggy. This ad reclaims them from piggy.
   const pig=getPiggyBank();
   if(pig<=0){showNotif('Nothing in Piggy Bank!');return;}
@@ -8040,6 +8061,8 @@ async function startPiggyAd() {
 }
 
 function openRpsLossAd(){
+  // Guard: prevent double-click zeroing the piggy while modal is already open
+  if(document.getElementById('adModal').classList.contains('show')) return;
   // Player lost RPS — coins already moved to piggy. Watch ad to reclaim back to wallet.
   const pig=getPiggyBank();
   if(pig<=0){showNotif('Nothing to reclaim!');return;}
@@ -8657,68 +8680,117 @@ function showStoryEndCredits() {
 
 function restoreUserSession() {
   const saved = localStorage.getItem('fil_current_user');
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      const name = parsed.name, ud = parsed.ud, uid = parsed.uid;
-      if (ud && (ud.isGuest || getUser(name) || uid)) {
-        currentUser = { name, uid: uid || null, ud };
-        // Guard: startNotificationListener may not be defined yet at parse time
-        // — it will be called once defined via DOMContentLoaded fallback below
-        if (typeof startNotificationListener === 'function') startNotificationListener();
-        // --- FIX: Initialize all game vars from saved user data on page load/F5 ---
-        coins       = ud.coins      || 0;
-        jumpBoosts  = Math.min(ud.jumpBoosts  || 0, 20);
-        parachutes  = ud.parachutes || 0;
-        skipUses    = ud.skipUses   || 0;
-        bookUses    = ud.bookUses   || 0;
-        lavaShips   = ud.lavaShips  || 0;
-        window.coins = coins;
-        // --- End fix ---		
-        if (!ud.isGuest && getUser(name)) {
-          const fresh = getUser(name);
-          if (fresh) currentUser.ud = { ...ud, ...fresh };
-        }
-        // If we have a Firebase uid, try to load latest profile from cloud
-        if (uid) {
-          firebaseDB.ref(`users/${uid}`).once('value').then(snap => {
-            const cloudProfile = snap.val();
-            if (cloudProfile) {
-              currentUser.ud = cloudProfile;
-              coins       = cloudProfile.coins      || 0;
-              jumpBoosts  = Math.min(cloudProfile.jumpBoosts || 0, 20);
-              parachutes  = cloudProfile.parachutes || 0;
-              skipUses    = cloudProfile.skipUses   || 0;
-              bookUses    = cloudProfile.bookUses   || 0;
-              lavaShips   = cloudProfile.lavaShips  || 0;
-              window.coins = coins;
-              updatePiggyDisplay();
-              loadSettings();
-            }
-          }).catch(() => {});
-        }
-        document.getElementById('welcomeUser').textContent = ud.isGuest
-          ? 'Welcome back, ' + name + '! 🎮 (Guest)'
-          : 'Welcome back, ' + name + '! 👋';
-        document.getElementById('bestScoreDisplay').textContent = (currentUser.ud.bestScore > 0)
-          ? '🏆 Best: Platform ' + currentUser.ud.bestScore
-          : 'No runs yet!';
-        updatePiggyDisplay();
-        loadSettings();
-        showScreen('startScreen');
-        return true;
-      }
-    } catch(e) { console.warn('Failed to restore session', e); }
+  if (!saved) return false;
+
+  let parsed;
+  try { parsed = JSON.parse(saved); } catch(e) {
+    console.warn('[Session] Could not parse saved session:', e);
+    return false;  // truly no usable data — show auth screen
   }
-  return false;
+
+  const { name, ud, uid } = parsed || {};
+  if (!ud || (!ud.isGuest && !getUser(name) && !uid)) return false;
+
+  // ── Restore in-memory user ──
+  currentUser = { name, uid: uid || null, ud };
+
+  // ── Restore game-state variables — NEVER default to 0 if a value exists ──
+  // Use the saved value; if it's missing, keep whatever is currently in memory
+  // (don't overwrite a valid in-memory value with 0).
+  if (typeof ud.coins      === 'number') coins      = ud.coins;
+  if (typeof ud.jumpBoosts === 'number') jumpBoosts = Math.min(ud.jumpBoosts, 20);
+  if (typeof ud.parachutes === 'number') parachutes = ud.parachutes;
+  if (typeof ud.skipUses   === 'number') skipUses   = ud.skipUses;
+  if (typeof ud.bookUses   === 'number') bookUses   = ud.bookUses;
+  if (typeof ud.lavaShips  === 'number') lavaShips  = ud.lavaShips;
+  window.coins = coins;
+
+  // ── Merge with local db record if available ──
+  if (!ud.isGuest && getUser(name)) {
+    const fresh = getUser(name);
+    if (fresh) currentUser.ud = { ...ud, ...fresh };
+  }
+
+  // ── Apply settings — isolated so a settings error never aborts the restore ──
+  try {
+    loadSettings();
+  } catch(e) {
+    console.warn('[Session] loadSettings failed (non-fatal — keeping loaded user data):', e);
+    // Do NOT return false here; the user IS restored, settings just stay at defaults
+  }
+
+  // ── UI ──
+  if (typeof startNotificationListener === 'function') startNotificationListener();
+  document.getElementById('welcomeUser').textContent = ud.isGuest
+    ? 'Welcome back, ' + name + '! 🎮 (Guest)'
+    : 'Welcome back, ' + name + '! 👋';
+  document.getElementById('bestScoreDisplay').textContent = (currentUser.ud.bestScore > 0)
+    ? '🏆 Best: Platform ' + currentUser.ud.bestScore
+    : 'No runs yet!';
+  updatePiggyDisplay();
+  showScreen('startScreen');
+
+  // ── Background: pull latest profile from Firebase without blocking UI ──
+  if (uid) {
+    firebaseDB.ref(`users/${uid}`).once('value').then(snap => {
+      const cloudProfile = snap.val();
+      if (!cloudProfile) return;
+      // Merge cloud into current — only overwrite fields that exist in cloud
+      // to avoid clobbering freshly-earned in-session values
+      const safeFields = ['coins','piggyBank','jumpBoosts','parachutes','skipUses',
+                          'bookUses','lavaShips','bestScore','bestLevel','settings',
+                          'hideTutorial','completedEpisodes'];
+      safeFields.forEach(f => {
+        if (cloudProfile[f] !== undefined) currentUser.ud[f] = cloudProfile[f];
+      });
+      // Update game vars from cloud — only if cloud value is >= local
+      // (prevents a stale cloud read from wiping freshly-earned coins)
+      if (typeof cloudProfile.coins === 'number' && cloudProfile.coins >= coins) {
+        coins = cloudProfile.coins;
+        window.coins = coins;
+      }
+      if (typeof cloudProfile.jumpBoosts === 'number') jumpBoosts = Math.min(cloudProfile.jumpBoosts, 20);
+      if (typeof cloudProfile.parachutes === 'number') parachutes = cloudProfile.parachutes;
+      if (typeof cloudProfile.skipUses   === 'number') skipUses   = cloudProfile.skipUses;
+      if (typeof cloudProfile.bookUses   === 'number') bookUses   = cloudProfile.bookUses;
+      if (typeof cloudProfile.lavaShips  === 'number') lavaShips  = cloudProfile.lavaShips;
+      updatePiggyDisplay();
+      try { loadSettings(); } catch(e) {
+        console.warn('[Session] loadSettings (cloud refresh) failed (non-fatal):', e);
+      }
+    }).catch(e => {
+      console.warn('[Session] Firebase profile fetch failed (non-fatal — using local data):', e);
+      // Keep whatever we already loaded from localStorage — never wipe it
+    });
+  }
+
+  return true;
 }
 
 window.addEventListener('beforeunload', () => {
   if (currentUser) {
+    // Always keep the uid in the saved session so restoreUserSession can
+    // pull the latest profile from Firebase on next page load
+    const snapshot = {
+      name: currentUser.name,
+      uid:  currentUser.uid || null,
+      ud:   { ...currentUser.ud }
+    };
+    // Safety: never persist NaN or missing financial fields
+    if (typeof snapshot.ud.coins !== 'number' || isNaN(snapshot.ud.coins)) {
+      snapshot.ud.coins = coins || 0;  // fall back to the in-memory game variable
+    }
+    if (typeof snapshot.ud.piggyBank !== 'number' || isNaN(snapshot.ud.piggyBank)) {
+      snapshot.ud.piggyBank = 0;
+    }
+    try {
+      localStorage.setItem('fil_current_user', JSON.stringify(snapshot));
+    } catch(e) { console.warn('[beforeunload] Could not save session:', e); }
+
     if (currentUser.ud.isGuest) {
       saveGuestProgress();
     } else {
-      saveUser(currentUser.name, currentUser.ud);
+      saveUser(currentUser.name, snapshot.ud);
     }
   }
 });
