@@ -2016,7 +2016,7 @@ let nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
 
 function initGame(){
   // --- STORY MODE: preserve coin amount, but always ensure power-ups are defined ---
-  if (window.currentStoryEpisode && typeof window.storyStartCoins !== 'undefined') {
+  if (currentStoryEpisode && typeof storyStartCoins !== 'undefined') {
     // Keep coins as-is; only load power-ups if they are currently undefined (e.g. after F5)
     console.log('[STORY] Story mode active, preserving coins =', coins);
     if (currentUser) {
@@ -2146,7 +2146,7 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
   updateHUD();
 }
 
-function updateHUD(){
+function _updateHUD(){
   document.getElementById('coinDisplay').textContent = '🪙 ' + coins;
   document.getElementById('levelDisplay').textContent = 'Level ' + level + (parachuteActive ? ' 🪂' : '');
   document.getElementById('platformDisplay').textContent = 'Plt ' + platformCount + (endPlatform > 0 ? '/'+endPlatform : '');
@@ -3225,17 +3225,17 @@ if (p.color === 'ice' && !p.iceUsed) {
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
             // Story mode safety: if endPlatform drifted from the locked target, snap it back BEFORE the win check
-            if (window.currentStoryEpisode && window.storyLockedEndPlatform) {
-              if (endPlatform !== window.storyLockedEndPlatform) {
-                console.warn('[STORY] endPlatform drifted to', endPlatform, '— snapping back to', window.storyLockedEndPlatform);
-                endPlatform = window.storyLockedEndPlatform;
+            if (currentStoryEpisode && storyLockedEndPlatform) {
+              if (endPlatform !== storyLockedEndPlatform) {
+                console.warn('[STORY] endPlatform drifted to', endPlatform, '— snapping back to', storyLockedEndPlatform);
+                endPlatform = storyLockedEndPlatform;
               }
             }
             if(endPlatform > 0 && platformCount >= endPlatform){
               console.warn('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform
-                +' storyEp='+(window.currentStoryEpisode?window.currentStoryEpisode.name:'none')
-                +' (story active='+!!window.currentStoryEpisode+')');
-              window.gameWin(); return;
+                +' storyEp='+(currentStoryEpisode?currentStoryEpisode.name:'none')
+                +' (story active='+!!currentStoryEpisode+')');
+              gameWin(); return;
             }
             updateHUD();
           }
@@ -3979,7 +3979,7 @@ function saveScore(){
   if(isCustomPlayMode()) return;
   const ud = currentUser.ud;
   // Submit to leaderboard (normal modes)
-  if (!window.currentStoryEpisode && !window.versusMode) {
+  if (!currentStoryEpisode && !versusMode) {
     const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
     lbSubmitNormal(mode, currentUser.name, platformCount, levelTimerSecs);
   }
@@ -4220,7 +4220,7 @@ document.getElementById('mathInput').addEventListener('keydown',e=>{if(e.key==='
 // ═══ GAME END ═══
 let diedInVersus = false; // tracks whether last death was mid-versus-game
 
-function gameEnd(fromPurple) {
+function _gameEnd(fromPurple) {
   if (versusMode) {
     endVersus(false, fromPurple ? 'Burned on purple!' : 'You burned!');
     return;
@@ -4309,7 +4309,7 @@ function gameEnd(fromPurple) {
 }
 
 // Floor Is Lava v36
-function gameWin() {
+function _gameWin() {
   gameRunning = false;
   cancelAnimationFrame(animId);
 
@@ -4400,15 +4400,15 @@ function restartGame(){
 }
 
 function restartGameAfterStory(){
-  if(window.currentStoryEpisode && !window.versusMode){
-    const ep = window.currentStoryEpisode;
+  if(currentStoryEpisode && !versusMode){
+    const ep = currentStoryEpisode;
     console.log('[STORY] Restarting episode:', ep.name);
     
     
     if(ep.platformConfig){
-      window.storyPlatformCfg = Object.assign({}, window.STORY_PLATFORM_DEFAULTS, ep.platformConfig);
+      storyPlatformCfg = Object.assign({}, STORY_PLATFORM_DEFAULTS, ep.platformConfig);
     } else {
-      window.storyPlatformCfg = null;
+      storyPlatformCfg = null;
     }
     
     document.getElementById('gameOver').classList.remove('show');
@@ -4421,8 +4421,8 @@ function restartGameAfterStory(){
     
     // Capture coins after a short delay
     setTimeout(() => {
-      window.storyStartCoins = coins;
-      console.log('[STORY] Restart - storyStartCoins =', window.storyStartCoins);
+      storyStartCoins = coins;
+      console.log('[STORY] Restart - storyStartCoins =', storyStartCoins);
     }, 100);
   } else {
     if(typeof restartGame === 'function') restartGame();
@@ -4437,20 +4437,20 @@ function restartGameAfterCoinRecovery() {
   const gpEl = document.getElementById('goPiggy');
   if(gpEl) gpEl.parentElement.style.display = '';
 
-  if (window.currentStoryEpisode && !window.versusMode) {
+  if (currentStoryEpisode && !versusMode) {
     // ── Story mode: re-launch the same episode ──
-    const ep = window.currentStoryEpisode;
+    const ep = currentStoryEpisode;
     console.log('[RPS/Ad WIN] Restarting story episode:', ep.name);
     if (ep.platformConfig) {
-      window.storyPlatformCfg = Object.assign({}, window.STORY_PLATFORM_DEFAULTS, ep.platformConfig);
+      storyPlatformCfg = Object.assign({}, STORY_PLATFORM_DEFAULTS, ep.platformConfig);
     } else {
-      window.storyPlatformCfg = null;
+      storyPlatformCfg = null;
     }
     if (typeof window.startGame === 'function') window.startGame();
     const variant = Math.random() < 0.5 ? 'storyPlay1' : 'storyPlay2';
     if (typeof window.playBgMusic === 'function') window.playBgMusic(variant);
     setTimeout(() => {
-      window.storyStartCoins = coins;
+      storyStartCoins = coins;
       console.log('[RPS/Ad WIN] storyStartCoins =', coins);
     }, 100);
   } else {
@@ -4507,7 +4507,7 @@ function sellAllPowerUps() {
   updatePiggyDisplay();
 }
 
-function goToMenu() {
+function _goToMenu() {
   gameRunning = false;
   paused = false;
   cancelAnimationFrame(animId);
@@ -5578,7 +5578,7 @@ function updateBgMusic(){
   if(id==='editorScreen'){ stopBgMusic(); edAutoSaveStop(); edAutoSave(); }
   else if(id==='leaderboardScreen'){ playBgMusic('menu'); return; }  // keep menu music
   else if(id==='gameScreen'){
-    if (window.currentStoryEpisode) {
+    if (currentStoryEpisode) {
       // Story mode in-game: alternate between storyPlay1 and storyPlay2 randomly
       const variant = (Math.random() < 0.5) ? 'storyPlay1' : 'storyPlay2';
       playBgMusic(variant);
@@ -5606,9 +5606,9 @@ function closeAllStoryOverlays() {
   // Clear any running story animation
   if (typeof storyAnimSkipCallback === 'function') storyAnimSkipCallback = null;
   // Clear story episode state
-  if (window.currentStoryEpisode) {
-    if (typeof restoreEndPlatform === 'function') restoreEndPlatform();
-    window.currentStoryEpisode = null;
+  if (currentStoryEpisode) {
+    restoreEndPlatform();
+    currentStoryEpisode = null;
   }
 }
 
@@ -6058,7 +6058,7 @@ function applySettings(s){
   if(zl) zl.textContent = Math.round(z * 100) + '%';
 
   // End platform — don't overwrite if story mode has it locked
-  if (!window.currentStoryEpisode && !window.storyLockedEndPlatform) {
+  if (!currentStoryEpisode && !storyLockedEndPlatform) {
     endPlatform = s.endPlatform ?? 1000;
     const ep = document.getElementById('endPlatformSel');
     if(ep) ep.value = String(endPlatform);
@@ -6397,8 +6397,8 @@ function setZoomPreset(val){
 
 function setEndPlatformFromSettings(val){
   // Story mode locks endPlatform — silently ignore any external changes while active
-  if (window.currentStoryEpisode) {
-    console.warn('[STORY] setEndPlatformFromSettings blocked during story mode (episode: ' + window.currentStoryEpisode.name + ')');
+  if (currentStoryEpisode) {
+    console.warn('[STORY] setEndPlatformFromSettings blocked during story mode (episode: ' + currentStoryEpisode.name + ')');
     return;
   }
   endPlatform = parseInt(val) || 0;
@@ -6701,8 +6701,8 @@ function edAutoSaveRestore(){
 // No coin/progress persistence in this mode.
 function isCustomPlayMode(){
   return !!(customPlayPlatforms && customPlayPlatforms.length > 0
-            && !window.currentStoryEpisode
-            && !window.versusMode);
+            && !currentStoryEpisode
+            && !versusMode);
 }
 
 const DIAL_SLOTS = [
@@ -7787,8 +7787,8 @@ function drawScorcha() {
 
 // Hook Scorcha into main game loop — called from gameLoop
 function maybeInitScorchaForEpisode() {
-  if(!window.currentStoryEpisode) return;
-  const epId = window.currentStoryEpisode.id;
+  if(!currentStoryEpisode) return;
+  const epId = currentStoryEpisode.id;
   if(!isBadGuyEpisode(epId)) return;
   if(!SCORCHA.active) initScorcha(epId);
 }
@@ -8409,13 +8409,8 @@ function initModeToggle(){
 // ██ LEADERBOARD ██
 // ── Story Mode entry point — safe to call from navbar at any time ──
 function openStoryMode() {
-  if (typeof window.loadStoryProgress === 'function') window.loadStoryProgress();
-  if (typeof showStoryWorldMap === 'function') {
-    showStoryWorldMap();
-  } else {
-    const overlay = document.getElementById('storyWorldMapOverlay');
-    if (overlay) { overlay.style.display = 'flex'; }
-  }
+  loadStoryProgress();
+  showStoryWorldMap();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -9157,45 +9152,43 @@ function checkAndRestorePowerupSession() {
 }
 
 
-  (function() {
-    // --------------------------------------------------------------
-    // STORY MODE – reads episode data from main game's VOLCANO_EPISODES
-    // --------------------------------------------------------------
-	// Make sure we use the SAME coins variable as the main game
-// No separate story coins variable - we use window.coins directly
-	window.storyStartCoins = 0;
-    if (!window.VOLCANO_EPISODES) {
-      return;
-    }
+// ── STORY MODE (global scope — integrated) ──
+// Variables formerly local to the IIFE are now module-level globals
+let STORY_EPISODES = null;        // set to VOLCANO_EPISODES at init time
+let storyProgress = { completedEpisodes: [] };
+let currentStoryEpisode = null;
+let animFrameId = null;
+let storyStartCoins = 0;
+let storyAnimSkipCallback = null;  // set by each animation; Space calls it
+let originalEndPlatform = 1000;
+let originalSelectorValue = '';
+let _mapAnimId = null;
+let storyLockedEndPlatform = null;  // set by setStoryTargetPlatforms, cleared by restoreEndPlatform
 
-    let STORY_EPISODES = window.VOLCANO_EPISODES;
-    let storyProgress = { completedEpisodes: [] };
-    let currentStoryEpisode = null;
-    let animFrameId = null;
-    let storyStartCoins = 0;
-    let storyAnimSkipCallback = null;  // set by each animation; Space calls it
+// Assign from the global VOLCANO_EPISODES array (defined earlier in this file)
+STORY_EPISODES = VOLCANO_EPISODES;
 
-    // Space bar skips start/escape animations
-    document.addEventListener('keydown', function(e) {
-      if (e.code === 'Space' && storyAnimSkipCallback) {
-        e.preventDefault();
-        storyAnimSkipCallback();
-      }
-    });
-    // Tap anywhere on the animation overlay also skips (mobile)
-    ['startAnimOverlay','escapeAnimOverlay'].forEach(function(id) {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('click', function() {
-        if (storyAnimSkipCallback) storyAnimSkipCallback();
-      });
-    });
-    let originalEndPlatform = 1000;
-    let originalSelectorValue = "";
+// Space bar skips start/escape animations
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Space' && storyAnimSkipCallback) {
+    e.preventDefault();
+    storyAnimSkipCallback();
+  }
+});
+// Tap anywhere on the animation overlay also skips (mobile)
+['startAnimOverlay','escapeAnimOverlay'].forEach(function(id) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', function() {
+    if (storyAnimSkipCallback) storyAnimSkipCallback();
+  });
+});
+
+
 
     // Helper to get character config safely
     function getSafeCharConfig() {
-      if (window.charConfig && typeof window.charConfig === 'object' && window.charConfig.ph) {
-        return window.charConfig;
+      if (charConfig && typeof charConfig === 'object' && charConfig.ph) {
+        return charConfig;
       }
       return {
         ph: 80, faceWf: 1.00, faceHf: 0.88, faceR: 0.12, faceOffY: 0,
@@ -9262,7 +9255,6 @@ function checkAndRestorePowerupSession() {
     }
 
     // ── WORLD MAP ANIMATION: zooms to current episode pin + shows next 3 ──
-    let _mapAnimId = null;
     function startMapAnim(ep) {
       if (_mapAnimId) cancelAnimationFrame(_mapAnimId);
       const cv = document.getElementById('storyMapAnimCanvas');
@@ -9388,7 +9380,7 @@ function checkAndRestorePowerupSession() {
       } catch(e) {}
     }
     // Expose to global scope so the navbar button and other callers can reach it
-    window.loadStoryProgress = loadStoryProgress;
+  // loadStoryProgress is now global
     function saveStoryProgress() {
       storyProgress.completedEpisodes = STORY_EPISODES.filter(ep => ep.completed).map(ep => ep.id);
       localStorage.setItem('volcanoRushStory', JSON.stringify(storyProgress));
@@ -9415,16 +9407,12 @@ function checkAndRestorePowerupSession() {
 // Override endPlatform and force it for the game — see setStoryTargetPlatforms below
 
 function setStoryTargetPlatforms(target) {
-  if (window.getGlobalEndPlatform) {
-    originalEndPlatform = window.getGlobalEndPlatform();
-  } else {
-    originalEndPlatform = endPlatform;
-  }
+  originalEndPlatform = endPlatform;
   console.log("[STORY] Saved originalEndPlatform =", originalEndPlatform);
 
   // Set both the local variable AND lock window.endPlatform
   endPlatform = target;
-  window.storyLockedEndPlatform = target;   // reference for the win check guard
+  storyLockedEndPlatform = target;   // reference for the win check guard
 
   try {
     Object.defineProperty(window, 'endPlatform', {
@@ -9456,7 +9444,7 @@ function setStoryTargetPlatforms(target) {
 
 function restoreEndPlatform() {
   console.log("[STORY] Restoring endPlatform to", originalEndPlatform);
-  window.storyLockedEndPlatform = null;
+  storyLockedEndPlatform = null;
 
   // Remove the property lock and restore normal get/set behaviour
   try {
@@ -9491,10 +9479,8 @@ let currentCarouselIndex = 0;  // index among unlocked episodes
 let unlockedEpisodes = [];
 
 function updateUnlockedEpisodes() {
-  const eps = (typeof STORY_EPISODES !== 'undefined' ? STORY_EPISODES : null) || window.VOLCANO_EPISODES;
-  if (!eps) return;
-  unlockedEpisodes = eps.filter(ep => ep.unlocked);
-  // find current index (first unlocked that is not completed? but we'll use the one selected)
+  if (!STORY_EPISODES) return;
+  unlockedEpisodes = STORY_EPISODES.filter(ep => ep.unlocked);
   if (currentCarouselIndex >= unlockedEpisodes.length) currentCarouselIndex = 0;
 }
 
@@ -9772,33 +9758,15 @@ function renderCarousel() {
 // Override showStoryWorldMap
 function showStoryWorldMap() {
   // If all episodes are completed, show the end credits screen instead
-  if (typeof STORY_EPISODES !== 'undefined' || window.VOLCANO_EPISODES) {
-    const eps = (typeof STORY_EPISODES !== 'undefined' ? STORY_EPISODES : null) || window.VOLCANO_EPISODES;
-    if (eps && eps.every(ep => ep.completed)) {
-      if (typeof showStoryEndCredits === 'function') { showStoryEndCredits(); return; }
-    }
+  if (STORY_EPISODES && STORY_EPISODES.every(ep => ep.completed)) {
+    showStoryEndCredits(); return;
   }
-  // --- FIX: Always pull the latest coin balance from the user profile ---
-  if (window.currentUser && window.currentUser.ud && typeof window.currentUser.ud.coins === 'number') {
-    coins = window.currentUser.ud.coins;
-    window.coins = coins;
-    console.log('[STORY] Synced coins from user:', coins);
+  // Always pull the latest coin balance from the user profile
+  if (currentUser && currentUser.ud && typeof currentUser.ud.coins === 'number') {
+    coins = currentUser.ud.coins;
   }
   if (isNaN(coins) || coins === undefined) coins = 0;
-  // Also force the UI on the start screen to update (if visible)
-  if (typeof updatePiggyDisplay === 'function') updatePiggyDisplay();
-  
-  console.log('[STORY] === SHOW WORLD MAP ===');
-  console.log('[STORY] window.coins at map open =', coins);
-  if (window.currentUser) {
-    console.log('[STORY] currentUser.ud.coins =', window.currentUser.ud.coins);
-  }
-  const startCoinSpan = document.getElementById('startMyCoinAmt');
-  if (startCoinSpan) {
-    console.log('[STORY] startMyCoinAmt text content =', startCoinSpan.innerText);
-  }
-  // ... rest of existing code
-  if(typeof playStoryMapMusic === 'function') playStoryMapMusic();
+  updatePiggyDisplay();
   const overlay = document.getElementById('storyWorldMapOverlay');
   // Ensure SVG container exists
   let svgContainer = document.getElementById('storyMapSVG');
@@ -9834,12 +9802,12 @@ function closeStoryMap(goingToMenu) {
 
   if (goingToMenu) {
     // ── MENU button: clear state and return to start screen ──
-    if (typeof restoreEndPlatform === 'function') restoreEndPlatform();
-    if (window.currentStoryEpisode) window.currentStoryEpisode = null;
-    if (typeof showScreen === 'function') showScreen('startScreen');
+    restoreEndPlatform();
+    if (currentStoryEpisode) currentStoryEpisode = null;
+    showScreen('startScreen');
     // Switch from WorldMap.mp3 back to menu music
-    if (typeof stopStoryMusic === 'function') stopStoryMusic();
-    if (typeof updateBgMusic === 'function') updateBgMusic();
+    if(typeof stopStoryMusic==='function') stopStoryMusic();
+    updateBgMusic();
   }
   // If NOT going to menu (i.e. opening an episode), do nothing with music —
   // WorldMap.mp3 keeps playing through pre-screen and start animation.
@@ -10344,8 +10312,8 @@ function closeStoryMap(goingToMenu) {
 function startStoryGameLevel(ep) {
   // --- Ensure coins has a valid number before capturing ---
   if (isNaN(coins) || coins === undefined) {
-    coins = (window.currentUser && window.currentUser.ud && typeof window.currentUser.ud.coins === 'number') 
-            ? window.currentUser.ud.coins 
+    coins = (currentUser && currentUser.ud && typeof currentUser.ud.coins === 'number') 
+            ? currentUser.ud.coins 
             : 0;
     console.log('[STORY] Fixed coins to', coins);
   }
@@ -10355,55 +10323,52 @@ function startStoryGameLevel(ep) {
   console.log('[STORY] coins BEFORE startGame:', coins);
 
   // Capture immediately – no delay needed
-  window.storyStartCoins = coins;
-  console.log('[STORY] storyStartCoins captured =', window.storyStartCoins);
+  storyStartCoins = coins;
+  console.log('[STORY] storyStartCoins captured =', storyStartCoins);
 
   currentStoryEpisode = ep;
-  window.currentStoryEpisode = ep;
+  currentStoryEpisode = ep;
 
   setStoryTargetPlatforms(ep.targetPlats);
 
   if (ep.platformConfig) {
-    window.storyPlatformCfg = Object.assign({}, window.STORY_PLATFORM_DEFAULTS, ep.platformConfig);
+    storyPlatformCfg = Object.assign({}, STORY_PLATFORM_DEFAULTS, ep.platformConfig);
   } else {
-    window.storyPlatformCfg = null;
+    storyPlatformCfg = null;
   }
 
   const titleEl = document.getElementById('startAnimTitle');
   if(titleEl) titleEl.textContent = `🌋 ${ep.name} · ${ep.location}`;
 
   // Start the game
-  if (window.startGame) window.startGame();
+  startGame();
 
   // Double‑check that coins are still what we captured (in case initGame tried to override)
   setTimeout(() => {
-    if (coins !== window.storyStartCoins) {
-      console.warn('[STORY] Coins changed after initGame! Restoring to', window.storyStartCoins);
-      coins = window.storyStartCoins;
-      if (window.currentUser) window.currentUser.ud.coins = coins;
-      if (window.dbSave) window.dbSave();
-      if (typeof syncUserProfile === 'function') syncUserProfile();
-      if (window.updateHUD) window.updateHUD();
+    if (coins !== storyStartCoins) {
+      console.warn('[STORY] Coins changed after initGame! Restoring to', storyStartCoins);
+      coins = storyStartCoins;
+      if (currentUser) currentUser.ud.coins = coins;
+      dbSave();
+      syncUserProfile();
+      if (typeof updateHUD === "function") updateHUD();
     }
   }, 50);
 }
 
 // ── Hook into game win (victory) ──
-const originalGameWin = window.gameWin;
-window.gameWin = function() {
-  console.log('[STORY gameWin] called. currentStoryEpisode=', currentStoryEpisode ? currentStoryEpisode.name : 'null', 'versusMode=', window.versusMode);
-  console.log('[STORY gameWin] window.coins =', coins, 'global coins =', coins);
-  if (currentStoryEpisode && !window.versusMode) {
+function gameWin() {
+  console.log('[STORY gameWin] called. currentStoryEpisode=', currentStoryEpisode ? currentStoryEpisode.name : 'null', 'versusMode=', versusMode);
+  console.log('[STORY gameWin] coins =', coins, 'global coins =', coins);
+  if (currentStoryEpisode && !versusMode) {
     console.log('[STORY gameWin] ✅ Story win path — stopping game loop');
 
     // ── Stop the game loop (mirrors what original gameWin does) ──
-    window.gameRunning = false;
-    if (window.animId) cancelAnimationFrame(window.animId);
-    if (typeof window.saveScore === 'function') window.saveScore();
-    window.lastGameWon = true;
-    if (typeof window.handleCoinsAndPowerUps === 'function') {
-      window.handleCoinsAndPowerUps('win');
-    }
+    gameRunning = false;
+    if (animId) cancelAnimationFrame(animId);
+    saveScore();
+    lastGameWon = true;
+    handleCoinsAndPowerUps('win');
 
     // ── Mark episode complete, unlock next ──
     currentStoryEpisode.completed = true;
@@ -10412,10 +10377,10 @@ window.gameWin = function() {
     saveStoryProgress();
 
     // ── Record time for this episode ──
-    const epTimeSecs = Math.round(window.levelTimerSecs || 0);
+    const epTimeSecs = Math.round(levelTimerSecs || 0);
     storyRunTimes[currentStoryEpisode.id] = epTimeSecs;
     storyRunSave();
-    const uName = window.currentUser ? window.currentUser.name : 'Guest';
+    const uName = currentUser ? currentUser.name : 'Guest';
     lbSubmitStory(currentStoryEpisode.id, uName, epTimeSecs);
     console.log('[STORY gameWin] time=', epTimeSecs+'s for ep='+currentStoryEpisode.name);
 
@@ -10423,16 +10388,16 @@ window.gameWin = function() {
     const allDone = STORY_EPISODES.every(ep2 => ep2.completed);
 
     // ── Capture platform count at this exact moment ──
-    const finalPlatforms = (typeof window.getPlatformCount === 'function')
-      ? window.getPlatformCount()
-      : (window.platformCount || 0);
+    const finalPlatforms = (typeof getPlatformCount === 'function')
+      ? getPlatformCount()
+      : (platformCount || 0);
     console.log('[STORY gameWin] finalPlatforms=', finalPlatforms, 'ep.targetPlats=', currentStoryEpisode.targetPlats);
 
     showEscapeAnimation(currentStoryEpisode, finalPlatforms, allDone);
 
   } else {
     console.log('[STORY gameWin] ➡️ Normal win path — calling original gameWin');
-    if (originalGameWin) originalGameWin();
+    _gameWin();
   }
 };
 
@@ -10443,7 +10408,7 @@ window.gameWin = function() {
       if(ep.id === 5) { showEscapeAnim_Ep5(ep, finalPlatforms, allDone); return; }
       if(ep.id === 6) { showEscapeAnim_Ep6(ep, finalPlatforms, allDone); return; }
 
-      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      playStoryVictoryMusic();
       const escapeTitleEl = document.getElementById('escapeAnimTitle');
       if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
       const escapeSubEl = document.getElementById('escapeAnimSubtitle');
@@ -10548,7 +10513,7 @@ window.gameWin = function() {
 
     // ── EP4 ESCAPE: Erta Ale — helicopter extraction over lava lake (2× = 14.4s) ──
     function showEscapeAnim_Ep4(ep, finalPlatforms, allDone) {
-      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      playStoryVictoryMusic();
       const escapeTitleEl = document.getElementById('escapeAnimTitle');
       if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
       const escapeSubEl = document.getElementById('escapeAnimSubtitle');
@@ -10669,7 +10634,7 @@ window.gameWin = function() {
 
     // ── EP5 ESCAPE: Cerro Negro — ash boarding out, sigil decoded (2× = 14.4s) ──
     function showEscapeAnim_Ep5(ep, finalPlatforms, allDone) {
-      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      playStoryVictoryMusic();
       const escapeTitleEl = document.getElementById('escapeAnimTitle');
       if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
       const escapeSubEl = document.getElementById('escapeAnimSubtitle');
@@ -10777,7 +10742,7 @@ window.gameWin = function() {
 
     // ── EP6 ESCAPE: Ol Doinyo Lengai — divine star ascension, Maasai blessing (2× = 14.4s) ──
     function showEscapeAnim_Ep6(ep, finalPlatforms, allDone) {
-      if(typeof playStoryVictoryMusic === 'function') playStoryVictoryMusic();
+      playStoryVictoryMusic();
       const escapeTitleEl = document.getElementById('escapeAnimTitle');
       if(escapeTitleEl) escapeTitleEl.textContent = `🏆 ${ep.rescue} — SECURED!`;
       const escapeSubEl = document.getElementById('escapeAnimSubtitle');
@@ -10884,7 +10849,7 @@ window.gameWin = function() {
     }
 
 function showEndStats(ep, finalPlatforms, allDone) {
-  const epTimeSecs = Math.round(window.levelTimerSecs || 0);
+  const epTimeSecs = Math.round(levelTimerSecs || 0);
   console.log('[STATS] showEndStats: coins =', coins, 'allDone=', allDone);
   if (!ep) return;
   const target = ep.targetPlats || 0;
@@ -10900,13 +10865,13 @@ function showEndStats(ep, finalPlatforms, allDone) {
   // Award bonus immediately
   if (bonus > 0) {
     coins = finalTotal;
-    if (window.currentUser) {
-      window.currentUser.ud.coins = coins;
-      if (window.dbSave) window.dbSave();
-      if (typeof syncUserProfile === 'function') syncUserProfile();
+    if (currentUser) {
+      currentUser.ud.coins = coins;
+      dbSave();
+      syncUserProfile();
     }
-    if (window.updatePiggyDisplay) window.updatePiggyDisplay();
-    if (window.updateHUD) window.updateHUD();
+    updatePiggyDisplay();
+    if (typeof updateHUD === "function") updateHUD();
   }
 
   // Update UI elements
@@ -10937,16 +10902,16 @@ function showEndStats(ep, finalPlatforms, allDone) {
     statsOverlay.style.display = 'none';
     restoreEndPlatform();
     currentStoryEpisode = null;
-    window.currentStoryEpisode = null;
-    if (typeof window.stopBgMusic === 'function') window.stopBgMusic();
+    currentStoryEpisode = null;
+    stopBgMusic();
 
-    if (typeof window.showScreen === 'function') {
-      window.showScreen('startScreen');
-    } else if (window.goToMenu) {
-      const oldRetain = window.retainPowerups;
-      window.retainPowerups = true;
-      window.goToMenu();
-      window.retainPowerups = oldRetain;
+    if (true) {
+      showScreen('startScreen');
+    } else {
+      const oldRetain = retainPowerups;
+      retainPowerups = true;
+      goToMenu();
+      retainPowerups = oldRetain;
     }
     setTimeout(() => {
       console.log('[STORY] After menu, startMyCoinAmt =', document.getElementById('startMyCoinAmt')?.innerText);
@@ -10967,7 +10932,7 @@ function showEndStats(ep, finalPlatforms, allDone) {
         myCoinsBox.style.borderColor = '#ffe066';
         setTimeout(() => { myCoinsBox.style.transform = 'scale(1)'; }, 200);
       }
-    if (window.updateHUD) window.updateHUD();
+    if (typeof updateHUD === "function") updateHUD();
 
     // ── Upload to community leaderboard ──
     if (currentUser && currentUser.name) {
@@ -10981,22 +10946,22 @@ function showEndStats(ep, finalPlatforms, allDone) {
         statsOverlay.style.display = 'none';
         restoreEndPlatform();
         currentStoryEpisode = null;
-        window.currentStoryEpisode = null;
-        if (typeof window.stopBgMusic === 'function') window.stopBgMusic();
-        if (window.updatePiggyDisplay) setTimeout(window.updatePiggyDisplay, 200);
+        currentStoryEpisode = null;
+        stopBgMusic();
+        setTimeout(updatePiggyDisplay, 200);
         if (allDone) {
           // All episodes complete — show end credits
-          if (typeof showStoryEndCredits === 'function') showStoryEndCredits();
+          showStoryEndCredits();
         } else {
-          if (typeof showStoryWorldMap === 'function') showStoryWorldMap();
+          showStoryWorldMap();
         }
       };
     }
 
     // Only animate the bonus amount (the coins earned during the run are already in the wallet)
-    if (bonus > 0 && myCoinsBox && typeof window.animateCoinTransfer === 'function') {
+    if (bonus > 0 && myCoinsBox) {
       bonusRow.id = 'statsBonusAnimSrc';
-      window.animateCoinTransfer('statsBonusAnimSrc', 'statsMyCoinsBox', bonus, () => {
+      animateCoinTransfer('statsBonusAnimSrc', 'statsMyCoinsBox', bonus, () => {
         bonusRow.id = 'statsBonus';
         completeBonusAward();
       });
@@ -11008,36 +10973,32 @@ function showEndStats(ep, finalPlatforms, allDone) {
 	
 
 // ── Hook into game death to clean up story mode ──
-const originalGameEnd = window.gameEnd;
-window.gameEnd = function(fromPurple) {
-  if (currentStoryEpisode && !window.versusMode) {
+function gameEnd(fromPurple) {
+  if (currentStoryEpisode && !versusMode) {
     // --- FIX: Do NOT clear the story episode on death.
     // The episode must remain so that "Play Again" restarts the same volcano.
     // Also do NOT restore the normal endPlatform (keep the story target).
     // Just call the original gameEnd to handle death penalties, piggy, etc.
-    if (originalGameEnd) originalGameEnd(fromPurple);
+    _gameEnd(fromPurple);
     // The episode stays alive; restartGameAfterStory will work.
   } else {
-    if (originalGameEnd) originalGameEnd(fromPurple);
+    _gameEnd(fromPurple);
   }
 };
 
 // Also restore when manually going to menu
-const originalGoToMenu = window.goToMenu;
-window.goToMenu = function() {
+function goToMenu() {
   if (currentStoryEpisode) {
     restoreEndPlatform();
     currentStoryEpisode = null;
-    window.currentStoryEpisode = null;
   }
-  if (originalGoToMenu) originalGoToMenu();
+  _goToMenu();
 };
 
 // Enhance HUD during story mode – replace original level & platform displays
-const originalUpdateHUD = window.updateHUD;
-window.updateHUD = function() {
+function updateHUD() {
   // Always call the original first (updates coins, lava info, etc.)
-  if (originalUpdateHUD) originalUpdateHUD();
+  _updateHUD();
 
   if (currentStoryEpisode && document.getElementById('gameScreen').classList.contains('active')) {
     const levelEl = document.getElementById('levelDisplay');
@@ -11046,14 +11007,14 @@ window.updateHUD = function() {
       levelEl.innerHTML = `🌋 ${currentStoryEpisode.name}`;
     }
     if (platformEl) {
-      const currentPlats = typeof window.getPlatformCount === 'function' ? window.getPlatformCount() : 0;
+      const currentPlats = typeof getPlatformCount === 'function' ? getPlatformCount() : 0;
       platformEl.innerHTML = `📊 ${currentPlats} / ${currentStoryEpisode.targetPlats}`;
     }
   }
   // When story mode ends, the original updateHUD will restore "Level X" and "Plt X / Y" automatically
 };
 
-    window.startStoryEpisode = function(epId) {
+    function startStoryEpisode(epId) {
       const ep = STORY_EPISODES.find(e => e.id === epId);
       if (!ep || ep.completed) return;
       if (!ep.unlocked) { alert("Previous episode must be completed first!"); return; }
@@ -11090,25 +11051,25 @@ window.updateHUD = function() {
       const overlay = el('storyInfoOverlay');
       if(overlay) overlay.classList.add('show');
     }
-    window.openStoryInfo = openStoryInfo;
+  // (now global — no export needed)
 
     function closeStoryInfo() {
       const overlay = document.getElementById('storyInfoOverlay');
       if(overlay) overlay.classList.remove('show');
     }
-    window.closeStoryInfo = closeStoryInfo;
+  // (now global — no export needed)
 
     function requestStoryReset() {
       const box = document.getElementById('storyResetConfirmBox');
       if(box) box.style.display = 'block';
     }
-    window.requestStoryReset = requestStoryReset;
+  // (now global — no export needed)
 
     function cancelStoryReset() {
       const box = document.getElementById('storyResetConfirmBox');
       if(box) box.style.display = 'none';
     }
-    window.cancelStoryReset = cancelStoryReset;
+  // (now global — no export needed)
 
 	function confirmStoryReset() {
 	  // Reset all episodes: mark as incomplete and unlock only the first
@@ -11142,7 +11103,7 @@ window.updateHUD = function() {
 		showNotif('🌋 Story Mode reset! Start from Krakatoa.');
 	  }
 	}
-    window.confirmStoryReset = confirmStoryReset;
+  // (now global — no export needed)
 
     // Initialize
     fixOverlayCSS();
@@ -11151,7 +11112,6 @@ window.updateHUD = function() {
       addStoryMapButton();
       document.getElementById('closeMapBtn')?.addEventListener('click', () => closeStoryMap(true));
     });
-  })();
   
   let notifListener = null;
 
