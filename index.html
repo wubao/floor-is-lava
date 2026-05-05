@@ -1010,11 +1010,11 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     </div>
     <div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;">
       <div style="background:#1a1a3e;border:1.5px solid #4a5fd4;border-radius:10px;padding:6px 14px;text-align:center;min-width:90px;">
-        <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🪙 MY COINS</div>
+        <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🪙 MY COINS (held)</div>
         <div id="goCoins" style="font-size:16px;font-weight:bold;color:#ffe066;">0</div>
       </div>
       <div style="background:#2a0a18;border:1.5px solid #cc6688;border-radius:10px;padding:6px 14px;text-align:center;min-width:90px;">
-        <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🐷 PIGGY</div>
+        <div style="font-size:9px;color:#aaa;margin-bottom:2px;">🐷 → PIGGY IF YOU LEAVE</div>
         <div id="goPiggy" style="font-size:16px;font-weight:bold;color:#ffb3c6;">0</div>
       </div>
     </div>
@@ -1789,6 +1789,159 @@ function updatePiggyDisplay(){
   const el=document.getElementById('piggyBankDisplay');if(el)el.style.opacity=p>0?'1':'0.55';
   const sc=document.getElementById('startMyCoinAmt');
   if(sc)sc.textContent=currentUser?(currentUser.ud.coins||0):0;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ██ PENDING COIN TRANSACTION SYSTEM ██
+//
+// Principle: Never destroy value (coins or piggy) before the equivalent
+// value is guaranteed on the other side. Every risky transfer (death,
+// ad, mini-game, RPS) is recorded as a pending transaction in
+// localStorage BEFORE any balances change. If the page crashes or the
+// user refreshes mid-flow, the transaction is recovered on next load.
+//
+// Transaction types:
+//   'death'      — coins held in My Coins on You Died screen; move to
+//                  piggy only when player commits to leaving (Play Again
+//                  without ad, or Menu).
+//   'ad-claim'   — piggy coins held in My Coins during the ad countdown;
+//                  only cleared from piggy once ad is fully watched.
+//   'minigame'   — same as ad-claim but triggered by a mini-game win.
+// ══════════════════════════════════════════════════════════════════════
+const PENDING_TX_KEY = 'fil_pending_coin_tx';
+const PENDING_TX_TTL = 10 * 60 * 1000; // 10 minutes — stale after this
+
+function pendingTxCreate(type, amount, extra = {}) {
+  const tx = {
+    id:        Date.now() + '-' + Math.random().toString(36).slice(2),
+    type,
+    amount,
+    timestamp: Date.now(),
+    completed: false,
+    ...extra
+  };
+  try { localStorage.setItem(PENDING_TX_KEY, JSON.stringify(tx)); } catch(e) {}
+  return tx;
+}
+
+function pendingTxGet() {
+  try {
+    const raw = localStorage.getItem(PENDING_TX_KEY);
+    if (!raw) return null;
+    const tx = JSON.parse(raw);
+    // Expire stale transactions automatically
+    if (Date.now() - tx.timestamp > PENDING_TX_TTL) {
+      pendingTxClear();
+      return null;
+    }
+    return tx;
+  } catch(e) { return null; }
+}
+
+function pendingTxClear() {
+  try { localStorage.removeItem(PENDING_TX_KEY); } catch(e) {}
+}
+
+// Called on every page load — recovers from a crash mid-transaction.
+// Safe to call before or after Firebase loads; uses only local memory.
+async function pendingTxRecover() {
+  const tx = pendingTxGet();
+  if (!tx || tx.completed) { pendingTxClear(); return; }
+
+  console.log('[PendingTx] Recovering interrupted transaction:', tx.type, tx.amount);
+
+  if (tx.type === 'death') {
+    // Player died, page refreshed before they made a choice.
+    // Coins are still in My Coins (we never moved them). Nothing to recover —
+    // just clear the record. The normal session restore will reload the coins.
+    console.log('[PendingTx] Death tx — coins were never moved, clearing.');
+    pendingTxClear();
+
+  } else if (tx.type === 'ad-claim' || tx.type === 'minigame') {
+    // Player started an ad or mini-game; page crashed before reward was applied.
+    // Piggy was NOT zeroed yet (new system), so we just need to clear the record.
+    // If piggy IS already zero and coins don't reflect the reward, restore piggy.
+    const currentPiggy = getPiggyBank();
+    const coinsHaveReward = currentUser
+      ? ((currentUser.ud.coins || 0) >= tx.amount)
+      : (coins >= tx.amount);
+    if (currentPiggy === 0 && !coinsHaveReward) {
+      // Something went wrong — restore piggy to keep the user whole
+      console.log('[PendingTx] Restoring piggy bank after interrupted', tx.type, ':', tx.amount);
+      await setPiggyBank(tx.amount);
+      showNotif('🔄 Recovered ' + tx.amount + ' coins from interrupted session.');
+    }
+    pendingTxClear();
+  }
+}
+
+// ── Death transaction helpers ──────────────────────────────────────
+// On death: hold coins in My Coins (don't move to piggy yet).
+// Record a 'death' pending transaction so if the page refreshes, we
+// know the coins were legitimately held and not double-counted.
+let _deathTxCoins = 0;   // coins held on death screen, not yet resolved
+
+function deathTxBegin(coinAmount) {
+  _deathTxCoins = coinAmount;
+  pendingTxCreate('death', coinAmount);
+}
+
+// Player chose to abandon recovery (Play Again without ad, or Menu).
+// NOW move coins to piggy.
+async function deathTxCommit() {
+  if (_deathTxCoins <= 0) { pendingTxClear(); return; }
+  const pig = getPiggyBank() + _deathTxCoins;
+  const held = _deathTxCoins;
+  _deathTxCoins = 0;
+  coins = 0;
+  if (currentUser) {
+    currentUser.ud.piggyBank = pig;
+    currentUser.ud.coins     = 0;
+    dbSave();
+    await syncUserProfile();
+  } else {
+    db.piggyBank = pig;
+    dbSave();
+  }
+  pendingTxClear();
+  updateHUD();
+  updatePiggyDisplay();
+  return held;
+}
+
+// Player watched ad or won RPS — coins stay in My Coins; clear the hold.
+function deathTxResolveKeep() {
+  _deathTxCoins = 0;
+  pendingTxClear();
+}
+
+// ── Ad-claim / Mini-game helpers ───────────────────────────────────
+// When transferring FROM piggy TO my coins, create a pending record
+// BEFORE zeroing piggy, and zero piggy only AFTER coins are credited.
+async function piggyToCoinsCommit(piggyAmt, label) {
+  if (piggyAmt <= 0) return;
+  // Step 1: create pending record (piggy still has the coins)
+  pendingTxCreate('ad-claim', piggyAmt, { label });
+  // Step 2: credit coins first
+  coins += piggyAmt;
+  if (currentUser) {
+    currentUser.ud.coins = coins;
+    dbSave(); // local snapshot with coins credited, piggy still non-zero
+  }
+  // Step 3: now zero piggy
+  if (currentUser) {
+    currentUser.ud.piggyBank = 0;
+    dbSave();
+    const synced = await syncUserProfile(3);
+    if (!synced) showNotif('⚠️ Could not save to cloud — coins safe locally.');
+  } else {
+    db.piggyBank = 0;
+    dbSave();
+  }
+  // Step 4: clear the pending record — transfer is complete
+  pendingTxClear();
+  updateHUD();
+  updatePiggyDisplay();
 }
 
 // ═══ Screen routing ═══
@@ -4144,34 +4297,33 @@ function doRPS(){
   else result='lose';
   const resEl=document.getElementById('rpsResult');
 if(result==='win'||result==='draw'){
-  const pig = getPiggyBank();
-  // Move coins from piggy to wallet immediately (no animation yet)
-  coins = pig;
+  // Coins are already in My Coins (_deathTxCoins) — just clear the death hold
+  deathTxResolveKeep();
+  rpsWonCoins = coins;  // coins unchanged; player keeps them
+
+  // Sync the confirmed state to Firebase
   if(currentUser) {
     currentUser.ud.coins = coins;
-    currentUser.ud.piggyBank = 0;
+    currentUser.ud.piggyBank = getPiggyBank();
     dbSave();
     syncUserProfile();
-  } else {
-    db.piggyBank = 0;
-    dbSave();
   }
-  rpsWonCoins = coins;
 
-  resEl.textContent = result==='win' ? '🎉 You WIN! Coins returned!' : '🤝 Draw! Coins returned!';
+  resEl.textContent = result==='win' ? '🎉 You WIN! Coins kept!' : '🤝 Draw! Coins kept!';
   resEl.style.color = '#44ff88';
-
-  // Short delay then restart the same game mode (story or normal)
-  setTimeout(() => {
-    restartGameAfterCoinRecovery();
-  }, 800);
+  setTimeout(() => { restartGameAfterCoinRecovery(); }, 800);
 } else {
-    // Coins stay in piggy — nothing to move, already there from death
-    resEl.textContent='😬 CPU wins! Coins stay in Piggy Bank.';resEl.style.color='#ff6666';
-    piggyAttemptUnlocked=true;
-    piggyAttemptUsed=false;
-    const adRow=document.getElementById('rpsAdRow');
-    if(adRow) adRow.style.display='flex';
+    // RPS loss — commit the death transaction: move held coins to piggy NOW
+    deathTxCommit().then(() => {
+      piggyAttemptUnlocked = true;
+      piggyAttemptUsed = false;
+      const adRow = document.getElementById('rpsAdRow');
+      if (adRow) adRow.style.display = 'flex';
+      const vp = document.getElementById('vrPiggy');
+      if (vp) vp.textContent = getPiggyBank();
+    });
+    resEl.textContent = '😬 CPU wins! Coins moved to Piggy Bank.';
+    resEl.style.color = '#ff6666';
   }
   document.getElementById('rpsGo').style.display='none';
   document.getElementById('rpsButtons').style.display='flex';
@@ -4186,22 +4338,12 @@ function startMathGame(){mathScore=0;piggyAttemptUsed=true;hideMiniPanels();docu
 function nextMathQ(){
 if(mathScore>=mathTotal){
   const pig = getPiggyBank();
-  coins += pig;
-  if(currentUser) {
-    currentUser.ud.coins = coins;
-    currentUser.ud.piggyBank = 0;
-    dbSave();
-    syncUserProfile();
-  } else {
-    db.piggyBank = 0;
-    dbSave();
-  }
-
-  // Go to start screen and animate
-  showScreen('startScreen');
-  setTimeout(() => {
-    animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', pig, () => updatePiggyDisplay());
-  }, 400);
+  piggyToCoinsCommit(pig, 'math-game').then(() => {
+    showScreen('startScreen');
+    setTimeout(() => {
+      animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', pig, () => updatePiggyDisplay());
+    }, 400);
+  });
   return;
 }
   const op=MATH_OPS[Math.floor(Math.random()*MATH_OPS.length)];
@@ -4261,7 +4403,6 @@ function _gameEnd(fromPurple) {
     document.getElementById('penaltyMsg').innerHTML = '';
     if (practiceEl) practiceEl.style.display = 'block';
 
-    // Reset power-ups locally (don't persist)
     jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0;
     booksOwned = false; bigHead = false; lavaShips = 0; lavaShipActive = false;
 
@@ -4276,36 +4417,56 @@ function _gameEnd(fromPurple) {
     if (rpsBtn) rpsBtn.style.display = 'none';
 
   } else {
-    // ── Normal mode: coin penalty + piggy + RPS/Ad ──
+    // ── Normal mode ──
     if (practiceEl) practiceEl.style.display = 'none';
 
-    // --- DEDUCT 30 COINS (death penalty) ---
+    // ── Death penalty: deduct up to 30 coins ──
     const penalty = 30;
-    let deducted = Math.min(penalty, coins);
+    const deducted = Math.min(penalty, coins);
     if (deducted > 0) {
       coins -= deducted;
       if (currentUser) { currentUser.ud.coins = coins; syncUserProfile(); }
-      showNotif(`💸 You lost ${deducted} coins!`);
       document.getElementById('penaltyMsg').innerHTML = `💸 Penalty: -${deducted} coins (death penalty)`;
     } else {
       document.getElementById('penaltyMsg').innerHTML = '';
     }
 
-    // Move remaining coins to piggy and reset power-ups
-    handleCoinsAndPowerUps('die');   // this will also set coins = 0
+    // ── PENDING TRANSACTION: hold remaining coins in My Coins ──
+    // We do NOT move coins to piggy yet. They stay in My Coins so the
+    // player can reclaim them via ad or RPS without any value being
+    // destroyed. Coins only move to piggy when the player explicitly
+    // chooses to abandon recovery (Play Again without ad, or Menu).
+    const heldCoins = coins; // what's held on the death screen
+    deathTxBegin(heldCoins);
 
-    // Coins are now 0; piggy holds everything
+    // Reset power-ups immediately (these aren't recoverable)
+    jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; booksOwned = 0;
+    bigHead = false; lavaShips = 0; lavaShipActive = false; lavaShipSurgeThreshold = 25;
+    if (currentUser) {
+      currentUser.ud.jumpBoosts = 0;
+      currentUser.ud.parachutes = 0;
+      currentUser.ud.skipUses   = 0;
+      currentUser.ud.bookUses   = 0;
+      currentUser.ud.lavaShips  = 0;
+      dbSave();
+      syncUserProfile();
+    }
+
+    // Show coins as still being in My Coins on the death screen
     const gcEl = document.getElementById('goCoins');
-    if (gcEl) gcEl.textContent = 0;
-    const piggyAmt = getPiggyBank();
+    if (gcEl) gcEl.textContent = heldCoins;
     const gpEl = document.getElementById('goPiggy');
-    if (gpEl) gpEl.textContent = piggyAmt;
-    if (gpEl) gpEl.parentElement.style.display = '';
+    if (gpEl) gpEl.parentElement.style.display = heldCoins > 0 ? '' : 'none';
+    if (gpEl) gpEl.textContent = heldCoins > 0 ? '→ Piggy if you leave' : '0';
 
+    // Label the piggy display to show the player what's at stake
+    const piggyLabel = document.querySelector('#gameOver .goButtons [id="goPiggy"]')?.previousElementSibling;
+
+    // Show / hide recovery buttons based on whether there's anything to recover
     const adBtn = document.getElementById('goAdBtn');
-    if (adBtn) adBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+    if (adBtn) adBtn.style.display = heldCoins > 0 ? 'block' : 'none';
     const rpsBtn = document.getElementById('rpsBtn');
-    if (rpsBtn) rpsBtn.style.display = piggyAmt > 0 ? 'block' : 'none';
+    if (rpsBtn) rpsBtn.style.display = heldCoins > 0 ? 'block' : 'none';
   }
 
   // Show Rematch (versus) or Play Again (solo)
@@ -4400,7 +4561,6 @@ function restartGame(){
     versusMode = false;
     document.getElementById('gameOver').classList.remove('show');
     document.getElementById('rpsOverlay').classList.remove('show');
-    // Restore piggy display visibility in case gameWin hid it
     const gpEl = document.getElementById('goPiggy');
     if(gpEl) gpEl.parentElement.style.display = '';
     const vr = document.getElementById('versusResult'); if(vr){vr.classList.remove('show'); vr.style.display='none';}
@@ -4410,7 +4570,13 @@ function restartGame(){
     animId = requestAnimationFrame(gameLoop);
   };
 
-  doStart();
+  // If there's a pending death transaction (player clicked Play Again without watching ad)
+  // commit it now — move coins to piggy before starting fresh
+  if (_deathTxCoins > 0) {
+    deathTxCommit().then(() => { doStart(); });
+  } else {
+    doStart();
+  }
 }
 
 function restartGameAfterStory(){
@@ -4527,6 +4693,12 @@ function _goToMenu() {
   cancelAnimationFrame(animId);
   lastGameWon = false;
   diedInVersus = false;
+
+  // If player is leaving from the death screen without watching ad/playing RPS,
+  // commit the death transaction now — move held coins to piggy.
+  if (_deathTxCoins > 0) {
+    deathTxCommit(); // async but fire-and-forget; coins move before menu shows
+  }
 
   if (isCustomPlayMode()) {
     // Practice mode: discard all local state, restore coins/power-ups from saved user data
@@ -6587,7 +6759,7 @@ function flipMemCard(card){
     if(a.dataset.emoji===b.dataset.emoji){
       setTimeout(()=>{a.classList.remove('flipped');a.classList.add('matched');b.classList.remove('flipped');b.classList.add('matched');memFlipped=[];memCanFlip=true;memMatched++;
         document.getElementById('memProgress').textContent=memMatched+'/8 pairs matched';
-        if(memMatched===8){const pig=getPiggyBank();document.getElementById('memResult').textContent='You win '+pig+' coins!';document.getElementById('memResult').style.color='#44ff88';coins+=pig;if(currentUser){currentUser.ud.coins=coins;currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}setTimeout(hideMiniPanels,2200);}
+        if(memMatched===8){const pig=getPiggyBank();document.getElementById('memResult').textContent='You win '+pig+' coins!';document.getElementById('memResult').style.color='#44ff88';piggyToCoinsCommit(pig,'memory-game');setTimeout(hideMiniPanels,2200);}
       },500);
     } else {
       setTimeout(()=>{a.classList.remove('flipped');a.textContent='❓';b.classList.remove('flipped');b.textContent='❓';memFlipped=[];memCanFlip=true;},900);
@@ -6606,7 +6778,7 @@ function nextReactRound(){
     const avg=Math.round(reactScores.reduce((a,b)=>a+b,0)/reactScores.length);
     const passed=reactScores.filter(s=>s<=reactTarget).length;
     const r=document.getElementById('reactResult');
-    if(passed>=2){const pig=getPiggyBank();r.textContent='Avg '+avg+'ms — You win '+pig+' coins!';r.style.color='#44ff88';coins+=pig;if(currentUser){currentUser.ud.coins=coins;currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}}
+    if(passed>=2){const pig=getPiggyBank();r.textContent='Avg '+avg+'ms — You win '+pig+' coins!';r.style.color='#44ff88';piggyToCoinsCommit(pig,'reaction-game');}
     else{r.textContent='Too slow (avg '+avg+'ms). Bank stays safe.';r.style.color='#ff9944';}
     document.getElementById('reactProgress').textContent='Done!';
     setTimeout(hideMiniPanels,2500);return;
@@ -6635,7 +6807,7 @@ function startWordGame(){
   wordScore=0;document.getElementById('wordResult').textContent='';nextWordQ();
 }
 function nextWordQ(){
-  if(wordScore>=3){const pig=getPiggyBank();document.getElementById('wordResult').textContent='All correct! You win '+pig+' coins!';document.getElementById('wordResult').style.color='#44ff88';coins+=pig;if(currentUser){currentUser.ud.coins=coins;currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}setTimeout(hideMiniPanels,2200);return;}
+  if(wordScore>=3){const pig=getPiggyBank();document.getElementById('wordResult').textContent='All correct! You win '+pig+' coins!';document.getElementById('wordResult').style.color='#44ff88';piggyToCoinsCommit(pig,'word-game').then(()=>{showScreen('startScreen');setTimeout(()=>animateCoinTransfer('piggyBankDisplay','startMyCoinsBox',pig,()=>updatePiggyDisplay()),400);});return;}
   wordCurrent=WORDS[Math.floor(Math.random()*WORDS.length)];
   document.getElementById('wordScrambled').textContent=scramble(wordCurrent).toUpperCase();
   document.getElementById('wordInput').value='';document.getElementById('wordResult').textContent='';
@@ -7894,35 +8066,46 @@ let lastGameWon=false; // set true by gameWin(), cleared by restartGame()/goToMe
 
 
 function openGameOverAd(){
-  // Guard: if the ad modal is already open, ignore this call entirely.
-  // Without this, a second click zeroes the piggy bank while the first ad is still running.
+  // Guard: prevent double-fire
   if(document.getElementById('adModal').classList.contains('show')) return;
-  // After death, coins are 0 — they're in the piggy. This ad reclaims them from piggy.
-  const pig=getPiggyBank();
-  if(pig<=0){showNotif('Nothing in Piggy Bank!');return;}
-  adFromGameOver=true;
-  adCoinsAtRisk=pig;
-  // Zero piggy atomically with the local state — Firebase will sync via startPiggyAd's await
-  if(currentUser){currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}
-  adCountVal=5;
-  document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent=5;
-  document.getElementById('adWatchBtn').disabled=true;
-  document.getElementById('adWatchBtn').textContent='Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display='none';
+
+  // Coins are still in My Coins (_deathTxCoins) — NOT in piggy yet.
+  // We don't need to move anything; just record the amount and show the ad.
+  const heldCoins = _deathTxCoins;
+  if(heldCoins <= 0){
+    // Fallback: check piggy in case we're coming from a different path
+    const pig = getPiggyBank();
+    if(pig <= 0){ showNotif('No coins to reclaim!'); return; }
+    // Piggy-path: treat like startPiggyAd
+    adFromPiggy = true;
+    adCoinsAtRisk = pig;
+  } else {
+    adFromGameOver = true;
+    adCoinsAtRisk  = heldCoins;
+  }
+
+  // Create pending ad-claim transaction (piggy still untouched)
+  pendingTxCreate('ad-claim', adCoinsAtRisk, { source: 'game-over' });
+
+  adCountVal = 5;
+  document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
+  document.getElementById('adCountdown').textContent = 5;
+  document.getElementById('adWatchBtn').disabled = true;
+  document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
+  document.getElementById('adSkipBtn').style.display = 'none';
   document.getElementById('adModal').classList.add('show');
   clearInterval(adTimer);
-  adTimer=setInterval(()=>{
+  adTimer = setInterval(() => {
     adCountVal--;
-    document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
-    if(adCountVal<=0){
+    document.getElementById('adCountdown').textContent = Math.max(0, adCountVal);
+    if(adCountVal <= 0){
       clearInterval(adTimer);
-      document.getElementById('adWatchBtn').disabled=false;
-      document.getElementById('adWatchBtn').textContent='Claim My '+adCoinsAtRisk+' Coins!';
+      document.getElementById('adWatchBtn').disabled = false;
+      document.getElementById('adWatchBtn').textContent = 'Claim My ' + adCoinsAtRisk + ' Coins!';
     } else {
-      document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
+      document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
     }
-  },1000);
+  }, 1000);
 }
 
 async function finishAd() {
@@ -7931,46 +8114,34 @@ async function finishAd() {
   const amt = adCoinsAtRisk;
   adCoinsAtRisk = 0;
 
-  // Helper to update coins and sync to Firebase, then optionally reload profile
-  async function updateCoinsAndSync(newCoins, alsoSetPiggyZero = false) {
-    coins = newCoins;
+  if (adFromGameOver) {
+    // ── Game-over path: coins were NEVER moved to piggy ──
+    // They're still in My Coins (_deathTxCoins). Just confirm the hold and restart.
+    adFromGameOver = false;
+    deathTxResolveKeep();  // clears the death tx; coins stay where they are
+    // Coins are already correct in memory — just sync and restart
     if (currentUser) {
       currentUser.ud.coins = coins;
-      if (alsoSetPiggyZero) {
-        await setPiggyBank(0);
-      }
-      dbSave();                          // local backup
-      const synced = await syncUserProfile(3);
-      if (!synced) {
-        showNotif('⚠️ Could not save coins to cloud. Coins saved locally.');
-      } else {
-        // Reload profile from Firebase to be absolutely sure
-        try {
-          const snap = await firebaseDB.ref(`users/${currentUser.uid}`).once('value');
-          if (snap.exists()) {
-            currentUser.ud = snap.val();
-            coins = currentUser.ud.coins;
-          }
-        } catch(e) { console.warn('Profile reload failed', e); }
-      }
-      updateHUD();
-      updatePiggyDisplay();
-    } else {
-      // No user – still update local display
-      updateHUD();
-      updatePiggyDisplay();
+      dbSave();
+      syncUserProfile(3).catch(() => {});
     }
-  }
+    pendingTxClear();
+    updateHUD();
+    updatePiggyDisplay();
+    showNotif('📺 Ad watched! Coins kept — back to the game!');
+    setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
 
-  if (adFromRpsLoss) {
+  } else if (adFromRpsLoss) {
+    // ── RPS-loss path: coins are in piggy, move them to wallet ──
     adFromRpsLoss = false;
-    await updateCoinsAndSync(amt, true);
+    await piggyToCoinsCommit(amt, 'rps-loss-ad');
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
     setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
 
   } else if (adFromPiggy) {
+    // ── Piggy screen path: move piggy coins to wallet ──
     adFromPiggy = false;
-    await updateCoinsAndSync(coins + amt, false);
+    await piggyToCoinsCommit(amt, 'piggy-screen-ad');
     showNotif('📺 Ad watched! Claimed ' + amt + ' coins!');
     showScreen('startScreen');
     if (currentUser) {
@@ -7981,15 +8152,16 @@ async function finishAd() {
     }
     setTimeout(() => animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', amt, () => updatePiggyDisplay()), 400);
 
-  } else if (adFromGameOver) {
-    adFromGameOver = false;
-    await updateCoinsAndSync(amt, true);
-    showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
-    setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
-
   } else {
-    // Generic ad (legacy)
-    await updateCoinsAndSync(coins + amt, false);
+    // ── Generic/legacy ad ──
+    pendingTxCreate('ad-claim', amt, { source: 'generic' });
+    coins += amt;
+    if (currentUser) { currentUser.ud.coins = coins; dbSave(); }
+    if (currentUser) { currentUser.ud.piggyBank = 0; dbSave(); syncUserProfile(3).catch(() => {}); }
+    else { db.piggyBank = 0; dbSave(); }
+    pendingTxClear();
+    updateHUD();
+    updatePiggyDisplay();
     showNotif('📺 Ad watched! Kept ' + amt + ' coins!');
   }
 }
@@ -7997,41 +8169,47 @@ async function finishAd() {
 async function skipAd(){
   clearInterval(adTimer);
   document.getElementById('adModal').classList.remove('show');
-  // Restore at-risk coins back to piggy (they were zeroed on ad open)
-  const pig=getPiggyBank()+adCoinsAtRisk;
-  await setPiggyBank(pig);
-  if(currentUser){currentUser.ud.coins=0;dbSave();await syncUserProfile();}
-  showNotif('🐷 Coins stay in Piggy Bank');
-  const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
-  updateHUD();
-  updatePiggyDisplay();
-  adCoinsAtRisk=0;
-  adFromPiggy=false; adFromGameOver=false; adFromRpsLoss=false;
+
+  if (adFromGameOver) {
+    // Player skipped the ad on the death screen — commit: move held coins to piggy
+    adFromGameOver = false;
+    const moved = await deathTxCommit();
+    showNotif('🐷 ' + (moved || 0) + ' coins moved to Piggy Bank');
+    const gpEl = document.getElementById('goPiggy');
+    if (gpEl) gpEl.textContent = getPiggyBank();
+    updateHUD();
+    updatePiggyDisplay();
+  } else {
+    // Piggy-screen or RPS-loss path: restore the at-risk amount back to piggy
+    const pig = getPiggyBank() + adCoinsAtRisk;
+    await setPiggyBank(pig);
+    if (currentUser) { currentUser.ud.coins = 0; dbSave(); await syncUserProfile(); }
+    showNotif('🐷 Coins stay in Piggy Bank');
+    const gpEl = document.getElementById('goPiggy');
+    if (gpEl) gpEl.textContent = pig;
+    updateHUD();
+    updatePiggyDisplay();
+  }
+
+  pendingTxClear();
+  adCoinsAtRisk = 0;
+  adFromPiggy = false; adFromGameOver = false; adFromRpsLoss = false;
 }
 
 
 async function startPiggyAd() {
-  // Prevent double‑fire
   if (document.getElementById('adModal').classList.contains('show')) return;
   const pig = getPiggyBank();
-  if (pig <= 0) {
-    showNotif('Piggy Bank is empty!');
-    return;
-  }
+  if (pig <= 0) { showNotif('Piggy Bank is empty!'); return; }
 
-  adFromPiggy = true;
-  adCoinsAtRisk = pig;
+  adFromPiggy    = true;
+  adCoinsAtRisk  = pig;
 
-  // Zero piggy locally immediately so a second tap can't double-fire
-  if (currentUser) {
-    currentUser.ud.piggyBank = 0;
-    dbSave();
-  } else {
-    db.piggyBank = 0;
-    dbSave();
-  }
+  // Create pending record BEFORE touching any balances
+  // Piggy is NOT zeroed here — it's only zeroed inside piggyToCoinsCommit
+  // after the coins have been credited to My Coins.
+  pendingTxCreate('ad-claim', pig, { source: 'piggy-screen' });
 
-  // Show the ad modal right away — don't wait on Firebase
   adCountVal = 5;
   document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
   document.getElementById('adCountdown').textContent = 5;
@@ -8053,36 +8231,35 @@ async function startPiggyAd() {
       document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
     }
   }, 1000);
-
-  // Fire Firebase sync in the background — don't block the UI
-  if (currentUser) {
-    syncUserProfile().catch(e => console.warn('[startPiggyAd] Firebase sync failed (non-fatal):', e));
-  }
 }
 
 function openRpsLossAd(){
-  // Guard: prevent double-click zeroing the piggy while modal is already open
   if(document.getElementById('adModal').classList.contains('show')) return;
-  // Player lost RPS — coins already moved to piggy. Watch ad to reclaim back to wallet.
-  const pig=getPiggyBank();
-  if(pig<=0){showNotif('Nothing to reclaim!');return;}
-  adFromRpsLoss=true;
-  adCoinsAtRisk=pig;
-  if(currentUser){currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}
-  adCountVal=5;
-  document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent=5;
-  document.getElementById('adWatchBtn').disabled=true;
-  document.getElementById('adWatchBtn').textContent='Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display='none';
+  const pig = getPiggyBank();
+  if(pig <= 0){ showNotif('Nothing to reclaim!'); return; }
+  adFromRpsLoss  = true;
+  adCoinsAtRisk  = pig;
+  // Create pending record BEFORE touching any balances
+  pendingTxCreate('ad-claim', pig, { source: 'rps-loss' });
+  adCountVal = 5;
+  document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
+  document.getElementById('adCountdown').textContent = 5;
+  document.getElementById('adWatchBtn').disabled = true;
+  document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
+  document.getElementById('adSkipBtn').style.display = 'none';
   document.getElementById('adModal').classList.add('show');
   clearInterval(adTimer);
-  adTimer=setInterval(()=>{
+  adTimer = setInterval(() => {
     adCountVal--;
-    document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
-    if(adCountVal<=0){clearInterval(adTimer);document.getElementById('adWatchBtn').disabled=false;document.getElementById('adWatchBtn').textContent='Claim My '+adCoinsAtRisk+' Coins!';}
-    else document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
-  },1000);
+    document.getElementById('adCountdown').textContent = Math.max(0, adCountVal);
+    if(adCountVal <= 0){
+      clearInterval(adTimer);
+      document.getElementById('adWatchBtn').disabled = false;
+      document.getElementById('adWatchBtn').textContent = 'Claim My ' + adCoinsAtRisk + ' Coins!';
+    } else {
+      document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
+    }
+  }, 1000);
 }
 
 // ----- DEMO ANIMATION (start screen interactive moves) -----
@@ -8704,6 +8881,10 @@ function restoreUserSession() {
   if (typeof ud.bookUses   === 'number') bookUses   = ud.bookUses;
   if (typeof ud.lavaShips  === 'number') lavaShips  = ud.lavaShips;
   window.coins = coins;
+
+  // ── Recover from any interrupted transaction (crash mid-ad, mid-game, etc.) ──
+  // This is async but fire-and-forget; it only restores piggy if something went wrong.
+  setTimeout(() => pendingTxRecover(), 500);
 
   // ── Merge with local db record if available ──
   if (!ud.isGuest && getUser(name)) {
