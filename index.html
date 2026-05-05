@@ -1501,6 +1501,7 @@ function syncUserProfile() {
   firebaseDB.ref(`users/${currentUser.uid}`).update(currentUser.ud);
 }
 Object.defineProperty(window, 'endPlatform', {
+  configurable: true,   // allow story mode to re-define it as a locked value
   get: function() { return endPlatform; },
   set: function(val) { endPlatform = val; }
 });
@@ -3182,7 +3183,9 @@ if (p.color === 'ice' && !p.iceUsed) {
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
             if(endPlatform > 0 && platformCount >= endPlatform){
-              console.log('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform+' storyEp='+(window.currentStoryEpisode?window.currentStoryEpisode.name:'none'));
+              console.warn('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform
+                +' storyEp='+(window.currentStoryEpisode?window.currentStoryEpisode.name:'none')
+                +' (story active='+!!window.currentStoryEpisode+')');
               window.gameWin(); return;
             }
             updateHUD();
@@ -3398,7 +3401,7 @@ const minAbove = isFrogger ? 2 : 10;
 
 
 let loopCount = 0;
-while (platforms.filter(p => p.y < player.y).length < minAbove && platforms.length < 200) {
+while (platforms.filter(p => p.y < player.y).length < minAbove && platforms.length < 800) {
   loopCount++;
   const aboveCount = platforms.filter(p => p.y < player.y).length;
   
@@ -5951,12 +5954,14 @@ function applySettings(s){
   const zl = document.getElementById('zoomLabel');
   if(zl) zl.textContent = Math.round(z * 100) + '%';
 
-  // End platform
-  endPlatform = s.endPlatform ?? 1000;
-  const ep = document.getElementById('endPlatformSel');
-  if(ep) ep.value = String(endPlatform);
-  const se = document.getElementById('sEndPlatSel');
-  if(se) se.value = String(endPlatform);
+  // End platform — don't overwrite if story mode has it locked
+  if (!window.currentStoryEpisode) {
+    endPlatform = s.endPlatform ?? 1000;
+    const ep = document.getElementById('endPlatformSel');
+    if(ep) ep.value = String(endPlatform);
+    const se = document.getElementById('sEndPlatSel');
+    if(se) se.value = String(endPlatform);
+  }
   updateHUD();
 
   // Bot difficulty
@@ -6287,6 +6292,11 @@ function setZoomPreset(val){
 }
 
 function setEndPlatformFromSettings(val){
+  // Story mode locks endPlatform — silently ignore any external changes while active
+  if (window.currentStoryEpisode) {
+    console.warn('[STORY] setEndPlatformFromSettings blocked during story mode (episode: ' + window.currentStoryEpisode.name + ')');
+    return;
+  }
   endPlatform = parseInt(val) || 0;
   const ep = document.getElementById('endPlatformSel');
   if(ep) ep.value = String(endPlatform);
@@ -9234,52 +9244,68 @@ function checkAndRestorePowerupSession() {
       }
     }
 
-// Override endPlatform and force it for the game
+// Override endPlatform and force it for the game — see setStoryTargetPlatforms below
+
 function setStoryTargetPlatforms(target) {
-  // Save current value via getter so we get the real variable, not a stale window prop
   if (window.getGlobalEndPlatform) {
     originalEndPlatform = window.getGlobalEndPlatform();
   } else {
-    originalEndPlatform = window.endPlatform;
+    originalEndPlatform = endPlatform;
   }
   console.log("[STORY] Saved originalEndPlatform =", originalEndPlatform);
 
-  // Set via setter if available, otherwise direct property
-  if (window.setGlobalEndPlatform) {
-    window.setGlobalEndPlatform(target);
-  } else {
-    window.endPlatform = target;
+  // Lock endPlatform via Object.defineProperty so nothing can overwrite it
+  // (loadSettings, setEndPlatformFromSettings, etc.) while story mode is active.
+  try {
+    Object.defineProperty(window, 'endPlatform', {
+      configurable: true,
+      get: () => target,
+      set: (v) => {
+        console.warn('[STORY] Blocked attempt to set endPlatform to', v, '— story target is', target);
+      }
+    });
+  } catch(e) {
+    // Fallback: just set it directly
+    endPlatform = target;
   }
 
-  // Update the select for visual consistency — but DO NOT call updateEndPlatform()
-  // because that reads the select value and would immediately overwrite our target
+  // Keep the hidden selector in sync visually
   const sel = document.getElementById('endPlatformSel');
   if (sel) {
     originalSelectorValue = sel.value;
     sel.value = target;
-    // ❌ REMOVED: if (typeof updateEndPlatform === 'function') updateEndPlatform();
     sel.disabled = true;
     sel.style.opacity = '0.5';
   }
+  // Also guard the settings selector
+  const sSel = document.getElementById('sEndPlatSel');
+  if (sSel) { sSel.disabled = true; sSel.style.opacity = '0.5'; }
 
-  const newValue = window.getGlobalEndPlatform ? window.getGlobalEndPlatform() : window.endPlatform;
-  console.log("[STORY] Target set to", target, "main endPlatform =", newValue);
+  const newValue = window.endPlatform;
+  console.log("[STORY] Target locked at", target, "— endPlatform reads as", newValue);
 }
 
 function restoreEndPlatform() {
   console.log("[STORY] Restoring endPlatform to", originalEndPlatform);
-  if (window.setGlobalEndPlatform) {
-    window.setGlobalEndPlatform(originalEndPlatform);
-  } else {
-    window.endPlatform = originalEndPlatform;
-  }
+
+  // Remove the property lock and restore normal get/set behaviour
+  try {
+    Object.defineProperty(window, 'endPlatform', {
+      configurable: true,
+      get: function() { return endPlatform; },
+      set: function(val) { endPlatform = val; }
+    });
+  } catch(e) {}
+  endPlatform = originalEndPlatform;
+
   const sel = document.getElementById('endPlatformSel');
-  if (sel && originalSelectorValue) {
-    sel.value = originalSelectorValue;
-    // ❌ REMOVED: if (typeof updateEndPlatform === 'function') updateEndPlatform();
+  if (sel) {
+    if (originalSelectorValue) sel.value = originalSelectorValue;
     sel.disabled = false;
     sel.style.opacity = '1';
   }
+  const sSel = document.getElementById('sEndPlatSel');
+  if (sSel) { sSel.disabled = false; sSel.style.opacity = '1'; }
 }
 
     // Adjust story overlays to respect the top mode-bar (keep navbar accessible)
