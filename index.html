@@ -7799,7 +7799,8 @@ function openGameOverAd(){
   if(pig<=0){showNotif('Nothing in Piggy Bank!');return;}
   adFromGameOver=true;
   adCoinsAtRisk=pig;
-  setPiggyBank(0);
+  // NOTE: do NOT zero the piggy here — only zero it in finishAd when confirmed.
+  // Zeroing early risks losing coins if the page reloads or ad is interrupted.
   adCountVal=5;
   document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
   document.getElementById('adCountdown').textContent=5;
@@ -7827,60 +7828,45 @@ function finishAd(){
   const amt=adCoinsAtRisk;
   adCoinsAtRisk=0;
 
+  // Common to all paths: zero the piggy NOW (safe — user confirmed by watching)
+  // and move those coins to wallet. Mirrors exactly how doRPS win works:
+  //   coins = pig; setPiggyBank(0); syncUserProfile();
+  setPiggyBank(0);
+  coins = amt;
+  if(currentUser){ currentUser.ud.coins = coins; currentUser.ud.piggyBank = 0; dbSave(); syncUserProfile(); }
+  updateHUD();
+  updatePiggyDisplay();
+
   if(adFromRpsLoss){
-    // From RPS loss Watch Ad — reclaim piggy coins, restart same game mode
     adFromRpsLoss=false;
-    coins=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
-    setPiggyBank(0);
-    updateHUD();
-    setTimeout(() => {
-      restartGameAfterCoinRecovery();
-    }, 400);
+    setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
 
   } else if(adFromPiggy){
-    // From piggy bank screen Watch Ad — go to start screen and animate
     adFromPiggy=false;
-    coins+=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
     showNotif('📺 Ad watched! Claimed '+amt+' coins!');
-    updateHUD();
-    updatePiggyDisplay();
     showScreen('startScreen');
-    if(currentUser){document.getElementById('bestScoreDisplay').textContent=currentUser.ud.bestScore>0?'🏆 Best: Platform '+currentUser.ud.bestScore+' (Level '+currentUser.ud.bestLevel+')':'No runs yet!';}
+    if(currentUser){ document.getElementById('bestScoreDisplay').textContent = currentUser.ud.bestScore>0 ? '🏆 Best: Platform '+currentUser.ud.bestScore+' (Level '+currentUser.ud.bestLevel+')' : 'No runs yet!'; }
     setTimeout(()=>animateCoinTransfer('piggyBankDisplay','startMyCoinsBox',amt,()=>updatePiggyDisplay()),400);
 
   } else if(adFromGameOver){
-    adFromGameOver = false;
-    coins = amt;
-    if(currentUser){ currentUser.ud.coins = coins; dbSave(); syncUserProfile(); }
-    setPiggyBank(0);
-    updateHUD();
+    adFromGameOver=false;
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
-    // Restart the SAME game mode (story or normal) — don't go to menu
-    setTimeout(() => {
-      restartGameAfterCoinRecovery();
-    }, 400);
-  }  else {
+    setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
+
+  } else {
     // Legacy fallback
-    coins+=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
     showNotif('📺 Ad watched! Kept '+amt+' coins!');
-    updateHUD();
   }
 }
 
 function skipAd(){
   clearInterval(adTimer);
   document.getElementById('adModal').classList.remove('show');
-  // Put the at-risk coins back to piggy (they came from piggy; wallet is already 0)
-  const pig=getPiggyBank()+adCoinsAtRisk;
-  setPiggyBank(pig);
-  if(currentUser){currentUser.ud.coins=0;dbSave();syncUserProfile();}
+  // Piggy was NOT zeroed on open — coins are still safely in piggy. Nothing to restore.
   showNotif('🐷 Coins stay in Piggy Bank');
-  const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
   updateHUD();
+  updatePiggyDisplay();
   adCoinsAtRisk=0;
   adFromPiggy=false; adFromGameOver=false; adFromRpsLoss=false;
 }
@@ -7891,7 +7877,7 @@ function startPiggyAd(){
   if(pig<=0){showNotif('Piggy Bank is empty!');return;}
   adFromPiggy=true;
   adCoinsAtRisk=pig;
-  setPiggyBank(0);
+  // NOTE: do NOT zero the piggy here — only zero it in finishAd when confirmed.
   adCountVal=5;
   document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
   document.getElementById('adCountdown').textContent=5;
@@ -7914,7 +7900,7 @@ function openRpsLossAd(){
   if(pig<=0){showNotif('Nothing to reclaim!');return;}
   adFromRpsLoss=true;
   adCoinsAtRisk=pig;
-  setPiggyBank(0);
+  // NOTE: do NOT zero the piggy here — only zero it in finishAd when confirmed.
   adCountVal=5;
   document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
   document.getElementById('adCountdown').textContent=5;
