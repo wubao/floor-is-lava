@@ -1497,9 +1497,19 @@ let currentUser = null, infoReturnScreen = 'startScreen', currentMode = 'play', 
 // ═══ FIREBASE PROFILE SYNC ═══
 // Writes the current user's profile data to Firebase Realtime Database.
 // Call this after every change to currentUser.ud (coins, power-ups, settings, etc.)
-function syncUserProfile() {
-  if (!currentUser || !currentUser.uid) return;
-  firebaseDB.ref(`users/${currentUser.uid}`).update(currentUser.ud);
+async function syncUserProfile(retries = 2) {
+  if (!currentUser || !currentUser.uid) return false;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      await firebaseDB.ref(`users/${currentUser.uid}`).update(currentUser.ud);
+      return true;
+    } catch (e) {
+      console.warn(`syncUserProfile attempt ${i} failed:`, e);
+      if (i === retries) return false;
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  return false;
 }
 Object.defineProperty(window, 'endPlatform', {
   configurable: true,   // allow story mode to re-define it as a locked value
@@ -7821,46 +7831,72 @@ function openGameOverAd(){
   },1000);
 }
 
-function finishAd(){
+async function finishAd() {
   clearInterval(adTimer);
   document.getElementById('adModal').classList.remove('show');
-  const amt=adCoinsAtRisk;
-  adCoinsAtRisk=0;
+  const amt = adCoinsAtRisk;
+  adCoinsAtRisk = 0;
 
-  if(adFromRpsLoss){
-    adFromRpsLoss=false;
-    coins=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
+  // Helper to update coins and sync to Firebase, then optionally reload profile
+  async function updateCoinsAndSync(newCoins, alsoSetPiggyZero = false) {
+    coins = newCoins;
+    if (currentUser) {
+      currentUser.ud.coins = coins;
+      if (alsoSetPiggyZero) {
+        setPiggyBank(0);
+      }
+      dbSave();                          // local backup
+      const synced = await syncUserProfile(3);
+      if (!synced) {
+        showNotif('⚠️ Could not save coins to cloud. Coins saved locally.');
+      } else {
+        // Reload profile from Firebase to be absolutely sure
+        try {
+          const snap = await firebaseDB.ref(`users/${currentUser.uid}`).once('value');
+          if (snap.exists()) {
+            currentUser.ud = snap.val();
+            coins = currentUser.ud.coins;
+          }
+        } catch(e) { console.warn('Profile reload failed', e); }
+      }
+      updateHUD();
+      updatePiggyDisplay();
+    } else {
+      // No user – still update local display
+      updateHUD();
+      updatePiggyDisplay();
+    }
+  }
+
+  if (adFromRpsLoss) {
+    adFromRpsLoss = false;
+    await updateCoinsAndSync(amt, true);
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
-    setPiggyBank(0);
-    updateHUD();
     setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
 
-  } else if(adFromPiggy){
-    adFromPiggy=false;
-    coins+=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
-    showNotif('📺 Ad watched! Claimed '+amt+' coins!');
-    updateHUD();
-    updatePiggyDisplay();
+  } else if (adFromPiggy) {
+    adFromPiggy = false;
+    await updateCoinsAndSync(coins + amt, false);
+    showNotif('📺 Ad watched! Claimed ' + amt + ' coins!');
     showScreen('startScreen');
-    if(currentUser){document.getElementById('bestScoreDisplay').textContent=currentUser.ud.bestScore>0?'🏆 Best: Platform '+currentUser.ud.bestScore+' (Level '+currentUser.ud.bestLevel+')':'No runs yet!';}
-    setTimeout(()=>animateCoinTransfer('piggyBankDisplay','startMyCoinsBox',amt,()=>updatePiggyDisplay()),400);
+    if (currentUser) {
+      document.getElementById('bestScoreDisplay').textContent =
+        currentUser.ud.bestScore > 0
+          ? '🏆 Best: Platform ' + currentUser.ud.bestScore + ' (Level ' + currentUser.ud.bestLevel + ')'
+          : 'No runs yet!';
+    }
+    setTimeout(() => animateCoinTransfer('piggyBankDisplay', 'startMyCoinsBox', amt, () => updatePiggyDisplay()), 400);
 
-  } else if(adFromGameOver){
-    adFromGameOver=false;
-    coins=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
-    setPiggyBank(0);
-    updateHUD();
+  } else if (adFromGameOver) {
+    adFromGameOver = false;
+    await updateCoinsAndSync(amt, true);
     showNotif('📺 Ad watched! Coins reclaimed — back to the game!');
     setTimeout(() => { restartGameAfterCoinRecovery(); }, 400);
 
   } else {
-    coins+=amt;
-    if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}
-    showNotif('📺 Ad watched! Kept '+amt+' coins!');
-    updateHUD();
+    // Generic ad (legacy)
+    await updateCoinsAndSync(coins + amt, false);
+    showNotif('📺 Ad watched! Kept ' + amt + ' coins!');
   }
 }
 
@@ -7878,28 +7914,39 @@ function skipAd(){
   adFromPiggy=false; adFromGameOver=false; adFromRpsLoss=false;
 }
 
-function startPiggyAd(){
+
+async function startPiggyAd() {
   // Guard: prevent double-fire on mobile (onclick + touchend)
-  if(document.getElementById('adModal').classList.contains('show')) return;
-  const pig=getPiggyBank();
-  if(pig<=0){showNotif('Piggy Bank is empty!');return;}
-  adFromPiggy=true;
-  adCoinsAtRisk=pig;
-  setPiggyBank(0);
-  adCountVal=5;
-  document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
-  document.getElementById('adCountdown').textContent=5;
-  document.getElementById('adWatchBtn').disabled=true;
-  document.getElementById('adWatchBtn').textContent='Watching... (5s)';
-  document.getElementById('adSkipBtn').style.display='none';
+  if (document.getElementById('adModal').classList.contains('show')) return;
+  const pig = getPiggyBank();
+  if (pig <= 0) { showNotif('Piggy Bank is empty!'); return; }
+  
+  adFromPiggy = true;
+  adCoinsAtRisk = pig;
+  setPiggyBank(0);                 // updates localStorage and currentUser.ud.piggyBank
+  
+  // Wait for Firebase to sync the zeroed piggy bank (important!)
+  if (currentUser) await syncUserProfile();
+  
+  adCountVal = 5;
+  document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
+  document.getElementById('adCountdown').textContent = 5;
+  document.getElementById('adWatchBtn').disabled = true;
+  document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
+  document.getElementById('adSkipBtn').style.display = 'none';
   document.getElementById('adModal').classList.add('show');
   clearInterval(adTimer);
-  adTimer=setInterval(()=>{
+  adTimer = setInterval(() => {
     adCountVal--;
-    document.getElementById('adCountdown').textContent=Math.max(0,adCountVal);
-    if(adCountVal<=0){clearInterval(adTimer);document.getElementById('adWatchBtn').disabled=false;document.getElementById('adWatchBtn').textContent='Claim My '+adCoinsAtRisk+' Coins!';}
-    else document.getElementById('adWatchBtn').textContent='Watching... ('+adCountVal+'s)';
-  },1000);
+    document.getElementById('adCountdown').textContent = Math.max(0, adCountVal);
+    if (adCountVal <= 0) {
+      clearInterval(adTimer);
+      document.getElementById('adWatchBtn').disabled = false;
+      document.getElementById('adWatchBtn').textContent = 'Claim My ' + adCoinsAtRisk + ' Coins!';
+    } else {
+      document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
+    }
+  }, 1000);
 }
 
 function openRpsLossAd(){
