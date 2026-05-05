@@ -1755,8 +1755,20 @@ function renderSavedUsers(){
     el.appendChild(c);
   });
 }
-function getPiggyBank(){return currentUser?(currentUser.ud.piggyBank||0):(db.piggyBank||0);}
-function setPiggyBank(v){if(currentUser){currentUser.ud.piggyBank=v;syncUserProfile();}else db.piggyBank=v;dbSave();}
+function getPiggyBank() {
+  let val = currentUser ? (currentUser.ud.piggyBank || 0) : (db.piggyBank || 0);
+  console.log('[getPiggyBank] returning', val, 'currentUser exists?', !!currentUser);
+  return val;
+}
+async function setPiggyBank(v) {
+  if (currentUser) {
+    currentUser.ud.piggyBank = v;
+    await syncUserProfile();   // wait for Firebase
+  } else {
+    db.piggyBank = v;
+    dbSave();
+  }
+}
 function updatePiggyDisplay(){
   const p=getPiggyBank();
   const a=document.getElementById('piggyBankAmt');if(a)a.textContent=p;
@@ -7916,18 +7928,20 @@ function skipAd(){
 
 
 async function startPiggyAd() {
-  // Guard: prevent double-fire on mobile (onclick + touchend)
+  // Prevent double‑fire
   if (document.getElementById('adModal').classList.contains('show')) return;
   const pig = getPiggyBank();
-  if (pig <= 0) { showNotif('Piggy Bank is empty!'); return; }
-  
+  if (pig <= 0) {
+    showNotif('Piggy Bank is empty!');
+    return;
+  }
+
   adFromPiggy = true;
   adCoinsAtRisk = pig;
-  setPiggyBank(0);                 // updates localStorage and currentUser.ud.piggyBank
-  
-  // Wait for Firebase to sync the zeroed piggy bank (important!)
-  if (currentUser) await syncUserProfile();
-  
+
+  // Zero the piggy bank and WAIT for Firebase to confirm
+  await setPiggyBank(0);
+
   adCountVal = 5;
   document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
   document.getElementById('adCountdown').textContent = 5;
@@ -7935,6 +7949,7 @@ async function startPiggyAd() {
   document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
   document.getElementById('adSkipBtn').style.display = 'none';
   document.getElementById('adModal').classList.add('show');
+
   clearInterval(adTimer);
   adTimer = setInterval(() => {
     adCountVal--;
