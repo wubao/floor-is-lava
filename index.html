@@ -2684,14 +2684,17 @@ function updateCrumblePlatforms(dt){
       p.y += p.crumbleVY * dt;
       p.crumbleShakeX = (Math.random() - 0.5) * 8;
 
-      // ── Crumble-collision: knock player down while platform is still visible ──
+      // ── Crumble-collision: knock player down while platform is falling ──
+      // Re-check every frame (flag cleared between falls) so platform hitting
+      // player from above is caught regardless of relative position.
       if(!p._crumbleHitPlayer){
         const px = p.x + (p.crumbleShakeX || 0);
+        // Full AABB overlap — catches platform falling onto player from any direction
         const overlapX = player.x + player.w > px && player.x < px + p.w;
-        const overlapY = player.y + player.h >= p.y - 2 && player.y < p.y + p.h + 14;
+        const overlapY = player.y + player.h > p.y && player.y < p.y + p.h;
         if(overlapX && overlapY){
           p._crumbleHitPlayer = true;
-          // Knock player off — gentle-to-mid downward push
+          // Mid-to-gentle downward push — knocks player off whatever they're standing on
           player.vy = Math.max(player.vy, 4.5);
           player.onGround = false;
           player.currentPlatformIndex = -1;
@@ -3221,10 +3224,12 @@ if (p.color === 'ice' && !p.iceUsed) {
 			  showNotif(isCustomPlayMode() ? '🌋 Level ' + level + '! (practice)' : '🌋 Level ' + level + '! +50 coins 🪙');
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
-            // Story mode safety: if endPlatform drifted from the locked target, snap it back
-            if (window.currentStoryEpisode && window.storyLockedEndPlatform && endPlatform !== window.storyLockedEndPlatform) {
-              console.warn('[STORY] endPlatform drifted to', endPlatform, '— snapping back to', window.storyLockedEndPlatform);
-              endPlatform = window.storyLockedEndPlatform;
+            // Story mode safety: if endPlatform drifted from the locked target, snap it back BEFORE the win check
+            if (window.currentStoryEpisode && window.storyLockedEndPlatform) {
+              if (endPlatform !== window.storyLockedEndPlatform) {
+                console.warn('[STORY] endPlatform drifted to', endPlatform, '— snapping back to', window.storyLockedEndPlatform);
+                endPlatform = window.storyLockedEndPlatform;
+              }
             }
             if(endPlatform > 0 && platformCount >= endPlatform){
               console.warn('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform
@@ -5962,6 +5967,40 @@ function saveSettings(){
   else { try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }catch(e){} }
 }
 
+async function forceSaveSettings() {
+  const s = captureSettings();
+  const btn = document.querySelector('.accountActionBtn[onclick="forceSaveSettings()"]');
+  if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
+  if (currentUser) {
+    currentUser.ud.settings = s;
+    dbSave();
+    const ok = await syncUserProfile(3);
+    if (btn) {
+      btn.disabled = false;
+      if (ok) {
+        btn.textContent = '✅ Settings Saved!';
+        btn.style.borderColor = '#44ff88';
+        btn.style.color = '#44ff88';
+      } else {
+        btn.textContent = '⚠️ Save Failed — try again';
+        btn.style.borderColor = '#ff9944';
+        btn.style.color = '#ff9944';
+      }
+      setTimeout(() => {
+        if (btn) {
+          btn.textContent = '💾 Save Settings to Cloud';
+          btn.style.borderColor = '#4a9fd4';
+          btn.style.color = '#aadeff';
+        }
+      }, 2500);
+    }
+  } else {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(e) {}
+    sAccountMsg('Settings saved locally (no account).', '#ffe066');
+    if (btn) { btn.textContent = '💾 Save Settings to Cloud'; btn.disabled = false; }
+  }
+}
+
 function captureSettings(){
   return {
     masterVolume: Math.round(masterVolume * 100),
@@ -6019,7 +6058,7 @@ function applySettings(s){
   if(zl) zl.textContent = Math.round(z * 100) + '%';
 
   // End platform — don't overwrite if story mode has it locked
-  if (!window.currentStoryEpisode) {
+  if (!window.currentStoryEpisode && !window.storyLockedEndPlatform) {
     endPlatform = s.endPlatform ?? 1000;
     const ep = document.getElementById('endPlatformSel');
     if(ep) ep.value = String(endPlatform);
@@ -6120,6 +6159,7 @@ function updateSettingsAccount() {
       <div class="accountInfoLabel">Coins</div>
       <div class="accountInfoValue">🪙 ${ud.coins || 0} &nbsp;·&nbsp; 🐷 ${ud.piggyBank || 0} in Piggy Bank</div>
     </div>
+    <button class="accountActionBtn neutral" onclick="forceSaveSettings()" style="background:linear-gradient(135deg,#1a3a5a,#1a2a4a);border-color:#4a9fd4;color:#aadeff;">💾 Save Settings to Cloud</button>
     ${!isGuest ? `
     <button class="accountActionBtn neutral" onclick="settingsChangePassword()">🔑 Change Password</button>
     <div id="sChangePwForm" style="display:none;margin-bottom:6px;">
@@ -7961,9 +8001,16 @@ async function startPiggyAd() {
   adFromPiggy = true;
   adCoinsAtRisk = pig;
 
-  // Zero the piggy bank and WAIT for Firebase to confirm
-  await setPiggyBank(0);
+  // Zero piggy locally immediately so a second tap can't double-fire
+  if (currentUser) {
+    currentUser.ud.piggyBank = 0;
+    dbSave();
+  } else {
+    db.piggyBank = 0;
+    dbSave();
+  }
 
+  // Show the ad modal right away — don't wait on Firebase
   adCountVal = 5;
   document.getElementById('adCoinAmt').textContent = adCoinsAtRisk;
   document.getElementById('adCountdown').textContent = 5;
@@ -7971,6 +8018,7 @@ async function startPiggyAd() {
   document.getElementById('adWatchBtn').textContent = 'Watching... (5s)';
   document.getElementById('adSkipBtn').style.display = 'none';
   document.getElementById('adModal').classList.add('show');
+  updatePiggyDisplay();
 
   clearInterval(adTimer);
   adTimer = setInterval(() => {
@@ -7984,6 +8032,11 @@ async function startPiggyAd() {
       document.getElementById('adWatchBtn').textContent = 'Watching... (' + adCountVal + 's)';
     }
   }, 1000);
+
+  // Fire Firebase sync in the background — don't block the UI
+  if (currentUser) {
+    syncUserProfile().catch(e => console.warn('[startPiggyAd] Firebase sync failed (non-fatal):', e));
+  }
 }
 
 function openRpsLossAd(){
@@ -9438,7 +9491,9 @@ let currentCarouselIndex = 0;  // index among unlocked episodes
 let unlockedEpisodes = [];
 
 function updateUnlockedEpisodes() {
-  unlockedEpisodes = STORY_EPISODES.filter(ep => ep.unlocked);
+  const eps = (typeof STORY_EPISODES !== 'undefined' ? STORY_EPISODES : null) || window.VOLCANO_EPISODES;
+  if (!eps) return;
+  unlockedEpisodes = eps.filter(ep => ep.unlocked);
   // find current index (first unlocked that is not completed? but we'll use the one selected)
   if (currentCarouselIndex >= unlockedEpisodes.length) currentCarouselIndex = 0;
 }
