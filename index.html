@@ -3990,15 +3990,23 @@ function saveScore(){
 // outcome: 'die'  — reset power-ups, send coins to piggy
 //          'menu' — sell power-ups back to coins, keep coins (go to menu)
 //          'win'  — keep coins AND power-ups (level win / play again on win)
-function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
+async function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
   if(outcome === 'die'){
     // Power-ups lost; coins go to piggy bank
     const lostAmt = coins;
     if(lostAmt > 0){
       const pig = getPiggyBank() + lostAmt;
-      setPiggyBank(pig);
       coins = 0;
-      if(currentUser){currentUser.ud.coins = 0; dbSave(); syncUserProfile();}
+      // Write piggy and coins together so they don't race each other
+      if(currentUser){
+        currentUser.ud.piggyBank = pig;
+        currentUser.ud.coins = 0;
+        dbSave();
+        await syncUserProfile();
+      } else {
+        db.piggyBank = pig;
+        dbSave();
+      }
       updateHUD();
       updatePiggyDisplay();
       const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
@@ -4013,7 +4021,7 @@ function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
       currentUser.ud.lavaShips = 0;
       currentUser.ud.coins = 0;
       dbSave();
-      syncUserProfile();
+      await syncUserProfile();
     }
     if(animate && lostAmt > 0){
       animateCoinTransfer('goCoins','goPiggy',lostAmt,onDone);
@@ -4120,9 +4128,15 @@ if(result==='win'||result==='draw'){
   const pig = getPiggyBank();
   // Move coins from piggy to wallet immediately (no animation yet)
   coins = pig;
-  setPiggyBank(0);
-  if(currentUser) { currentUser.ud.coins = coins; syncUserProfile(); }
-  dbSave();
+  if(currentUser) {
+    currentUser.ud.coins = coins;
+    currentUser.ud.piggyBank = 0;
+    dbSave();
+    syncUserProfile();
+  } else {
+    db.piggyBank = 0;
+    dbSave();
+  }
   rpsWonCoins = coins;
 
   resEl.textContent = result==='win' ? '🎉 You WIN! Coins returned!' : '🤝 Draw! Coins returned!';
@@ -4154,9 +4168,15 @@ function nextMathQ(){
 if(mathScore>=mathTotal){
   const pig = getPiggyBank();
   coins += pig;
-  setPiggyBank(0);
-  if(currentUser) { currentUser.ud.coins = coins; syncUserProfile(); }
-  dbSave();
+  if(currentUser) {
+    currentUser.ud.coins = coins;
+    currentUser.ud.piggyBank = 0;
+    dbSave();
+    syncUserProfile();
+  } else {
+    db.piggyBank = 0;
+    dbSave();
+  }
 
   // Go to start screen and animate
   showScreen('startScreen');
@@ -6509,7 +6529,7 @@ function flipMemCard(card){
     if(a.dataset.emoji===b.dataset.emoji){
       setTimeout(()=>{a.classList.remove('flipped');a.classList.add('matched');b.classList.remove('flipped');b.classList.add('matched');memFlipped=[];memCanFlip=true;memMatched++;
         document.getElementById('memProgress').textContent=memMatched+'/8 pairs matched';
-        if(memMatched===8){const pig=getPiggyBank();document.getElementById('memResult').textContent='You win '+pig+' coins!';document.getElementById('memResult').style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}setTimeout(hideMiniPanels,2200);}
+        if(memMatched===8){const pig=getPiggyBank();document.getElementById('memResult').textContent='You win '+pig+' coins!';document.getElementById('memResult').style.color='#44ff88';coins+=pig;if(currentUser){currentUser.ud.coins=coins;currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}setTimeout(hideMiniPanels,2200);}
       },500);
     } else {
       setTimeout(()=>{a.classList.remove('flipped');a.textContent='❓';b.classList.remove('flipped');b.textContent='❓';memFlipped=[];memCanFlip=true;},900);
@@ -6528,7 +6548,7 @@ function nextReactRound(){
     const avg=Math.round(reactScores.reduce((a,b)=>a+b,0)/reactScores.length);
     const passed=reactScores.filter(s=>s<=reactTarget).length;
     const r=document.getElementById('reactResult');
-    if(passed>=2){const pig=getPiggyBank();r.textContent='Avg '+avg+'ms — You win '+pig+' coins!';r.style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}}
+    if(passed>=2){const pig=getPiggyBank();r.textContent='Avg '+avg+'ms — You win '+pig+' coins!';r.style.color='#44ff88';coins+=pig;if(currentUser){currentUser.ud.coins=coins;currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}}
     else{r.textContent='Too slow (avg '+avg+'ms). Bank stays safe.';r.style.color='#ff9944';}
     document.getElementById('reactProgress').textContent='Done!';
     setTimeout(hideMiniPanels,2500);return;
@@ -6557,7 +6577,7 @@ function startWordGame(){
   wordScore=0;document.getElementById('wordResult').textContent='';nextWordQ();
 }
 function nextWordQ(){
-  if(wordScore>=3){const pig=getPiggyBank();document.getElementById('wordResult').textContent='All correct! You win '+pig+' coins!';document.getElementById('wordResult').style.color='#44ff88';coins+=pig;setPiggyBank(0);if(currentUser){currentUser.ud.coins=coins;dbSave();syncUserProfile();}setTimeout(hideMiniPanels,2200);return;}
+  if(wordScore>=3){const pig=getPiggyBank();document.getElementById('wordResult').textContent='All correct! You win '+pig+' coins!';document.getElementById('wordResult').style.color='#44ff88';coins+=pig;if(currentUser){currentUser.ud.coins=coins;currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}setTimeout(hideMiniPanels,2200);return;}
   wordCurrent=WORDS[Math.floor(Math.random()*WORDS.length)];
   document.getElementById('wordScrambled').textContent=scramble(wordCurrent).toUpperCase();
   document.getElementById('wordInput').value='';document.getElementById('wordResult').textContent='';
@@ -7821,7 +7841,8 @@ function openGameOverAd(){
   if(pig<=0){showNotif('Nothing in Piggy Bank!');return;}
   adFromGameOver=true;
   adCoinsAtRisk=pig;
-  setPiggyBank(0);
+  // Zero piggy atomically with the local state — Firebase will sync via startPiggyAd's await
+  if(currentUser){currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}
   adCountVal=5;
   document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
   document.getElementById('adCountdown').textContent=5;
@@ -7855,7 +7876,7 @@ async function finishAd() {
     if (currentUser) {
       currentUser.ud.coins = coins;
       if (alsoSetPiggyZero) {
-        setPiggyBank(0);
+        await setPiggyBank(0);
       }
       dbSave();                          // local backup
       const synced = await syncUserProfile(3);
@@ -7912,16 +7933,17 @@ async function finishAd() {
   }
 }
 
-function skipAd(){
+async function skipAd(){
   clearInterval(adTimer);
   document.getElementById('adModal').classList.remove('show');
   // Restore at-risk coins back to piggy (they were zeroed on ad open)
   const pig=getPiggyBank()+adCoinsAtRisk;
-  setPiggyBank(pig);
-  if(currentUser){currentUser.ud.coins=0;dbSave();syncUserProfile();}
+  await setPiggyBank(pig);
+  if(currentUser){currentUser.ud.coins=0;dbSave();await syncUserProfile();}
   showNotif('🐷 Coins stay in Piggy Bank');
   const gpEl=document.getElementById('goPiggy');if(gpEl)gpEl.textContent=pig;
   updateHUD();
+  updatePiggyDisplay();
   adCoinsAtRisk=0;
   adFromPiggy=false; adFromGameOver=false; adFromRpsLoss=false;
 }
@@ -7970,7 +7992,7 @@ function openRpsLossAd(){
   if(pig<=0){showNotif('Nothing to reclaim!');return;}
   adFromRpsLoss=true;
   adCoinsAtRisk=pig;
-  setPiggyBank(0);
+  if(currentUser){currentUser.ud.piggyBank=0;dbSave();syncUserProfile();}else{db.piggyBank=0;dbSave();}
   adCountVal=5;
   document.getElementById('adCoinAmt').textContent=adCoinsAtRisk;
   document.getElementById('adCountdown').textContent=5;
