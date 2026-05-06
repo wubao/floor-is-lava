@@ -2528,10 +2528,10 @@ function activateSkip(){
     )
     .sort((a, b) => b.y - a.y);  // highest Y = closest above player = index 0
 
-  // Try to land on the 8th platform above; if not enough exist, count down to 1st
+  // Try to land on the 5th platform above; if not enough exist, count down to 1st
   let target = null;
   let skippedCount = 0;
-  for(let attempt = Math.min(8, above.length); attempt >= 1; attempt--){
+  for(let attempt = Math.min(5, above.length); attempt >= 1; attempt--){
     const candidate = above[attempt - 1];
     if(candidate){
       target = candidate;
@@ -3001,6 +3001,18 @@ function updateSwingPlatforms(dt){
 
     // ── 6. Physics while player stands on the swing platform ──
     if (onThisSwing) {
+      // Safety: if any tipping platform is actively falling near the player's Y range,
+      // release the player from the swing so tipping and swing don't fight each other.
+      const nearbyTippingActive = platforms.some(tp =>
+        tp.tipping && tp.tipping !== 'idle' && tp.tipping !== 'waiting' &&
+        Math.abs(tp.y - p.y) < PLATFORM_GAP * 3
+      );
+      if(nearbyTippingActive){
+        player.onGround = false;
+        player.currentPlatformIndex = -1;
+        player.vy = 1;
+        // Don't snap player position this frame
+      } else {
       // Slope acceleration: positive tilt = right side lower → player slides right
       // Stronger than before so the slide is clearly visible
       const slopeAccel = Math.sin(sd.tilt) * 1.1 * dt;
@@ -3041,6 +3053,7 @@ function updateSwingPlatforms(dt){
         anim.funnyFace = true; anim.tiltDir = launchDir;
         showNotif('⚖️ Swung off the platform!');
       }
+      } // end else (nearbyTippingActive guard)
     }
   }
 }
@@ -3050,19 +3063,14 @@ const CRUMBLE_WARNING_MS = 1200;
 const CRUMBLE_FALL_MS    = 1800;   // 1.8s of fall so it actually reaches the player below
 // How long after being hit the player cannot stand on ANY platform (simulates being dazed)
 const CRUMBLE_GROUND_DENY_MS = 1200;
-let _crumbleGroundDenyTimer = 0;   // counts down in ms; while > 0, player.onGround forced false
+let _crumbleGroundDenyTimer = 0;   // kept for compatibility but no longer used for ground-deny
+let crumbleFallThroughTimer = 0;   // ms remaining: player falls through ALL platforms
 
 function updateCrumblePlatforms(dt){
-  // Count down the ground-deny window
-  if(_crumbleGroundDenyTimer > 0){
-    _crumbleGroundDenyTimer -= dt * 16.67;
-    if(_crumbleGroundDenyTimer < 0) _crumbleGroundDenyTimer = 0;
-    // While active: prevent the player from being considered grounded
-    // (the collision loop still runs, but we override onGround each frame here)
-    if(player.onGround && _crumbleGroundDenyTimer > 0){
-      player.onGround = false;
-      player.currentPlatformIndex = -1;
-    }
+  // Count down the fall-through timer
+  if(crumbleFallThroughTimer > 0){
+    crumbleFallThroughTimer -= dt * 16.67;
+    if(crumbleFallThroughTimer < 0) crumbleFallThroughTimer = 0;
   }
 
   for(const p of platforms){
@@ -3113,16 +3121,10 @@ function updateCrumblePlatforms(dt){
           player.onGround = false;
           player.currentPlatformIndex = -1;
 
-          // ── 1.2-second window where player cannot regain footing ──
-          // Also mark every platform at or above player as pass-through during this window
-          // so the player falls THROUGH the platform they were standing on.
-          _crumbleGroundDenyTimer = CRUMBLE_GROUND_DENY_MS;
-          // Temporarily mark platforms near the player as ghost so collision is skipped
-          platforms.forEach(p => {
-            if(p.y >= player.y - PLATFORM_GAP && p.y <= player.y + PLATFORM_GAP * 0.5){
-              p._crumbleGhostTimer = CRUMBLE_GROUND_DENY_MS;
-            }
-          });
+          // ── Fall-through window: player cannot land on ANY platform for 800ms ──
+          // This is the correct fix: the collision loop skips all landings while active.
+          crumbleFallThroughTimer = 800;
+          _crumbleGroundDenyTimer = 0; // clear old timer (no longer used)
 
           // Tilt/funny-face animation
           anim.active    = true;
@@ -3590,6 +3592,8 @@ if(SCORCHA && SCORCHA.playerEnsnared){
       const inFlight = lavaShipActive ||
         (anim.active && (anim.type === 'vineSwing' || anim.type === 'vineLaunch'));
       if(inFlight){ continue; }
+      // No landing while crumble fall-through is active
+      if(crumbleFallThroughTimer > 0){ continue; }
       const sd = p.swingData;
       // Only attempt landing if: airborne, OR on a different platform.
       // Also require vy >= 0 (falling) to avoid catching upward jumps.
@@ -3628,6 +3632,8 @@ if(SCORCHA && SCORCHA.playerEnsnared){
         } else {
           // Skip crumbled-away platforms
           if(p.crumbleState === 'gone') continue;
+          // ── CRUMBLE FALL-THROUGH: player passes through ALL platforms during this window ──
+          if(crumbleFallThroughTimer > 0) continue;
           // Skip platforms that are ghosted during crumble boss fall-through window
           if(p._crumbleGhostTimer > 0){
             p._crumbleGhostTimer -= dt * 16.67;
