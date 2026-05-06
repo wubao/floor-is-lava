@@ -11625,6 +11625,185 @@ document.addEventListener('click', (e) => {
 })();
 </script>
 
+<!-- Add this block to the end of your HTML file, before the closing </body> tag -->
+<script>
+  // ---- Enhanced community score sync with notifications ----
+  (function() {
+    // Override or extend syncScoreToCommunity
+    const originalSync = window.syncScoreToCommunity;
+    window.syncScoreToCommunity = async function(mode, name, platforms, timeSecs) {
+      if (!firebaseDB) return;
+      const ref = firebaseDB.ref(`community/${mode}`);
+      const snapshot = await ref.once('value');
+      const allScores = [];
+      snapshot.forEach(child => {
+        allScores.push({ username: child.key, ...child.val() });
+      });
+      const existingIdx = allScores.findIndex(s => s.username === name);
+      const oldPlatforms = existingIdx !== -1 ? allScores[existingIdx].platforms : 0;
+      if (platforms <= oldPlatforms) return; // no improvement
+
+      // store before state
+      const sortByPlat = (a,b) => b.platforms - a.platforms;
+      const beforeScores = [...allScores].sort(sortByPlat);
+      const beforeTop10 = beforeScores.slice(0,10).map(s => s.username);
+      const beforeRankMap = new Map(beforeScores.map((s,i) => [s.username, i+1]));
+
+      // update user's score
+      const userRef = firebaseDB.ref(`community/${mode}/${name}`);
+      await userRef.set({
+        name: name,
+        platforms: platforms,
+        secs: Math.round(timeSecs),
+        date: new Date().toISOString().slice(0,10),
+        likes: existingIdx !== -1 ? (allScores[existingIdx].likes || 0) : 0,
+        likedBy: existingIdx !== -1 ? (allScores[existingIdx].likedBy || {}) : {}
+      });
+
+      // after state
+      const afterSnap = await ref.once('value');
+      const afterScores = [];
+      afterSnap.forEach(child => afterScores.push({ username: child.key, ...child.val() }));
+      const afterSorted = afterScores.sort(sortByPlat);
+      const afterTop10 = afterSorted.slice(0,10).map(s => s.username);
+      const afterRankMap = new Map(afterSorted.map((s,i) => [s.username, i+1]));
+
+      // helper to send notification
+      async function sendNotif(recipient, type, extra) {
+        if (!recipient || !recipient.trim()) return;
+        const notifRef = firebaseDB.ref(`notifications/${recipient}`).push();
+        await notifRef.set({
+          type: type,
+          from: name,
+          mode: mode,
+          platforms: platforms,
+          timestamp: Date.now(),
+          read: false,
+          details: extra || {}
+        });
+      }
+
+      // personal best (we only update if platforms > oldPlatforms)
+      if (platforms > oldPlatforms) {
+        await sendNotif(name, 'personal_best', { old: oldPlatforms, new: platforms });
+      }
+
+      // entered top 10?
+      const wasInTop10 = beforeTop10.includes(name);
+      const nowInTop10 = afterTop10.includes(name);
+      if (nowInTop10 && !wasInTop10) {
+        await sendNotif(name, 'entered_top10', { rank: afterRankMap.get(name), platforms });
+      }
+
+      // beaten (rank decreased) for others
+      for (let other of allScores) {
+        if (other.username === name) continue;
+        const beforeRank = beforeRankMap.get(other.username);
+        const afterRank = afterRankMap.get(other.username);
+        if (afterRank && beforeRank && afterRank > beforeRank) {
+          await sendNotif(other.username, 'beaten', {
+            oldRank: beforeRank,
+            newRank: afterRank,
+            oldScore: other.platforms,
+            newScore: platforms,
+            by: name
+          });
+        }
+      }
+
+      // pushed out of top 10
+      for (let other of allScores) {
+        if (other.username === name) continue;
+        const wasTop = beforeTop10.includes(other.username);
+        const isTop = afterTop10.includes(other.username);
+        if (wasTop && !isTop) {
+          await sendNotif(other.username, 'pushed_out', {
+            oldRank: beforeRankMap.get(other.username),
+            platforms: other.platforms,
+            newThreshold: afterSorted[9]?.platforms || 0
+          });
+        }
+      }
+    };
+  })();
+
+  // ---- Hook into game win points ----
+  // Override original _gameWin to add community sync for normal mode
+  const origGameWin = window._gameWin;
+  window._gameWin = function() {
+    const result = origGameWin.apply(this, arguments);
+    // if game ended with win, not practice mode, not story, not versus
+    if (typeof lastGameWon !== 'undefined' && lastGameWon && !isCustomPlayMode() && !currentStoryEpisode && !versusMode && currentUser) {
+      const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
+      window.syncScoreToCommunity(mode, currentUser.name, platformCount, levelTimerSecs);
+    }
+    return result;
+  };
+  // Also override endVersus win branch if needed (already has sync in original)
+  // For story mode, the existing showEndStats already calls syncScoreToCommunity.
+
+  // ---- Enhance notification display ----
+  const origShowNotificationsPanel = window.showNotificationsPanel;
+  window.showNotificationsPanel = async function() {
+    const panel = document.getElementById('notifPanel');
+    const listDiv = document.getElementById('notifList');
+    if (!listDiv) return;
+    const notifs = window._latestNotifs || [];
+    if (notifs.length === 0) {
+      listDiv.innerHTML = '<div style="color:#888; text-align:center;">No notifications</div>';
+    } else {
+      listDiv.innerHTML = notifs.map(n => {
+        let msg = '';
+        switch (n.type) {
+          case 'like':
+            msg = `${escapeHtml(n.from)} liked your ${n.mode} score of ${n.platforms} platforms`;
+            break;
+          case 'beaten':
+            msg = `${escapeHtml(n.from)} beat your #${n.details.oldRank} score (${n.details.oldScore} platforms) with ${n.details.newScore} platforms – you dropped to #${n.details.newRank}`;
+            break;
+          case 'pushed_out':
+            msg = `Your ${n.mode} score (${n.platforms} platforms) was pushed out of the top 10. New threshold is ${n.details.newThreshold} platforms.`;
+            break;
+          case 'entered_top10':
+            msg = `🌟 You entered the global top 10 in ${n.mode} mode! Rank #${n.details.rank} with ${n.platforms} platforms.`;
+            break;
+          case 'personal_best':
+            msg = `🎉 New personal best in ${n.mode}! ${n.details.old} → ${n.platforms} platforms.`;
+            break;
+          default:
+            msg = `${escapeHtml(n.from)} ${n.type} in ${n.mode}`;
+        }
+        return `
+          <div class="notif-item" data-id="${n.id}" style="padding:6px; border-bottom:1px solid #2a2a4a; ${n.read ? 'opacity:0.6;' : ''}">
+            <div>${msg}</div>
+            <div style="font-size:9px; color:#aaa;">${new Date(n.timestamp).toLocaleString()}</div>
+            ${!n.read ? '<button class="mark-read-btn" style="font-size:9px; background:none; border:1px solid #4a5fd4; border-radius:4px; margin-top:4px; cursor:pointer;">✓ Mark read</button>' : ''}
+          </div>`;
+      }).join('');
+      // attach mark-read handlers
+      document.querySelectorAll('.mark-read-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const itemDiv = btn.closest('.notif-item');
+          const notifId = itemDiv.dataset.id;
+          await firebaseDB.ref(`notifications/${currentUser.name}/${notifId}`).update({ read: true });
+          btn.remove();
+          itemDiv.style.opacity = '0.6';
+        });
+      });
+    }
+    panel.style.display = 'block';
+  };
+
+  // helper to refresh notifications panel after new ones arrive
+  const origNotifListener = window.startNotificationListener;
+  if (origNotifListener) {
+    window.startNotificationListener = function() {
+      origNotifListener();
+      // also force refresh when panel is opened again
+    };
+  }
+</script>
+
 <!--
 ═══════════════════════════════════════════════
   CLOUD LEVEL SHARING (future backend setup)
