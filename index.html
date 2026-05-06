@@ -2516,6 +2516,10 @@ function maybeTriggerTrick(){
 }
 
 function jump(half, boostOverride){
+ if(SCORCHA && SCORCHA.playerEnsnared){
+    showNotif('🕸️ Ensnared – cannot jump!');
+    return;
+  }
   if(!gameRunning || paused) return;
   if(player.onGround){
     let force = half ? HALF_JUMP : JUMP_FORCE;
@@ -3357,10 +3361,15 @@ function gameLoop(ts){
   if(initialTimerActive){initialTimer -= dt * (16.67/1000); if(initialTimer <= 0){initialTimer = 0; initialTimerActive = false;} updateHUD();}
 
   const MOVE_SPEED = 4.8;
-  let vxInput = 0;
-  if(keys['ArrowLeft']||keys['KeyQ']) vxInput = -MOVE_SPEED;
-  else if(keys['ArrowRight']||keys['KeyD']) vxInput = MOVE_SPEED;
-  else if(touchMoveVX !== 0) vxInput = touchMoveVX * MOVE_SPEED;
+let vxInput = 0;
+if(keys['ArrowLeft']||keys['KeyQ']) vxInput = -MOVE_SPEED;
+else if(keys['ArrowRight']||keys['KeyD']) vxInput = MOVE_SPEED;
+else if(touchMoveVX !== 0) vxInput = touchMoveVX * MOVE_SPEED;
+
+// ── BLOCK MOVEMENT WHEN ENSNARED BY NET ──
+if(SCORCHA && SCORCHA.playerEnsnared){
+  vxInput = 0;
+}
 
   // ── STICKY PLATFORM: slow movement & short jump while stuck ──
   if(onSticky){
@@ -3375,6 +3384,7 @@ function gameLoop(ts){
   }
 
   if(vxInput !== 0) player.vx = vxInput; else player.vx *= 0.75;
+
 
   // parachute physics
   if(parachuteActive && !player.onGround){
@@ -7703,6 +7713,7 @@ function initScorcha(storyEpId) {
   SCORCHA.netActive = false;
   SCORCHA.playerEnsnared = false;
   SCORCHA.playerEnsnareTimer = 0;
+  SCORCHA.playerGrounded = false; 
   SCORCHA.idleT = 0;
   SCORCHA.actionDoneCount = 0;
   SCORCHA.actTimer = 0;
@@ -7751,17 +7762,18 @@ function updateScorcha(dt) {
   if(!SCORCHA.active || !gameRunning) return;
   SCORCHA.idleT += dt * 0.05;
 
-  // ── PLAYER ENSNARE (net hit) ──
-  if(SCORCHA.playerEnsnared){
-    SCORCHA.playerEnsnareTimer -= dt * (16.67/1000) * 1000;
-    player.vx = 0;
-    if(SCORCHA.playerEnsnareTimer <= 0){
-      SCORCHA.playerEnsnared = false;
-      showNotif('🕸️ Net broken free!');
-    }
-    // Don't return — still need to update the flying net and check collision
+// ── PLAYER ENSNARE (net hit) ──
+if(SCORCHA.playerEnsnared){
+  SCORCHA.playerEnsnareTimer -= dt * (16.67/1000) * 1000;
+  player.vx = 0;
+  player.vy = 0;                     // ADD THIS – stop falling/jumping
+  SCORCHA.playerGrounded = true;     // ADD THIS – new flag to block jump()
+  if(SCORCHA.playerEnsnareTimer <= 0){
+    SCORCHA.playerEnsnared = false;
+    SCORCHA.playerGrounded = false;  // ADD THIS – clear flag
+    showNotif('🕸️ Net broken free!');
   }
-
+}
   // ── FLYING NET ──
   if(SCORCHA.netActive && !SCORCHA.netLanded){
     SCORCHA.netY += SCORCHA.netVY * dt;
