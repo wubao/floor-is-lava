@@ -1586,8 +1586,55 @@ function _lbDate() {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
 }
 let savedLevels = []; // [{name, platforms, enabled, repeatable}]
-function levelsLoad(){try{const s=localStorage.getItem(LEVELS_KEY);if(s)savedLevels=JSON.parse(s);}catch(e){savedLevels=[];}}
-function levelsSave(){try{localStorage.setItem(LEVELS_KEY,JSON.stringify(savedLevels));}catch(e){}}
+
+function levelsLoad(){
+  try{
+    const s = localStorage.getItem(LEVELS_KEY);
+    if(s) savedLevels = JSON.parse(s);
+  } catch(e){ savedLevels = []; }
+}
+
+function levelsSave(){
+  try{ localStorage.setItem(LEVELS_KEY, JSON.stringify(savedLevels)); } catch(e){}
+  // Mirror to Firebase if logged in — fire-and-forget
+  _levelsSyncToFirebase();
+}
+
+// Push savedLevels → Firebase under users/{uid}/customLevels
+async function _levelsSyncToFirebase(){
+  if(!currentUser || !currentUser.uid || !firebaseDB) return;
+  try{
+    await firebaseDB.ref(`users/${currentUser.uid}/customLevels`).set(savedLevels);
+  } catch(e){ console.warn('[Levels] Firebase write failed:', e); }
+}
+
+// Pull Firebase levels and MERGE with local — called after login.
+// Best-practice merge: union by level name; Firebase wins on duplicates (more recent save).
+async function levelsMergeFromFirebase(){
+  if(!currentUser || !currentUser.uid || !firebaseDB) return;
+  try{
+    const snap = await firebaseDB.ref(`users/${currentUser.uid}/customLevels`).once('value');
+    const remote = snap.val();
+    if(!Array.isArray(remote) || remote.length === 0) {
+      // Nothing remote — push local levels up so they're backed up
+      if(savedLevels.length > 0) await _levelsSyncToFirebase();
+      return;
+    }
+    // Merge: start with remote, then add any local-only levels (by name)
+    const remoteNames = new Set(remote.map(l => l.name));
+    const localOnly   = savedLevels.filter(l => !remoteNames.has(l.name));
+    const merged      = [...remote, ...localOnly];
+    savedLevels = merged;
+    localStorage.setItem(LEVELS_KEY, JSON.stringify(savedLevels));
+    // Write the merged set back to Firebase
+    await firebaseDB.ref(`users/${currentUser.uid}/customLevels`).set(savedLevels);
+    console.log(`[Levels] Merged: ${remote.length} remote + ${localOnly.length} local-only = ${merged.length} total`);
+    // Refresh the list if the screen is currently open
+    if(document.getElementById('customLevelsScreen') && document.getElementById('customLevelsScreen').style.display !== 'none'){
+      renderCustomLevelsList();
+    }
+  } catch(e){ console.warn('[Levels] Firebase merge failed:', e); }
+}
 
 let currentUser = null, infoReturnScreen = 'startScreen', currentMode = 'play', endPlatform = 1000;
 
@@ -1789,6 +1836,7 @@ function doLogin() {
       updatePiggyDisplay();
       loadSettings();
       if (typeof startNotificationListener === 'function') startNotificationListener();
+      levelsMergeFromFirebase(); // merge local + Firebase custom levels
       showScreen('startScreen');
     })
     .catch(error => authMsg(friendlyAuthError(error), '#ff6666'));
@@ -1851,6 +1899,7 @@ function loginAs(name,ud){
   document.getElementById('bestScoreDisplay').textContent=ud.bestScore>0?'🏆 Best: Platform '+ud.bestScore+' (Level '+ud.bestLevel+')':'No runs yet!';
   updatePiggyDisplay();
   loadSettings();
+  levelsMergeFromFirebase(); // merge local + Firebase custom levels
   showScreen('startScreen');
   ud.hideTutorial = false;
 }
@@ -2955,39 +3004,51 @@ function updateCrumblePlatforms(dt){
       p.y += p.crumbleVY * dt;
       p.crumbleShakeX = (Math.random() - 0.5) * 8;
 
-      // ── Crumble-collision: knock player down while platform is falling ──
-      // Re-check every frame (flag cleared between falls) so platform hitting
-      // player from above is caught regardless of relative position.
-          if(!p._crumbleHitPlayer){
-            // Use a slight horizontal shake offset for collision, same as drawing
-            const shakeX = p.crumbleShakeX || 0;
-            const platLeft = p.x + shakeX;
-            const platRight = p.x + p.w + shakeX;
+      // ── Crumble-collision: knock player while platform is falling ──
+      // Fires every frame until cooldown expires — not a one-shot flag.
+      // Cooldown prevents repeat hits within 400 ms of the last one.
+      const now = Date.now();
+      const cooldownOk = !p._crumbleHitTime || (now - p._crumbleHitTime > 400);
+      if(cooldownOk){
+        const shakeX = p.crumbleShakeX || 0;
+        const platLeft  = p.x + shakeX;
+        const platRight = p.x + p.w + shakeX;
+        const overlapX  = player.x + player.w > platLeft - 2 && player.x < platRight + 2;
+        const overlapY  = player.y + player.h > p.y && player.y < p.y + p.h + 12;
 
-            // More generous overlap – use a small tolerance (2px) to catch edge cases
-            const overlapX = player.x + player.w > platLeft - 2 && player.x < platRight + 2;
-            const overlapY = player.y + player.h > p.y && player.y < p.y + p.h;
+        if(overlapX && overlapY){
+          p._crumbleHitTime = now;
 
-            if(overlapX && overlapY){
-              p._crumbleHitPlayer = true;
-
-              // ----- Forceful push: player loses footing and is thrown off -----
-              // Stronger downward push (6.0) ensures noticeable displacement
-              player.vy = Math.max(player.vy, 6.0);
-              // Make sure player is no longer considered on any platform
-              player.onGround = false;
-              player.currentPlatformIndex = -1;
-
-              // Add a random horizontal nudge (left or right) to simulate being knocked aside
-              const pushDir = (Math.random() - 0.5) * 2; // -1 .. 1
-              player.vx += pushDir * 3.5;
-
-              // Play a distinct sound for crumble hit (optional)
-              playSound('sticky'); // reuse sticky sound, or create 'crumble' sound if preferred
-
-              showNotif('💥 Crumbling platform hit you!');
-            }
+          if(player.onGround){
+            // ── Case A: player standing on ANY platform ──
+            // Rip their footing away — they slip off whatever they're on
+            player.onGround = false;
+            player.currentPlatformIndex = -1;
+            // Strong enough downward vy to clear a double-jump vy (JUMP_FORCE = -11.5)
+            // We need vy > |JUMP_FORCE| so upward momentum is cancelled
+            player.vy = 13.0;
+            // Small horizontal nudge so they visibly slide off
+            player.vx += (Math.random() < 0.5 ? -1 : 1) * 2.5;
+          } else {
+            // ── Case B: player in the air ──
+            // Overwhelm any upward jump — more than double jump speed
+            player.vy = Math.max(player.vy, 14.0); // > |JUMP_FORCE| × 1.2
+            // Cancel upward momentum explicitly
+            if(player.vy < 0) player.vy = 14.0;
           }
+
+          // Trigger the mid-air tilt/funny-face animation either way
+          anim.active   = true;
+          anim.type     = 'tilt';
+          anim.angle    = 0;
+          anim.progress = 0;
+          anim.funnyFace = true;
+          anim.tiltDir  = (Math.random() < 0.5) ? 1 : -1;
+
+          playSound('sticky');
+          showNotif('💥 Crumbling platform hit you!');
+        }
+      }
 
       if(p.crumbleTimer <= 0){
         p.crumbleState = 'gone';
@@ -5134,7 +5195,15 @@ function playCustomLevel(i){
   setMode('play');
   startGame();
 }
-function deleteLevel(i){if(confirm('Delete "'+savedLevels[i].name+'"?')){savedLevels.splice(i,1);levelsSave();renderCustomLevelsList();}}
+function deleteLevel(i){
+  const lvl = savedLevels[i];
+  if(confirm('⚠️ Permanently delete "' + lvl.name + '"?\n\nThis cannot be undone. The level will be removed from your device and your saved account.')){
+    savedLevels.splice(i,1);
+    levelsSave(); // also syncs to Firebase
+    renderCustomLevelsList();
+    showNotif('🗑 Level deleted');
+  }
+}
 function exportSingleLevel(i){
   const data=JSON.stringify(savedLevels[i]);
   const blob=new Blob([data],{type:'application/json'});
@@ -5874,21 +5943,76 @@ let bgMusicTrack = null;
 
 function playBgMusic(track){
   if(!track){ stopBgMusic(); return; }
-  // Always recreate the Audio element — reusing a paused element can fail
-  // silently after browser suspends audio context (e.g. after page focus change).
-  // The guard prevents UNNECESSARY restarts of the currently-playing track.
+  // Guard: browser may not support MP3 at all
+  const testAudio = document.createElement('audio');
+  const canPlay = testAudio.canPlayType('audio/mpeg');
+  if(canPlay === ''){
+    console.warn('[BGM] Browser cannot play MP3 — music disabled');
+    return;
+  }
+  // Avoid restarting an already-playing identical track
   if(bgMusicTrack === track && bgAudio && !bgAudio.paused && bgAudio.currentTime > 0) return;
   stopBgMusic();
-  if(!bgMusicEnabled) return;   // respect global music toggle
+  if(!bgMusicEnabled) return;
   bgMusicTrack = track;
   const src = BG_MUSIC[track];
   if(!src){ console.warn('[BGM] No file mapped for track:', track); return; }
-  bgAudio = new Audio(src);
-  bgAudio.loop = true;
-  bgAudio.volume = isMuted ? 0 : masterVolume;
-  bgAudio.play().catch(e => {
-    // Autoplay blocked — store intent so the next user gesture can resume
-    console.warn('[BGM] Play blocked for track:', track, e.name);
+
+  // Check if we already have a blob URL cached for this track (avoids re-fetch)
+  if(window._bgMusicBlobCache && window._bgMusicBlobCache[track]){
+    _playFromSrc(window._bgMusicBlobCache[track], track);
+    return;
+  }
+
+  // Try direct play first; if it fails with NotSupportedError (common for large
+  // files served from GitHub Pages with incomplete range-request support), fall
+  // back to fetching the full file as a Blob and playing from an object URL.
+  const audio = new Audio(src);
+  audio.loop = true;
+  audio.volume = isMuted ? 0 : masterVolume;
+  audio._track = track;
+  audio.play().then(() => {
+    bgAudio = audio;
+    window._pendingBgTrack = null;
+  }).catch(e => {
+    if(e.name === 'NotSupportedError' || e.name === 'NotAllowedError'){
+      if(e.name === 'NotSupportedError'){
+        // Fetch full file as blob to sidestep range-request issues on GitHub Pages
+        console.warn('[BGM] NotSupportedError — fetching as blob:', track);
+        fetch(src)
+          .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+          .then(blob => {
+            const blobUrl = URL.createObjectURL(blob);
+            if(!window._bgMusicBlobCache) window._bgMusicBlobCache = {};
+            window._bgMusicBlobCache[track] = blobUrl;
+            // Only play if this track is still what's wanted
+            if(bgMusicTrack === track) _playFromSrc(blobUrl, track);
+          })
+          .catch(fetchErr => console.warn('[BGM] Blob fetch failed for', track, fetchErr));
+      } else {
+        // Autoplay blocked by browser — store intent for next user gesture
+        console.warn('[BGM] Autoplay blocked for track:', track);
+        bgAudio = audio; // keep ref so visibility handler can resume
+        window._pendingBgTrack = track;
+      }
+    } else {
+      console.warn('[BGM] Play error for track:', track, e.name);
+      window._pendingBgTrack = track;
+    }
+  });
+}
+
+function _playFromSrc(src, track){
+  const audio = new Audio(src);
+  audio.loop = true;
+  audio.volume = isMuted ? 0 : masterVolume;
+  audio._track = track;
+  audio.play().then(() => {
+    bgAudio = audio;
+    window._pendingBgTrack = null;
+  }).catch(e => {
+    console.warn('[BGM] Blob play blocked:', track, e.name);
+    bgAudio = audio;
     window._pendingBgTrack = track;
   });
 }
