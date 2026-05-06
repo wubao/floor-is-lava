@@ -3083,16 +3083,6 @@ function updateCrumblePlatforms(dt){
     }
   }
 
-  // Count down the normal crumble ground-deny window (v107 behaviour)
-  if(_crumbleGroundDenyTimer > 0){
-    _crumbleGroundDenyTimer -= dt * 16.67;
-    if(_crumbleGroundDenyTimer < 0) _crumbleGroundDenyTimer = 0;
-    if(player.onGround && _crumbleGroundDenyTimer > 0){
-      player.onGround = false;
-      player.currentPlatformIndex = -1;
-    }
-  }
-
   for(const p of platforms){
     if(!p.crumbleState || p.crumbleState === 'gone') continue;
     if(p.crumbleState === 'idle') continue;
@@ -3150,15 +3140,15 @@ function updateCrumblePlatforms(dt){
             crumbleFallThroughTimer = 200;
             _crumbleGroundDenyTimer = 0;
           } else {
-            // ── NORMAL CRUMBLE PLATFORM: gentle push only (v107 stable behaviour) ──
+            // ── NORMAL CRUMBLE PLATFORM: push only, land freely on next platform ──
+            // No ground-deny timer — player can jump immediately once they land below.
             const lateralForce = 8 + Math.random() * 3;   // 8–11 px/frame
             player.vx = lateralDir * lateralForce;
             player.vy = 13.0;
             player.onGround = false;
             player.currentPlatformIndex = -1;
-            // Old-style deny timer — does NOT use fall-through
-            _crumbleGroundDenyTimer = CRUMBLE_GROUND_DENY_MS;
-            crumbleFallThroughTimer = 0; // ensure no fall-through for normal crumble
+            crumbleFallThroughTimer = 0; // no fall-through for normal crumble
+            _crumbleGroundDenyTimer = 0; // clear any lingering deny timer
           }
 
           // Tilt/funny-face animation
@@ -7908,7 +7898,6 @@ function scorchaCreateRescuePlatform() {
 function scorchaEpisodePowers(storyEpId) {
   // Direct power mapping per episode (overrides automatic progression)
   const powerMap = {
-    0: [2],            // Krakatoa – crumble only
     3: [1],            // Campi Flegrei → solo tip
     6: [2],            // Ol Doinyo Lengai → solo crumble
     9: [3],            // Hekla → solo sticky
