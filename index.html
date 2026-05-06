@@ -2434,6 +2434,7 @@ function getHudModeLabel(){
 }
 // ── STATE LOG every ~5 s — diagnose episode/platformCount/mode issues ──
 let _hudLogTimer = 0;
+let _lastLoggedPlatformCount = -1;  // track changes between 5s snapshots
 function _logGameState(){
   if(++_hudLogTimer % 300 !== 0) return;
   const ep = (typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode)
@@ -2444,8 +2445,16 @@ function _logGameState(){
     : (typeof gameMode !== 'undefined' ? gameMode : '?');
   const locked = (typeof storyLockedEndPlatform !== 'undefined' && storyLockedEndPlatform)
     ? 'locked='+storyLockedEndPlatform : 'free';
-  console.log('[STATE] mode='+mode+' | '+ep+' | endPlatform='+endPlatform+' ('+locked+')'
-    +' | platformCount='+platformCount+' | lavaShip='+lavaShipActive
+  // Detect if platformCount has frozen (same value as last 5s snapshot)
+  const frozeWarning = (_lastLoggedPlatformCount === platformCount && platformCount > 0 && gameRunning)
+    ? ' ⚠️ FROZEN?' : '';
+  _lastLoggedPlatformCount = platformCount;
+  const target = (typeof endPlatform !== 'undefined' && endPlatform > 0) ? endPlatform : '∞';
+  const progress = (endPlatform > 0) ? ' ('+Math.round(platformCount/endPlatform*100)+'%)' : '';
+  console.log('[STATE] mode='+mode+' | '+ep
+    +' | plt='+platformCount+'/'+target+progress+frozeWarning
+    +' | endPlatform='+endPlatform+' ('+locked+')'
+    +' | lavaShip='+lavaShipActive
     +' | anim='+(typeof anim!=='undefined'?anim.type:'?')
     +' | customPlayPlatforms='+(customPlayPlatforms?customPlayPlatforms.length:0));
 }
@@ -2553,6 +2562,7 @@ function activateSkip(){
   player.onGround = true;
   player.currentPlatformIndex = target.index;
   platformCount = Math.max(platformCount, target.index);
+  console.log('[PLT] skip: platformCount='+platformCount+' | p.index='+target.index+' | skippedCount='+skippedCount+' | source=platformSkip');
 
   // Trigger crumble countdown if we landed on a crumble platform
   if(target.crumbleState === 'idle') triggerCrumble(target);
@@ -2885,6 +2895,7 @@ function updateAnim(dt){
     if(vineNearPlat && vineNearPlat.index > platformCount){
       platformCount = vineNearPlat.index;
       player.currentPlatformIndex = vineNearPlat.index;
+      console.log('[PLT] vine: platformCount='+platformCount+' | p.index='+vineNearPlat.index+' | source=vineLaunch');
       const nl = Math.floor(platformCount/100)+1;
       if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
       updateHUD();
@@ -3653,6 +3664,10 @@ if (p.color === 'ice' && !p.iceUsed) {
   updateHUD();
 }          if(p.index > player.currentPlatformIndex){
             player.currentPlatformIndex = p.index; platformCount = p.index;
+            console.log('[PLT] landed: platformCount='+platformCount
+              +' | p.index='+p.index+' | color='+p.color
+              +' | target='+(endPlatform>0?endPlatform:'∞')
+              +' | source=collision');
             player.lowestLandedY = p.y;
             const nl = Math.floor(platformCount / 100) + 1;
 			if(nl !== level){
@@ -3883,6 +3898,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
       if(shipPassedPlat && shipPassedPlat.index > platformCount){
         platformCount = shipPassedPlat.index;
         player.currentPlatformIndex = shipPassedPlat.index;
+        console.log('[PLT] ship: platformCount='+platformCount+' | p.index='+shipPassedPlat.index+' | source=lavaShip');
         const nl = Math.floor(platformCount/100)+1;
         if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
         updateHUD();
