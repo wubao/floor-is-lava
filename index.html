@@ -2422,8 +2422,8 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
 
 // ── HUD MODE LABEL — extend here for new modes ───────────
 function getHudModeLabel(){
-  if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode)
-    return '🌋 Ep '+(currentStoryEpisode.id+1)+' · '+currentStoryEpisode.name;
+  // Story mode: episode info already shown in levelDisplay by story updateHUD wrapper — don't duplicate here
+  if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode) return '';
   if(typeof versusMode !== 'undefined' && versusMode) return '⚔️ Versus Mode';
   if(typeof isCustomPlayMode === 'function' && isCustomPlayMode()) return '🗂 Custom Level';
   if(typeof gameMode !== 'undefined'){
@@ -2517,7 +2517,7 @@ function activateSkip(){
       !p.isGap &&                                               // not a gap (no surface)
       p.w >= 40                                                 // wide enough to stand on
     )
-    .sort((a, b) => a.y - b.y);  // lowest Y = highest on screen = index 0
+    .sort((a, b) => b.y - a.y);  // highest Y = closest above player = index 0
 
   // Try to land on the 8th platform above; if not enough exist, count down to 1st
   let target = null;
@@ -3103,7 +3103,15 @@ function updateCrumblePlatforms(dt){
           player.currentPlatformIndex = -1;
 
           // ── 1.2-second window where player cannot regain footing ──
+          // Also mark every platform at or above player as pass-through during this window
+          // so the player falls THROUGH the platform they were standing on.
           _crumbleGroundDenyTimer = CRUMBLE_GROUND_DENY_MS;
+          // Temporarily mark platforms near the player as ghost so collision is skipped
+          platforms.forEach(p => {
+            if(p.y >= player.y - PLATFORM_GAP && p.y <= player.y + PLATFORM_GAP * 0.5){
+              p._crumbleGhostTimer = CRUMBLE_GROUND_DENY_MS;
+            }
+          });
 
           // Tilt/funny-face animation
           anim.active    = true;
@@ -3609,6 +3617,12 @@ if(SCORCHA && SCORCHA.playerEnsnared){
         } else {
           // Skip crumbled-away platforms
           if(p.crumbleState === 'gone') continue;
+          // Skip platforms that are ghosted during crumble boss fall-through window
+          if(p._crumbleGhostTimer > 0){
+            p._crumbleGhostTimer -= dt * 16.67;
+            if(p._crumbleGhostTimer < 0) p._crumbleGhostTimer = 0;
+            continue;
+          }
           player.y = p.y - player.h; player.vy = 0; player.onGround = true; if(nightMode) nightVisiblePlatforms.add(p.index);
           parachuteActive = false; parachuteDeployY = null;
           document.getElementById('parachuteHUD').style.opacity = '0';
@@ -3855,13 +3869,20 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
       player.y -= speedPx * dt;
       player.vy = 0;
       player.onGround = false;
-      // Keep platformCount in sync while ship ascends
-      const shipNearPlat = platforms.filter(p =>
-        p.y >= player.y - PLATFORM_GAP*0.5 && p.y <= player.y + PLATFORM_GAP*2
-        && p.crumbleState !== 'gone').sort((a,b)=>a.y-b.y)[0];
-      if(shipNearPlat && shipNearPlat.index > platformCount){
-        platformCount = shipNearPlat.index;
-        player.currentPlatformIndex = shipNearPlat.index;
+      // Keep platformCount in sync while ship ascends.
+      // Find the highest-indexed platform the ship has already passed
+      // (platforms at or below the player's current y — the ship has flown past them).
+      // Using Math.max over ALL such platforms avoids the narrow per-frame window
+      // that could miss platforms when the ship moves many pixels in one frame.
+      const shipPassedPlat = platforms.reduce((best, p) => {
+        if(p.crumbleState === 'gone') return best;
+        if(p.y < player.y - PLATFORM_GAP * 0.25) return best; // too far above — not yet reached
+        if(!best || p.index > best.index) return p;
+        return best;
+      }, null);
+      if(shipPassedPlat && shipPassedPlat.index > platformCount){
+        platformCount = shipPassedPlat.index;
+        player.currentPlatformIndex = shipPassedPlat.index;
         const nl = Math.floor(platformCount/100)+1;
         if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
         updateHUD();
