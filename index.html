@@ -6174,9 +6174,29 @@ async function forceSaveSettings() {
   const s = captureSettings();
   const btn = document.querySelector('.accountActionBtn[onclick="forceSaveSettings()"]');
   if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
-  if (currentUser) {
-    currentUser.ud.settings = s;
-    dbSave();
+
+  // 1. Always save locally first (backup)
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(e) { console.warn(e); }
+
+  // 2. If no user, done.
+  if (!currentUser) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Settings Saved Locally';
+      setTimeout(() => {
+        if (btn) btn.textContent = '💾 Save Settings to Cloud';
+      }, 2000);
+    }
+    sAccountMsg('No account – settings saved locally.', '#ffe066');
+    return;
+  }
+
+  // 3. Update local user object
+  currentUser.ud.settings = s;
+  dbSave();
+
+  // 4. Attempt cloud save only if user has a Firebase UID
+  if (currentUser.uid) {
     const ok = await syncUserProfile(3);
     if (btn) {
       btn.disabled = false;
@@ -6184,10 +6204,12 @@ async function forceSaveSettings() {
         btn.textContent = '✅ Settings Saved!';
         btn.style.borderColor = '#44ff88';
         btn.style.color = '#44ff88';
+        sAccountMsg('Settings saved to cloud.', '#44ff88');
       } else {
-        btn.textContent = '⚠️ Save Failed — try again';
+        btn.textContent = '⚠️ Cloud Save Failed (local backup ok)';
         btn.style.borderColor = '#ff9944';
         btn.style.color = '#ff9944';
+        sAccountMsg('Cloud save failed – settings kept locally. Check internet / Firebase rules.', '#ff9944');
       }
       setTimeout(() => {
         if (btn) {
@@ -6195,12 +6217,18 @@ async function forceSaveSettings() {
           btn.style.borderColor = '#4a9fd4';
           btn.style.color = '#aadeff';
         }
-      }, 2500);
+      }, 3000);
     }
   } else {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(e) {}
-    sAccountMsg('Settings saved locally (no account).', '#ffe066');
-    if (btn) { btn.textContent = '💾 Save Settings to Cloud'; btn.disabled = false; }
+    // Guest user without Firebase UID (should not happen, but safety)
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Settings Saved Locally (no cloud)';
+      setTimeout(() => {
+        if (btn) btn.textContent = '💾 Save Settings to Cloud';
+      }, 2000);
+    }
+    sAccountMsg('Guest: settings saved locally. Create an account to save to cloud.', '#ffe066');
   }
 }
 
