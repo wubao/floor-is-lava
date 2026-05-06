@@ -2505,28 +2505,26 @@ function activateJumpBoost(){ return jumpBoosts > 0; }
 function activateSkip(){
   if(skipUses <= 0){triggerQuickBuyIfEmpty('skip');return;}
 
-  // Collect platforms ABOVE the player, sorted highest first (smallest Y = highest).
-  // Only consider solid, reachable platforms.
+  // Collect solid platforms DIRECTLY above the player — any horizontal position,
+  // since the skip is a vertical teleport (elevator ride straight up).
+  // Sort: ascending Y = highest platform first (smallest Y = furthest up).
   const above = platforms
     .filter(p =>
-      p.y < player.y &&
-      p.index > player.currentPlatformIndex &&
-      p.crumbleState !== 'gone' &&
-      (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting') &&
-      !p.isGap
+      p.y < player.y &&                                          // above player
+      p.index > player.currentPlatformIndex &&                  // higher index
+      p.crumbleState !== 'gone' &&                              // not crumbled away
+      (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting') && // not actively falling
+      !p.isGap &&                                               // not a gap (no surface)
+      p.w >= 40                                                 // wide enough to stand on
     )
-    .sort((a, b) => a.y - b.y);  // ascending Y = highest platform first
+    .sort((a, b) => a.y - b.y);  // lowest Y = highest on screen = index 0
 
-  // Try from 8 platforms above down to 1 and verify the player can actually
-  // stand on the candidate (its top surface is accessible — not blocked).
+  // Try to land on the 8th platform above; if not enough exist, count down to 1st
   let target = null;
   let skippedCount = 0;
   for(let attempt = Math.min(8, above.length); attempt >= 1; attempt--){
-    const candidate = above[attempt - 1];   // index 0 = highest, 1 = 2nd highest, etc.
-    if(!candidate) continue;
-    // Verify: player would land on top surface (not fall through or clip sideways).
-    // Quick check: the candidate platform must be wide enough to land on.
-    if(candidate.w >= 40){   // player width is 40px
+    const candidate = above[attempt - 1];
+    if(candidate){
       target = candidate;
       skippedCount = attempt;
       break;
@@ -2534,20 +2532,21 @@ function activateSkip(){
   }
 
   if(!target){
-    // Nothing valid above — refund and notify
     showNotif('💫 No platforms above to skip to!');
     playSound('buy');
     updateHUD();
     return;
   }
 
-  // Consume the use ONLY once we know we have a valid target
+  // Deduct use only once we have a confirmed target
   skipUses--;
   if(skipUses <= 0) triggerQuickBuyIfEmpty('skip');
 
-  // Teleport player to top of target platform
-  player.x = Math.max(target.x, Math.min(target.x + target.w - player.w,
-    player.x + player.w/2 - player.w/2));   // keep x roughly aligned, clamped to platform
+  // ── Place player on the target platform ──
+  // Horizontally: centre the player on the platform, clamped to its edges
+  const centreOnPlat = target.x + target.w / 2 - player.w / 2;
+  player.x = Math.max(target.x, Math.min(target.x + target.w - player.w, centreOnPlat));
+  // Vertically: land on top surface
   player.y = target.y - player.h;
   player.vy = 0;
   player.vx = 0;
@@ -2555,7 +2554,7 @@ function activateSkip(){
   player.currentPlatformIndex = target.index;
   platformCount = Math.max(platformCount, target.index);
 
-  // Trigger crumble if we landed on one
+  // Trigger crumble countdown if we landed on a crumble platform
   if(target.crumbleState === 'idle') triggerCrumble(target);
 
   // Tilt animation for visual flair
@@ -7831,7 +7830,7 @@ function scorchaCreateRescuePlatform() {
 function scorchaEpisodePowers(storyEpId) {
   // Direct power mapping per episode (overrides automatic progression)
   const powerMap = {
-    0: [4],            // Krakatoa – crumble only
+    0: [2],            // Krakatoa – crumble only
     3: [1],            // Campi Flegrei → solo tip
     6: [2],            // Ol Doinyo Lengai → solo crumble
     9: [3],            // Hekla → solo sticky
