@@ -34,6 +34,7 @@
     appId: "1:847518709085:web:918807292b46a56043a4b4"
   };
   firebase.initializeApp(firebaseConfig);
+  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const firebaseDB = firebase.database();
 </script>
 
@@ -6175,64 +6176,77 @@ async function forceSaveSettings() {
   const btn = document.querySelector('.accountActionBtn[onclick="forceSaveSettings()"]');
   if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
 
-  // Save locally as backup
+  // Always save locally as backup
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(e) { console.warn(e); }
 
-  if (!currentUser) {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '💾 Settings Saved Locally';
-      setTimeout(() => { if (btn) btn.textContent = '💾 Save Settings to Cloud'; }, 2000);
-    }
-    sAccountMsg('No account – settings saved locally.', '#ffe066');
-    return;
-  }
-
-  // Update local user object
-  currentUser.ud.settings = s;
-  dbSave();
-
-  // 🔥 Get the actual Firebase Auth user (not just stored uid)
+  // Get the actual Firebase Auth user
   const firebaseUser = firebase.auth().currentUser;
-  if (!firebaseUser || !firebaseUser.uid) {
+
+  if (!firebaseUser) {
+    // Not signed in to Firebase – could be a guest with incomplete token, or no user
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '⚠️ Not logged into Firebase – saved locally';
+      btn.textContent = '⚠️ Not signed in – saved locally';
       setTimeout(() => { if (btn) btn.textContent = '💾 Save Settings to Cloud'; }, 2500);
     }
-    sAccountMsg('Firebase session missing. Please log out and back in.', '#ff9944');
+    sAccountMsg('Not signed in to Firebase. Settings saved locally.', '#ff9944');
     return;
   }
 
-  // Ensure the stored uid matches the Firebase user (optional)
-  if (currentUser.uid !== firebaseUser.uid) {
-    console.warn('UID mismatch, updating session');
+  // If we have a currentUser object, update it with the correct uid
+  if (currentUser) {
     currentUser.uid = firebaseUser.uid;
-    localStorage.setItem('fil_current_user', JSON.stringify({ name: currentUser.name, uid: currentUser.uid, ud: currentUser.ud }));
+    currentUser.ud.settings = s;
+    dbSave();
+    // Also update localStorage snapshot
+    const snapshot = {
+      name: currentUser.name,
+      uid: firebaseUser.uid,
+      ud: currentUser.ud
+    };
+    localStorage.setItem('fil_current_user', JSON.stringify(snapshot));
+  } else {
+    // No currentUser? Try to create one from Firebase profile
+    const snapshot = await firebaseDB.ref(`users/${firebaseUser.uid}`).once('value');
+    const profile = snapshot.val();
+    if (profile) {
+      currentUser = {
+        name: profile.username,
+        uid: firebaseUser.uid,
+        ud: profile
+      };
+      currentUser.ud.settings = s;
+      dbSave();
+      localStorage.setItem('fil_current_user', JSON.stringify({ name: profile.username, uid: firebaseUser.uid, ud: profile }));
+    } else {
+      // This shouldn't happen for registered users, but fallback
+      sAccountMsg('User profile not found. Please log out and back in.', '#ff6666');
+      if (btn) btn.disabled = false;
+      return;
+    }
   }
 
-  // Force token refresh to avoid stale authentication
+  // Force token refresh to avoid stale auth
   try {
     await firebaseUser.getIdToken(true);
-  } catch (tokenErr) {
-    console.warn('Token refresh failed', tokenErr);
-    // Continue anyway – maybe still works
+  } catch (e) {
+    console.warn('Token refresh failed', e);
   }
 
-  // Now attempt cloud sync
-  const ok = await syncUserProfile(3);
-  if (btn) {
-    btn.disabled = false;
-    if (ok) {
+  // Now call the sync function with the correct uid
+  // We'll use a slightly modified sync that uses firebaseUser.uid
+  try {
+    const safeUd = { ...currentUser.ud };
+    if (typeof safeUd.coins !== 'number' || isNaN(safeUd.coins)) safeUd.coins = 0;
+    if (typeof safeUd.piggyBank !== 'number' || isNaN(safeUd.piggyBank)) safeUd.piggyBank = 0;
+    await firebaseDB.ref(`users/${firebaseUser.uid}`).update(safeUd);
+    const ok = true;
+    if (btn) {
+      btn.disabled = false;
       btn.textContent = '✅ Settings Saved!';
       btn.style.borderColor = '#44ff88';
       btn.style.color = '#44ff88';
       sAccountMsg('Settings saved to cloud.', '#44ff88');
-    } else {
-      btn.textContent = '⚠️ Cloud Save Failed – check connection';
-      btn.style.borderColor = '#ff9944';
-      btn.style.color = '#ff9944';
-      sAccountMsg('Cloud save failed. Try again later.', '#ff9944');
     }
     setTimeout(() => {
       if (btn) {
@@ -6241,6 +6255,18 @@ async function forceSaveSettings() {
         btn.style.color = '#aadeff';
       }
     }, 3000);
+  } catch (err) {
+    console.error('Cloud save error', err);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⚠️ Cloud Save Failed – saved locally';
+      btn.style.borderColor = '#ff9944';
+      btn.style.color = '#ff9944';
+      sAccountMsg('Cloud save failed. Check your internet connection.', '#ff9944');
+      setTimeout(() => {
+        if (btn) btn.textContent = '💾 Save Settings to Cloud';
+      }, 3000);
+    }
   }
 }
 
