@@ -3517,12 +3517,11 @@ if (p.color === 'ice' && !p.iceUsed) {
 			  showNotif(isCustomPlayMode() ? '🌋 Level ' + level + '! (practice)' : '🌋 Level ' + level + '! +50 coins 🪙');
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
-            // Story mode safety: if endPlatform drifted from the locked target, snap it back BEFORE the win check
+            // Story mode safety: unconditionally enforce the locked target EVERY frame.
+            // This corrects any drift (from async loadSettings, selector reads, etc.)
+            // BEFORE the win check reads endPlatform on the same frame.
             if (currentStoryEpisode && storyLockedEndPlatform) {
-              if (endPlatform !== storyLockedEndPlatform) {
-                console.warn('[STORY] endPlatform drifted to', endPlatform, '— snapping back to', storyLockedEndPlatform);
-                endPlatform = storyLockedEndPlatform;
-              }
+              endPlatform = storyLockedEndPlatform;
             }
             if(endPlatform > 0 && platformCount >= endPlatform){
               console.warn('[WIN CHECK] platformCount='+platformCount+' endPlatform='+endPlatform
@@ -4919,7 +4918,15 @@ function buyItem(type){
   }
   if(currentUser && !isCustomPlayMode()){currentUser.ud.coins=coins;dbSave();syncUserProfile();}updateHUD();
 }
-function updateEndPlatform(){endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;updateHUD();}
+function updateEndPlatform(){
+  // Story mode: never allow the selector to override the locked target
+  if (typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode) {
+    console.warn('[STORY] updateEndPlatform() blocked — story target is', storyLockedEndPlatform);
+    return;
+  }
+  endPlatform=parseInt(document.getElementById('endPlatformSel').value)||0;
+  updateHUD();
+}
 
 // ══════════════════════════════════════════════════════════════
 // QUICK BUY POPUP — appears above the power wheel when a power-up
@@ -6455,7 +6462,7 @@ function applySettings(s){
   if(zsel) zsel.value = String(z);
   const zl = document.getElementById('zoomLabel');
   if(zl) zl.textContent = Math.round(z * 100) + '%';
-
+  
   // End platform — don't overwrite if story mode has it locked
   // Use typeof guards: these vars are declared later in the script; on first page load
   // applySettings runs before they exist, so we must not throw a ReferenceError here.
@@ -6467,6 +6474,9 @@ function applySettings(s){
     if(ep) ep.value = String(endPlatform);
     const se = document.getElementById('sEndPlatSel');
     if(se) se.value = String(endPlatform);
+  } else {
+    // Story is active — ensure the local variable matches the lock, ignore saved settings value
+    if (_storyLock) endPlatform = _storyLock;
   }
   updateHUD();
 
