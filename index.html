@@ -3001,10 +3001,11 @@ function updateSwingPlatforms(dt){
 
     // ── 6. Physics while player stands on the swing platform ──
     if (onThisSwing) {
-      // Safety: if any tipping platform is actively falling near the player's Y range,
+      // Safety: if any tipping platform is ACTIVELY FALLING near the player's Y range,
       // release the player from the swing so tipping and swing don't fight each other.
+      // NOTE: exclude 'landed' — a landed tipping platform is permanent and harmless.
       const nearbyTippingActive = platforms.some(tp =>
-        tp.tipping && tp.tipping !== 'idle' && tp.tipping !== 'waiting' &&
+        tp.tipping && tp.tipping !== 'idle' && tp.tipping !== 'waiting' && tp.tipping !== 'landed' &&
         Math.abs(tp.y - p.y) < PLATFORM_GAP * 3
       );
       if(nearbyTippingActive){
@@ -3067,10 +3068,29 @@ let _crumbleGroundDenyTimer = 0;   // kept for compatibility but no longer used 
 let crumbleFallThroughTimer = 0;   // ms remaining: player falls through ALL platforms
 
 function updateCrumblePlatforms(dt){
-  // Count down the fall-through timer
+  // Count down the Scorcha fall-through timer
   if(crumbleFallThroughTimer > 0){
     crumbleFallThroughTimer -= dt * 16.67;
     if(crumbleFallThroughTimer < 0) crumbleFallThroughTimer = 0;
+    // Distance cap: stop fall-through once player has fallen 4 platforms
+    if(window._scorchaFallStartY !== undefined && window._scorchaFallCap !== undefined){
+      const fallen = player.y - window._scorchaFallStartY;  // positive = downward
+      if(fallen >= window._scorchaFallCap){
+        crumbleFallThroughTimer = 0;
+        window._scorchaFallStartY = undefined;
+        window._scorchaFallCap = undefined;
+      }
+    }
+  }
+
+  // Count down the normal crumble ground-deny window (v107 behaviour)
+  if(_crumbleGroundDenyTimer > 0){
+    _crumbleGroundDenyTimer -= dt * 16.67;
+    if(_crumbleGroundDenyTimer < 0) _crumbleGroundDenyTimer = 0;
+    if(player.onGround && _crumbleGroundDenyTimer > 0){
+      player.onGround = false;
+      player.currentPlatformIndex = -1;
+    }
   }
 
   for(const p of platforms){
@@ -3112,19 +3132,34 @@ function updateCrumblePlatforms(dt){
           const platCX   = p.x + p.w/2;
           const lateralDir = playerCX < platCX ? -1 : 1;
 
-          // ── BIG lateral throw — 1.5–2 body widths (40px body × 2 = 80px+) ──
-          // vx of 8–10 at normal speed carries ~80–100px horizontally before landing
-          const lateralForce = 8 + Math.random() * 3;   // 8–11 px/frame
+          if(p._scorchaTriggered){
+            // ── SCORCHA BOSS POWER: strong push, fall through up to 4 platforms ──
+            const lateralForce = 4 + Math.random() * 2;   // gentler than before (was 8–11)
+            player.vx = lateralDir * lateralForce;
+            player.vy = 6.0;   // quarter of original 13.0 — more measured push
+            player.onGround = false;
+            player.currentPlatformIndex = -1;
 
-          player.vx = lateralDir * lateralForce;
-          player.vy = 13.0;   // strong downward so they fall off whatever they're on
-          player.onGround = false;
-          player.currentPlatformIndex = -1;
+            // Calculate 4-platform fall distance cap
+            // PLATFORM_GAP ≈ 72px; 4 platforms = ~288px of world-Y travel
+            const fallDistanceCap = PLATFORM_GAP * 4;
+            window._scorchaFallStartY = player.y;
+            window._scorchaFallCap = fallDistanceCap;
 
-          // ── Fall-through window: player cannot land on ANY platform for 800ms ──
-          // This is the correct fix: the collision loop skips all landings while active.
-          crumbleFallThroughTimer = 800;
-          _crumbleGroundDenyTimer = 0; // clear old timer (no longer used)
+            // Fall-through for ~200ms (quarter of original 800ms)
+            crumbleFallThroughTimer = 200;
+            _crumbleGroundDenyTimer = 0;
+          } else {
+            // ── NORMAL CRUMBLE PLATFORM: gentle push only (v107 stable behaviour) ──
+            const lateralForce = 8 + Math.random() * 3;   // 8–11 px/frame
+            player.vx = lateralDir * lateralForce;
+            player.vy = 13.0;
+            player.onGround = false;
+            player.currentPlatformIndex = -1;
+            // Old-style deny timer — does NOT use fall-through
+            _crumbleGroundDenyTimer = CRUMBLE_GROUND_DENY_MS;
+            crumbleFallThroughTimer = 0; // ensure no fall-through for normal crumble
+          }
 
           // Tilt/funny-face animation
           anim.active    = true;
@@ -8229,7 +8264,7 @@ function scorchaCheckAndUsePower() {
     ).slice(0, 1);
     if(candidates.length){
       const p2 = candidates[0];
-      p2.color = 'crumble'; p2.crumbleState = 'idle'; triggerCrumble(p2);
+      p2.color = 'crumble'; p2.crumbleState = 'idle'; p2._scorchaTriggered = true; triggerCrumble(p2);
       showNotif('💥 Scorcha crumbles a platform!');
       return true;
     }
