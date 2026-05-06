@@ -394,16 +394,88 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 #versusResult p{color:#ccc;font-size:12px;margin-bottom:14px;text-align:center;white-space:pre-line;padding:0 20px;}
 .vrBtn{border:none;border-radius:10px;padding:8px 18px;font-size:12px;font-weight:bold;cursor:pointer;margin:3px;}
 /* AD MODAL */
-#rewardPopup{display:none;position:fixed;inset:0;background:#000d;z-index:9000;align-items:center;justify-content:center;}
-#rewardPopup.show{display:flex;}
-#rewardPanel{background:linear-gradient(160deg,#1a2a1a,#0e1a0e);border:2px solid #27ae60;border-radius:16px;padding:22px 20px;width:min(300px,92%);color:#fff;text-align:center;}
-#rewardPanel h2{color:#ffe066;font-size:16px;margin-bottom:8px;}
-#rewardPanel p{color:#aaa;font-size:11px;margin-bottom:12px;line-height:1.5;}
-#rewardCountdown{font-size:34px;font-weight:bold;color:#27ae60;margin-bottom:10px;}
-#rewardWatchBtn{background:#27ae60;color:#fff;border:none;border-radius:9px;padding:9px;font-size:13px;font-weight:bold;cursor:pointer;width:100%;margin-bottom:6px;}
-#rewardWatchBtn:disabled{background:#2a5a2a;color:#888;cursor:default;}
-#rewardSkipBtn{background:transparent;color:#666;border:1px solid #333;border-radius:8px;padding:6px;font-size:11px;cursor:pointer;width:100%;}
-#rewardCloseBtn{background:transparent;color:#444;border:1px solid #2a2a2a;border-radius:8px;padding:5px;font-size:10px;cursor:pointer;width:100%;margin-top:4px;}
+/* Reward Popup – matches game colour scheme */
+#rewardPopup {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+}
+#rewardPopup.show { display: flex; }
+
+#rewardPanel {
+  background: var(--bg-card, #1a1a3e);
+  border: 2px solid var(--border-primary, #4a5fd4);
+  border-radius: 16px;
+  padding: 22px 20px;
+  width: min(300px, 92%);
+  color: var(--text-primary, #e8e0ff);
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+}
+#rewardPanel h2 {
+  color: var(--yellow, #ffe066);
+  font-family: Arial Black, sans-serif;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+#rewardPanel p {
+  color: var(--text-muted, #ccc);
+  font-size: 11px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+#rewardCountdown {
+  font-size: 34px;
+  font-weight: bold;
+  color: var(--yellow, #ffe066);
+  margin-bottom: 10px;
+}
+#rewardWatchBtn {
+  background: linear-gradient(135deg, var(--yellow, #ffe066), var(--yellow-dark, #f5a000));
+  color: var(--yellow-text, #4a2000);
+  border: none;
+  border-radius: 9px;
+  padding: 9px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 6px;
+}
+#rewardWatchBtn:disabled {
+  background: #2a5a2a;
+  color: #888;
+  cursor: default;
+  opacity: 0.6;
+}
+#rewardSkipBtn {
+  background: transparent;
+  color: var(--orange, #ff9944);
+  border: 1.5px solid var(--border-pink, #cc6688);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+}
+#rewardCloseBtn {
+  background: transparent;
+  color: var(--text-dim, #aaa);
+  border: 1px solid var(--border-dim, #2a2a4a);
+  border-radius: 8px;
+  padding: 5px;
+  font-size: 10px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 4px;
+}
+#rewardCloseBtn:hover {
+  background: rgba(255,255,255,0.05);
+}
 
 /* EDITOR */
 #editorScreen{background:#0d0d1e;}
@@ -11629,10 +11701,17 @@ document.addEventListener('click', (e) => {
 <script>
   // ---- Enhanced community score sync with notifications ----
   (function() {
-    // Override or extend syncScoreToCommunity
+    // Prevent duplicate notifications for the same game session
+    let _scoreSyncedForThisGame = false;
+
+    // Store the original sync function (the simple one that just saves to DB)
     const originalSync = window.syncScoreToCommunity;
+
+    // Override with our enhanced version that also sends notifications
     window.syncScoreToCommunity = async function(mode, name, platforms, timeSecs) {
+      if (_scoreSyncedForThisGame) return;
       if (!firebaseDB) return;
+      
       const ref = firebaseDB.ref(`community/${mode}`);
       const snapshot = await ref.once('value');
       const allScores = [];
@@ -11649,16 +11728,8 @@ document.addEventListener('click', (e) => {
       const beforeTop10 = beforeScores.slice(0,10).map(s => s.username);
       const beforeRankMap = new Map(beforeScores.map((s,i) => [s.username, i+1]));
 
-      // update user's score
-      const userRef = firebaseDB.ref(`community/${mode}/${name}`);
-      await userRef.set({
-        name: name,
-        platforms: platforms,
-        secs: Math.round(timeSecs),
-        date: new Date().toISOString().slice(0,10),
-        likes: existingIdx !== -1 ? (allScores[existingIdx].likes || 0) : 0,
-        likedBy: existingIdx !== -1 ? (allScores[existingIdx].likedBy || {}) : {}
-      });
+      // update user's score (call original to save)
+      await originalSync(mode, name, platforms, timeSecs);
 
       // after state
       const afterSnap = await ref.once('value');
@@ -11683,7 +11754,7 @@ document.addEventListener('click', (e) => {
         });
       }
 
-      // personal best (we only update if platforms > oldPlatforms)
+      // personal best
       if (platforms > oldPlatforms) {
         await sendNotif(name, 'personal_best', { old: oldPlatforms, new: platforms });
       }
@@ -11724,23 +11795,27 @@ document.addEventListener('click', (e) => {
           });
         }
       }
+
+      _scoreSyncedForThisGame = true;
+    };
+
+    // Reset the guard when a new game starts
+    const originalInitGame = window.initGame;
+    window.initGame = function() {
+      _scoreSyncedForThisGame = false;
+      return originalInitGame.apply(this, arguments);
     };
   })();
 
   // ---- Hook into game win points ----
-  // Override original _gameWin to add community sync for normal mode
   const origGameWin = window._gameWin;
   window._gameWin = function() {
     const result = origGameWin.apply(this, arguments);
-    // if game ended with win, not practice mode, not story, not versus
-    if (typeof lastGameWon !== 'undefined' && lastGameWon && !isCustomPlayMode() && !currentStoryEpisode && !versusMode && currentUser) {
-      const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
-      window.syncScoreToCommunity(mode, currentUser.name, platformCount, levelTimerSecs);
-    }
+    // No extra sync here – the original _gameWin already calls syncScoreToCommunity
+    // for normal mode wins (climber/frogger) once.
+    // Story mode and versus mode are handled inside their own win functions.
     return result;
   };
-  // Also override endVersus win branch if needed (already has sync in original)
-  // For story mode, the existing showEndStats already calls syncScoreToCommunity.
 
   // ---- Enhance notification display ----
   const origShowNotificationsPanel = window.showNotificationsPanel;
@@ -11793,15 +11868,6 @@ document.addEventListener('click', (e) => {
     }
     panel.style.display = 'block';
   };
-
-  // helper to refresh notifications panel after new ones arrive
-  const origNotifListener = window.startNotificationListener;
-  if (origNotifListener) {
-    window.startNotificationListener = function() {
-      origNotifListener();
-      // also force refresh when panel is opened again
-    };
-  }
 </script>
 
 <!--
