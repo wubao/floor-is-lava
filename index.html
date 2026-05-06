@@ -2261,6 +2261,9 @@ function makePlatform(y, index, prevX, prevW){
   };
 }
 function getCustomLevelChunk(startIndex){
+  // STORY MODE: never inject custom levels
+  if(currentStoryEpisode) return null;
+
   const enabled = savedLevels.filter(l=>l.enabled && l.platforms && l.platforms.length > 0);
   if(!enabled.length) return null;
   const lvl = enabled[Math.floor(Math.random() * enabled.length)];
@@ -2271,7 +2274,7 @@ function getCustomLevelChunk(startIndex){
     origY: p.y,
     pulled: false,
     isGap: false,
-    iceUsed: false      // 👈 add this line
+    iceUsed: false
   }));
 }
 
