@@ -2350,8 +2350,7 @@ function initGame(){
   nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
   bgAnimations = [];
 
-// ── IMPORTANT: in story mode, NEVER use customPlayPlatforms even if it still has
-// data from a previous editor session. Clear it first so normal generation runs.
+// Story mode must never use customPlayPlatforms even if stale from a prior editor session
 if(currentStoryEpisode && customPlayPlatforms){
   console.log('[STORY] Cleared stale customPlayPlatforms before story level init');
   customPlayPlatforms = null;
@@ -2421,7 +2420,7 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
   updateHUD();
 }
 
-// ── HUD MODE LABEL — add new modes here ──────────────────────
+// ── HUD MODE LABEL — extend here for new modes ───────────
 function getHudModeLabel(){
   if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode)
     return '🌋 Ep '+(currentStoryEpisode.id+1)+' · '+currentStoryEpisode.name;
@@ -2433,7 +2432,7 @@ function getHudModeLabel(){
   }
   return '';
 }
-// ── STATE LOG every ~5 s (300 frames) — helps diagnose episode/freeze issues ──
+// ── STATE LOG every ~5 s — diagnose episode/platformCount/mode issues ──
 let _hudLogTimer = 0;
 function _logGameState(){
   if(++_hudLogTimer % 300 !== 0) return;
@@ -2445,11 +2444,10 @@ function _logGameState(){
     : (typeof gameMode !== 'undefined' ? gameMode : '?');
   const locked = (typeof storyLockedEndPlatform !== 'undefined' && storyLockedEndPlatform)
     ? 'locked='+storyLockedEndPlatform : 'free';
-  const customPlats = customPlayPlatforms ? customPlayPlatforms.length : 0;
   console.log('[STATE] mode='+mode+' | '+ep+' | endPlatform='+endPlatform+' ('+locked+')'
     +' | platformCount='+platformCount+' | lavaShip='+lavaShipActive
     +' | anim='+(typeof anim!=='undefined'?anim.type:'?')
-    +' | customPlayPlatforms='+customPlats);
+    +' | customPlayPlatforms='+(customPlayPlatforms?customPlayPlatforms.length:0));
 }
 
 function _updateHUD(){
@@ -2506,36 +2504,67 @@ function _updateHUD(){
 function activateJumpBoost(){ return jumpBoosts > 0; }
 function activateSkip(){
   if(skipUses <= 0){triggerQuickBuyIfEmpty('skip');return;}
+
+  // Collect platforms ABOVE the player, sorted highest first (smallest Y = highest).
+  // Only consider solid, reachable platforms.
+  const above = platforms
+    .filter(p =>
+      p.y < player.y &&
+      p.index > player.currentPlatformIndex &&
+      p.crumbleState !== 'gone' &&
+      (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting') &&
+      !p.isGap
+    )
+    .sort((a, b) => a.y - b.y);  // ascending Y = highest platform first
+
+  // Try from 8 platforms above down to 1 and verify the player can actually
+  // stand on the candidate (its top surface is accessible — not blocked).
+  let target = null;
+  let skippedCount = 0;
+  for(let attempt = Math.min(8, above.length); attempt >= 1; attempt--){
+    const candidate = above[attempt - 1];   // index 0 = highest, 1 = 2nd highest, etc.
+    if(!candidate) continue;
+    // Verify: player would land on top surface (not fall through or clip sideways).
+    // Quick check: the candidate platform must be wide enough to land on.
+    if(candidate.w >= 40){   // player width is 40px
+      target = candidate;
+      skippedCount = attempt;
+      break;
+    }
+  }
+
+  if(!target){
+    // Nothing valid above — refund and notify
+    showNotif('💫 No platforms above to skip to!');
+    playSound('buy');
+    updateHUD();
+    return;
+  }
+
+  // Consume the use ONLY once we know we have a valid target
   skipUses--;
   if(skipUses <= 0) triggerQuickBuyIfEmpty('skip');
-  // Search strategy: try 8 platforms above, step down to 1 until one is found
-  const above = platforms
-    .filter(p => p.y < player.y && p.index > player.currentPlatformIndex
-              && p.crumbleState !== 'gone'
-              && (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting'))
-    .sort((a,b) => a.y - b.y);  // ascending Y = highest first
-  let target = null;
-  for(let attempt = 8; attempt >= 1; attempt--){
-    if(above.length >= attempt){ target = above[attempt - 1]; break; }
-  }
-  if(!target && above.length > 0) target = above[above.length - 1];
-  if(target){
-    const skippedCount = above.indexOf(target) + 1;
-    player.y = target.y - player.h;
-    player.vy = 0; player.vx = 0;
-    player.onGround = true;
-    player.currentPlatformIndex = target.index;
-    platformCount = Math.max(platformCount, target.index);
-    anim.active = true; anim.type = 'tilt'; anim.angle = 0; anim.progress = 0;
-    anim.funnyFace = true; anim.tiltDir = 1;
-    showNotif('💫 Skipped '+skippedCount+' platform'+(skippedCount>1?'s':'')+'! ('+skipUses+' left)');
-    updateHUD();
-  } else {
-    skipUses++;  // refund — nothing to skip to
-    showNotif('💫 No platforms above to skip to!');
-    updateHUD();
-  }
+
+  // Teleport player to top of target platform
+  player.x = Math.max(target.x, Math.min(target.x + target.w - player.w,
+    player.x + player.w/2 - player.w/2));   // keep x roughly aligned, clamped to platform
+  player.y = target.y - player.h;
+  player.vy = 0;
+  player.vx = 0;
+  player.onGround = true;
+  player.currentPlatformIndex = target.index;
+  platformCount = Math.max(platformCount, target.index);
+
+  // Trigger crumble if we landed on one
+  if(target.crumbleState === 'idle') triggerCrumble(target);
+
+  // Tilt animation for visual flair
+  anim.active = true; anim.type = 'tilt'; anim.angle = 0; anim.progress = 0;
+  anim.funnyFace = true; anim.tiltDir = 1;
+
+  showNotif('💫 Skipped '+skippedCount+' platform'+(skippedCount>1?'s':'')+'! ('+skipUses+' left)');
   playSound('buy');
+  updateHUD();
 }
 function activateBook(){
   if(bookUses <= 0 || !bigHead){showNotif('Buy The Book first!');return;}
@@ -2850,7 +2879,7 @@ function updateAnim(dt){
     anim.angle = Math.sin(elapsed * Math.PI * 2) * 1.5;
     anim.funnyFace = true;
     anim.progress = elapsed;
-    // ── Update platformCount while vine carries player up ──
+    // Keep platformCount in sync while vine carries player up
     const vineNearPlat = platforms.filter(p =>
       p.y >= player.y - PLATFORM_GAP*0.5 && p.y <= player.y + PLATFORM_GAP*2
       && p.crumbleState !== 'gone').sort((a,b)=>a.y-b.y)[0];
@@ -2962,16 +2991,14 @@ function updateSwingPlatforms(dt){
 
     // ── 6. Physics while player stands on the swing platform ──
     if (onThisSwing) {
-      // Correct slope acceleration (gravity pulls down the incline)
-      // Positive tilt (right side higher) → slide left (negative vx)
-      // Negative tilt (left side higher) → slide right (positive vx)
-      const slopeAccel = Math.sin(sd.tilt) * 0.85 * dt;
+      // Slope acceleration: positive tilt = right side lower → player slides right
+      // Stronger than before so the slide is clearly visible
+      const slopeAccel = Math.sin(sd.tilt) * 1.1 * dt;
       player.vx += slopeAccel;
-      player.vx = Math.max(-12, Math.min(12, player.vx));
+      player.vx = Math.max(-14, Math.min(14, player.vx));
 
       // Snap player to the rotated surface
       const pCX = player.x + player.w / 2;
-      const pBY = player.y + player.h;
       const localX = pCX - platCX;
       const surfaceY = platCY + localX * Math.sin(sd.tilt);
       player.y = surfaceY - player.h;
@@ -2979,21 +3006,30 @@ function updateSwingPlatforms(dt){
 
       const halfW = p.w / 2;
       const playerLocalX = pCX - platCX;
-      const offRight = playerLocalX > halfW + 2;
-      const offLeft  = playerLocalX < -halfW - 2;
+      // Tight threshold: fire as player reaches the physical end of the plank
+      const offRight = playerLocalX > halfW - 2;
+      const offLeft  = playerLocalX < -(halfW - 2);
 
       if (offRight || offLeft) {
-        const edgeVelMag = armLen * Math.abs(sd.vel) * 1.2;
+        // Player slid off the end of the tilted platform
         const launchDir = offRight ? 1 : -1;
-        player.vx = launchDir * edgeVelMag * Math.cos(sd.angle) * 0.8;
-        const endIsHigh = (offRight && sd.tilt > 0.05) || (offLeft && sd.tilt < -0.05);
-        if (endIsHigh) {
-          player.vy = -edgeVelMag * Math.sin(Math.abs(sd.tilt)) * 1.5 - 2;
+        const tilt = sd.tilt;
+        // Low end (the downward-tilting side): carry momentum out and slightly down
+        const lowEndIsThisSide = (offRight && tilt > 0) || (offLeft && tilt < 0);
+        if (lowEndIsThisSide) {
+          player.vx = launchDir * (Math.abs(player.vx) + 3);
+          player.vy = 2.5;
         } else {
-          player.vy = 2.0;
+          // High end: pop upward
+          player.vx = launchDir * (Math.abs(player.vx) + 2);
+          player.vy = -3.5;
         }
         player.onGround = false;
         player.currentPlatformIndex = -1;
+        // Tilt/funny-face animation so player visibly reacts
+        anim.active = true; anim.type = 'tilt'; anim.angle = 0; anim.progress = 0;
+        anim.funnyFace = true; anim.tiltDir = launchDir;
+        showNotif('⚖️ Swung off the platform!');
       }
     }
   }
@@ -3001,8 +3037,24 @@ function updateSwingPlatforms(dt){
 
 // ── UPDATE CRUMBLING PLATFORMS ──────────────────────────
 const CRUMBLE_WARNING_MS = 1200;
-const CRUMBLE_FALL_MS    = 500;
+const CRUMBLE_FALL_MS    = 1800;   // 1.8s of fall so it actually reaches the player below
+// How long after being hit the player cannot stand on ANY platform (simulates being dazed)
+const CRUMBLE_GROUND_DENY_MS = 1200;
+let _crumbleGroundDenyTimer = 0;   // counts down in ms; while > 0, player.onGround forced false
+
 function updateCrumblePlatforms(dt){
+  // Count down the ground-deny window
+  if(_crumbleGroundDenyTimer > 0){
+    _crumbleGroundDenyTimer -= dt * 16.67;
+    if(_crumbleGroundDenyTimer < 0) _crumbleGroundDenyTimer = 0;
+    // While active: prevent the player from being considered grounded
+    // (the collision loop still runs, but we override onGround each frame here)
+    if(player.onGround && _crumbleGroundDenyTimer > 0){
+      player.onGround = false;
+      player.currentPlatformIndex = -1;
+    }
+  }
+
   for(const p of platforms){
     if(!p.crumbleState || p.crumbleState === 'gone') continue;
     if(p.crumbleState === 'idle') continue;
@@ -3013,48 +3065,59 @@ function updateCrumblePlatforms(dt){
         p.crumbleState = 'crumbling';
         p.crumbleTimer = CRUMBLE_FALL_MS;
         p.crumbleVY = 0;
-        p._crumbleHitPlayer = false; // only knock player once per fall
+        p._crumbleHitCooldown = 0;
       }
     }
     if(p.crumbleState === 'crumbling'){
       p.crumbleTimer -= dt * 16.67;
-      p.crumbleVY = (p.crumbleVY || 0) + 1.2 * dt;
+      // Gentle start, builds speed — feels like a heavy slab dropping
+      p.crumbleVY = (p.crumbleVY || 0) + 0.55 * dt;
       p.y += p.crumbleVY * dt;
-      p.crumbleShakeX = (Math.random() - 0.5) * 8;
+      p.crumbleShakeX = (Math.random() - 0.5) * 6;
 
-      // ── Crumble-collision: knock player down while platform is falling ──
-      // Re-check every frame (flag cleared between falls) so platform hitting
-      // player from above is caught regardless of relative position.
-          if(!p._crumbleHitPlayer){
-            // Use a slight horizontal shake offset for collision, same as drawing
-            const shakeX = p.crumbleShakeX || 0;
-            const platLeft = p.x + shakeX;
-            const platRight = p.x + p.w + shakeX;
+      // ── Cooldown-based hit detection (not one-shot) ──
+      if(p._crumbleHitCooldown === undefined) p._crumbleHitCooldown = 0;
+      p._crumbleHitCooldown = Math.max(0, (p._crumbleHitCooldown||0) - dt * 16.67);
 
-            // More generous overlap – use a small tolerance (2px) to catch edge cases
-            const overlapX = player.x + player.w > platLeft - 2 && player.x < platRight + 2;
-            const overlapY = player.y + player.h > p.y && player.y < p.y + p.h;
+      if(p._crumbleHitCooldown <= 0){
+        const shakeX = p.crumbleShakeX || 0;
+        const platLeft  = p.x + shakeX;
+        const platRight = p.x + p.w + shakeX;
+        const overlapX = player.x + player.w > platLeft - 4 && player.x < platRight + 4;
+        const overlapY = player.y < p.y + p.h + 14 && player.y + player.h > p.y - 4;
 
-            if(overlapX && overlapY){
-              p._crumbleHitPlayer = true;
+        if(overlapX && overlapY){
+          p._crumbleHitCooldown = 350;   // 350ms before next hit from this slab
 
-              // ----- Forceful push: player loses footing and is thrown off -----
-              // Stronger downward push (6.0) ensures noticeable displacement
-              player.vy = Math.max(player.vy, 6.0);
-              // Make sure player is no longer considered on any platform
-              player.onGround = false;
-              player.currentPlatformIndex = -1;
+          // Choose a side to throw the player — away from platform centre
+          const playerCX = player.x + player.w/2;
+          const platCX   = p.x + p.w/2;
+          const lateralDir = playerCX < platCX ? -1 : 1;
 
-              // Add a random horizontal nudge (left or right) to simulate being knocked aside
-              const pushDir = (Math.random() - 0.5) * 2; // -1 .. 1
-              player.vx += pushDir * 3.5;
+          // ── BIG lateral throw — 1.5–2 body widths (40px body × 2 = 80px+) ──
+          // vx of 8–10 at normal speed carries ~80–100px horizontally before landing
+          const lateralForce = 8 + Math.random() * 3;   // 8–11 px/frame
 
-              // Play a distinct sound for crumble hit (optional)
-              playSound('sticky'); // reuse sticky sound, or create 'crumble' sound if preferred
+          player.vx = lateralDir * lateralForce;
+          player.vy = 13.0;   // strong downward so they fall off whatever they're on
+          player.onGround = false;
+          player.currentPlatformIndex = -1;
 
-              showNotif('💥 Crumbling platform hit you!');
-            }
-          }
+          // ── 1.2-second window where player cannot regain footing ──
+          _crumbleGroundDenyTimer = CRUMBLE_GROUND_DENY_MS;
+
+          // Tilt/funny-face animation
+          anim.active    = true;
+          anim.type      = 'tilt';
+          anim.angle     = 0;
+          anim.progress  = 0;
+          anim.funnyFace = true;
+          anim.tiltDir   = lateralDir;
+
+          playSound('sticky');
+          showNotif('💥 Crumbling platform hit you!');
+        }
+      }
 
       if(p.crumbleTimer <= 0){
         p.crumbleState = 'gone';
@@ -3139,7 +3202,7 @@ function updateTippingPlatforms(dt){
 			player.vy = -2;                            // normal upward
 		  }
 		  player.onGround = false;
-		  player.currentPlatformIndex = -1;  // must clear so next landing re-evaluates platformCount
+		  player.currentPlatformIndex = -1;  // reset so next landing re-evaluates platformCount
 		  // Clear sticky/purple state so physics don't fight the push
 		  onSticky = false; stickyTimer = 0; stickyPlatform = null;
 		  if(onPurple){ onPurple=false; purpleTimer=0; purplePlatform=null; document.getElementById('purpleWarning').style.opacity='0'; }
@@ -3793,7 +3856,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
       player.y -= speedPx * dt;
       player.vy = 0;
       player.onGround = false;
-      // ── Keep platformCount in sync while ship ascends ──
+      // Keep platformCount in sync while ship ascends
       const shipNearPlat = platforms.filter(p =>
         p.y >= player.y - PLATFORM_GAP*0.5 && p.y <= player.y + PLATFORM_GAP*2
         && p.crumbleState !== 'gone').sort((a,b)=>a.y-b.y)[0];
@@ -3827,7 +3890,7 @@ while (platforms.filter(p => p.y < player.y).length < minAbove && platforms.leng
   const last = platforms[platforms.length - 1];
   
   let chunkAdded = false;
-  // ── STORY MODE: never inject custom level chunks — use makePlatform only ──
+  // Story mode: never inject custom level chunks — always use makePlatform
   if(!currentStoryEpisode && last.index >= nextCustomChunkAt){
     const chunk = getCustomLevelChunk(last.index + 1);
     if(chunk && chunk.length > 0){
@@ -3964,7 +4027,7 @@ function drawGame(){
 
     // ── CRUMBLING PLATFORM (active shaking/falling) ──
     if(p.crumbleState && p.crumbleState !== 'idle'){
-      const alpha = p.crumbleState === 'crumbling' ? Math.max(0.1, p.crumbleTimer / 500) : 1;
+      const alpha = p.crumbleState === 'crumbling' ? Math.max(0.08, p.crumbleTimer / CRUMBLE_FALL_MS) : 1;
       gCtx.save();
       gCtx.globalAlpha = alpha;
       const fc = COLORS['crumble'];
@@ -6487,6 +6550,10 @@ async function forceSaveSettings() {
 }
 
 function captureSettings(){
+  // Never save a story-locked endPlatform — always save the normal mode value.
+  // The VALID_END_PLATFORMS list is the single source of truth for selectable values.
+  const VALID_END_PLATFORMS = [0, 100, 250, 500, 1000, 2000, 5000];
+  const safeEndPlatform = VALID_END_PLATFORMS.includes(endPlatform) ? endPlatform : 1000;
   return {
     masterVolume: Math.round(masterVolume * 100),
     isMuted,
@@ -6494,7 +6561,7 @@ function captureSettings(){
     bgAnimsEnabled,
     stalagmitesEnabled,
     startingZoom: currentZoom,
-    endPlatform,
+    endPlatform: safeEndPlatform,   // never a story-locked value
     botDifficulty,
     hudSide,
     hideResetBtn,
@@ -6542,13 +6609,14 @@ function applySettings(s){
   const zl = document.getElementById('zoomLabel');
   if(zl) zl.textContent = Math.round(z * 100) + '%';
   
-  // End platform — don't overwrite if story mode has it locked
-  // Use typeof guards: these vars are declared later in the script; on first page load
-  // applySettings runs before they exist, so we must not throw a ReferenceError here.
+  // End platform — don't overwrite if story mode has it locked.
+  // Also sanitise: if a story-locked value was previously saved (bug), fall back to 1000.
+  const VALID_EP = [0, 100, 250, 500, 1000, 2000, 5000];
   const _storyEp   = (typeof currentStoryEpisode   !== 'undefined') ? currentStoryEpisode   : null;
   const _storyLock = (typeof storyLockedEndPlatform !== 'undefined') ? storyLockedEndPlatform : null;
   if (!_storyEp && !_storyLock) {
-    endPlatform = s.endPlatform ?? 1000;
+    const rawEP = s.endPlatform ?? 1000;
+    endPlatform = VALID_EP.includes(rawEP) ? rawEP : 1000;
     const ep = document.getElementById('endPlatformSel');
     if(ep) ep.value = String(endPlatform);
     const se = document.getElementById('sEndPlatSel');
@@ -7763,7 +7831,7 @@ function scorchaCreateRescuePlatform() {
 function scorchaEpisodePowers(storyEpId) {
   // Direct power mapping per episode (overrides automatic progression)
   const powerMap = {
-    0: [2],            // Krakatoa – crumble only
+    0: [4],            // Krakatoa – crumble only
     3: [1],            // Campi Flegrei → solo tip
     6: [2],            // Ol Doinyo Lengai → solo crumble
     9: [3],            // Hekla → solo sticky
