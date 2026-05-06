@@ -983,6 +983,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <div id="hud">
     <div id="practiceHudBadge" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(255,200,50,0.15);border:1px solid rgba(255,200,50,0.4);border-radius:12px;padding:2px 10px;font-size:9px;font-weight:bold;color:#ffe066;letter-spacing:0.5px;pointer-events:none;z-index:20;">🎮 PRACTICE — not saving</div>
     <div id="coinDisplay">🪙 0</div>
+    <div id="hudModeDisplay" style="font-size:10px;color:#aef;text-shadow:1px 1px 2px #000;margin-top:1px;"></div>
     <div id="levelDisplay">Level 1</div>
     <div id="platformDisplay">Platform 0</div>
     <div id="lavaInfo">Lava: 1 plt/s</div>
@@ -2349,6 +2350,13 @@ function initGame(){
   nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
   bgAnimations = [];
 
+// ── IMPORTANT: in story mode, NEVER use customPlayPlatforms even if it still has
+// data from a previous editor session. Clear it first so normal generation runs.
+if(currentStoryEpisode && customPlayPlatforms){
+  console.log('[STORY] Cleared stale customPlayPlatforms before story level init');
+  customPlayPlatforms = null;
+}
+
 if(customPlayPlatforms && customPlayPlatforms.length > 0){
   platforms = customPlayPlatforms.map((p,i) => {
     const armLen = PLATFORM_GAP * 0.9;
@@ -2413,8 +2421,42 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
   updateHUD();
 }
 
+// ── HUD MODE LABEL — add new modes here ──────────────────────
+function getHudModeLabel(){
+  if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode)
+    return '🌋 Ep '+(currentStoryEpisode.id+1)+' · '+currentStoryEpisode.name;
+  if(typeof versusMode !== 'undefined' && versusMode) return '⚔️ Versus Mode';
+  if(typeof isCustomPlayMode === 'function' && isCustomPlayMode()) return '🗂 Custom Level';
+  if(typeof gameMode !== 'undefined'){
+    if(gameMode === 'frogger') return '🐸 Frogger Mode';
+    return '🧗 Climber Mode';
+  }
+  return '';
+}
+// ── STATE LOG every ~5 s (300 frames) — helps diagnose episode/freeze issues ──
+let _hudLogTimer = 0;
+function _logGameState(){
+  if(++_hudLogTimer % 300 !== 0) return;
+  const ep = (typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode)
+    ? '[EP '+(currentStoryEpisode.id+1)+'] '+currentStoryEpisode.name+' (target='+currentStoryEpisode.targetPlats+')'
+    : 'no episode';
+  const mode = (typeof versusMode !== 'undefined' && versusMode) ? 'versus'
+    : (typeof isCustomPlayMode === 'function' && isCustomPlayMode()) ? 'custom'
+    : (typeof gameMode !== 'undefined' ? gameMode : '?');
+  const locked = (typeof storyLockedEndPlatform !== 'undefined' && storyLockedEndPlatform)
+    ? 'locked='+storyLockedEndPlatform : 'free';
+  const customPlats = customPlayPlatforms ? customPlayPlatforms.length : 0;
+  console.log('[STATE] mode='+mode+' | '+ep+' | endPlatform='+endPlatform+' ('+locked+')'
+    +' | platformCount='+platformCount+' | lavaShip='+lavaShipActive
+    +' | anim='+(typeof anim!=='undefined'?anim.type:'?')
+    +' | customPlayPlatforms='+customPlats);
+}
+
 function _updateHUD(){
+  _logGameState();
   document.getElementById('coinDisplay').textContent = '🪙 ' + coins;
+  const hudModeEl = document.getElementById('hudModeDisplay');
+  if(hudModeEl) hudModeEl.textContent = getHudModeLabel();
   document.getElementById('levelDisplay').textContent = 'Level ' + level + (parachuteActive ? ' 🪂' : '');
   document.getElementById('platformDisplay').textContent = 'Plt ' + platformCount + (endPlatform > 0 ? '/'+endPlatform : '');
   document.getElementById('lavaInfo').textContent = 'Lava: ' + (lavaPixPerFrame * 60 / PLATFORM_GAP).toFixed(1) + ' plt/s';
@@ -2466,11 +2508,34 @@ function activateSkip(){
   if(skipUses <= 0){triggerQuickBuyIfEmpty('skip');return;}
   skipUses--;
   if(skipUses <= 0) triggerQuickBuyIfEmpty('skip');
-  const sa = Math.random() < 0.5 ? 1 : 2;
-  const above = platforms.filter(p => p.y < player.y && p.index > player.currentPlatformIndex).sort((a,b) => b.y - a.y);
-  const target = above[Math.min(sa-1, above.length-1)];
-  if(target){player.y=target.y-player.h;player.vy=0;player.vx=0;player.onGround=true;player.currentPlatformIndex=target.index;platformCount=Math.max(platformCount,target.index);}
-  showNotif('⬆️ Skipped '+sa+'! ('+skipUses+' left)');playSound('buy');updateHUD();
+  // Search strategy: try 8 platforms above, step down to 1 until one is found
+  const above = platforms
+    .filter(p => p.y < player.y && p.index > player.currentPlatformIndex
+              && p.crumbleState !== 'gone'
+              && (!p.tipping || p.tipping === 'idle' || p.tipping === 'waiting'))
+    .sort((a,b) => a.y - b.y);  // ascending Y = highest first
+  let target = null;
+  for(let attempt = 8; attempt >= 1; attempt--){
+    if(above.length >= attempt){ target = above[attempt - 1]; break; }
+  }
+  if(!target && above.length > 0) target = above[above.length - 1];
+  if(target){
+    const skippedCount = above.indexOf(target) + 1;
+    player.y = target.y - player.h;
+    player.vy = 0; player.vx = 0;
+    player.onGround = true;
+    player.currentPlatformIndex = target.index;
+    platformCount = Math.max(platformCount, target.index);
+    anim.active = true; anim.type = 'tilt'; anim.angle = 0; anim.progress = 0;
+    anim.funnyFace = true; anim.tiltDir = 1;
+    showNotif('💫 Skipped '+skippedCount+' platform'+(skippedCount>1?'s':'')+'! ('+skipUses+' left)');
+    updateHUD();
+  } else {
+    skipUses++;  // refund — nothing to skip to
+    showNotif('💫 No platforms above to skip to!');
+    updateHUD();
+  }
+  playSound('buy');
 }
 function activateBook(){
   if(bookUses <= 0 || !bigHead){showNotif('Buy The Book first!');return;}
@@ -2778,24 +2843,26 @@ function updateAnim(dt){
   else if(anim.type === 'vineLaunch'){
     const launch = anim.vine;
     const elapsed = Math.min(1, (now - launch.launchStartTime) / launch.launchDuration);
-    // Ease out cubic: slow start, fast end
     const easeOut = 1 - Math.pow(1 - elapsed, 3);
     const targetY = launch.startY - (15 * PLATFORM_GAP);
     player.y = launch.startY + (targetY - launch.startY) * easeOut;
     player.vy = 0;
-    // Add a flip animation during launch
     anim.angle = Math.sin(elapsed * Math.PI * 2) * 1.5;
     anim.funnyFace = true;
     anim.progress = elapsed;
-    
+    // ── Update platformCount while vine carries player up ──
+    const vineNearPlat = platforms.filter(p =>
+      p.y >= player.y - PLATFORM_GAP*0.5 && p.y <= player.y + PLATFORM_GAP*2
+      && p.crumbleState !== 'gone').sort((a,b)=>a.y-b.y)[0];
+    if(vineNearPlat && vineNearPlat.index > platformCount){
+      platformCount = vineNearPlat.index;
+      player.currentPlatformIndex = vineNearPlat.index;
+      const nl = Math.floor(platformCount/100)+1;
+      if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
+      updateHUD();
+    }
     if(elapsed >= 1){
-      // Launch complete, reset animation
-      anim.active = false;
-      anim.type = 'none';
-      anim.angle = 0;
-      anim.vine = null;
-      player.vy = 0;
-      // Small upward boost to finish
+      anim.active = false; anim.type = 'none'; anim.angle = 0; anim.vine = null;
       player.vy = -2;
       showNotif('🚀 Launched 15 platforms!');
     }
@@ -2895,14 +2962,16 @@ function updateSwingPlatforms(dt){
 
     // ── 6. Physics while player stands on the swing platform ──
     if (onThisSwing) {
-      // Slope acceleration: tilt > 0 means right side lower → player slides right (positive vx)
-      // tilt < 0 means left side lower → player slides left (negative vx)
-      const slopeAccel = Math.sin(sd.tilt) * 1.1 * dt;
+      // Correct slope acceleration (gravity pulls down the incline)
+      // Positive tilt (right side higher) → slide left (negative vx)
+      // Negative tilt (left side higher) → slide right (positive vx)
+      const slopeAccel = Math.sin(sd.tilt) * 0.85 * dt;
       player.vx += slopeAccel;
-      player.vx = Math.max(-14, Math.min(14, player.vx));
+      player.vx = Math.max(-12, Math.min(12, player.vx));
 
       // Snap player to the rotated surface
       const pCX = player.x + player.w / 2;
+      const pBY = player.y + player.h;
       const localX = pCX - platCX;
       const surfaceY = platCY + localX * Math.sin(sd.tilt);
       player.y = surfaceY - player.h;
@@ -2910,35 +2979,21 @@ function updateSwingPlatforms(dt){
 
       const halfW = p.w / 2;
       const playerLocalX = pCX - platCX;
-      const offRight = playerLocalX > halfW - 2;
-      const offLeft  = playerLocalX < -(halfW - 2);
+      const offRight = playerLocalX > halfW + 2;
+      const offLeft  = playerLocalX < -halfW - 2;
 
       if (offRight || offLeft) {
-        // Player has slid off the end of the platform
-        // The lower end is where they slide off — give a matching launch velocity
+        const edgeVelMag = armLen * Math.abs(sd.vel) * 1.2;
         const launchDir = offRight ? 1 : -1;
-        // The lower end means they go down and out; higher end gives a slight upward pop
-        const tilt = sd.tilt;
-        const lowEndIsThisSide = (offRight && tilt > 0) || (offLeft && tilt < 0);
-        if (lowEndIsThisSide) {
-          // Sliding off the low/downward end — carry momentum outward + slight downward
-          player.vx = launchDir * (Math.abs(player.vx) + 3);
-          player.vy = 2.5;
+        player.vx = launchDir * edgeVelMag * Math.cos(sd.angle) * 0.8;
+        const endIsHigh = (offRight && sd.tilt > 0.05) || (offLeft && sd.tilt < -0.05);
+        if (endIsHigh) {
+          player.vy = -edgeVelMag * Math.sin(Math.abs(sd.tilt)) * 1.5 - 2;
         } else {
-          // Sliding off the high/upward end — pop slightly upward
-          player.vx = launchDir * (Math.abs(player.vx) + 2);
-          player.vy = -3.5;
+          player.vy = 2.0;
         }
         player.onGround = false;
         player.currentPlatformIndex = -1;
-        // Trigger tilt animation so the player visibly reacts
-        anim.active   = true;
-        anim.type     = 'tilt';
-        anim.angle    = 0;
-        anim.progress = 0;
-        anim.funnyFace = true;
-        anim.tiltDir   = launchDir;
-        showNotif('⚖️ Swung off the platform!');
       }
     }
   }
@@ -2946,7 +3001,7 @@ function updateSwingPlatforms(dt){
 
 // ── UPDATE CRUMBLING PLATFORMS ──────────────────────────
 const CRUMBLE_WARNING_MS = 1200;
-const CRUMBLE_FALL_MS    = 1800;   // extended: 1.8s of falling so it reaches the player
+const CRUMBLE_FALL_MS    = 500;
 function updateCrumblePlatforms(dt){
   for(const p of platforms){
     if(!p.crumbleState || p.crumbleState === 'gone') continue;
@@ -2958,63 +3013,48 @@ function updateCrumblePlatforms(dt){
         p.crumbleState = 'crumbling';
         p.crumbleTimer = CRUMBLE_FALL_MS;
         p.crumbleVY = 0;
-        p._crumbleHitCooldown = 0;  // cooldown counter (ms) — resets between hits
+        p._crumbleHitPlayer = false; // only knock player once per fall
       }
     }
     if(p.crumbleState === 'crumbling'){
       p.crumbleTimer -= dt * 16.67;
-      // Accelerate downward — starts slow, builds speed to feel like a dropping slab
-      p.crumbleVY = (p.crumbleVY || 0) + 0.55 * dt;
+      p.crumbleVY = (p.crumbleVY || 0) + 1.2 * dt;
       p.y += p.crumbleVY * dt;
-      p.crumbleShakeX = (Math.random() - 0.5) * 6;
+      p.crumbleShakeX = (Math.random() - 0.5) * 8;
 
-      // ── Crumble-collision: fires every frame via cooldown (not one-shot) ──
-      // Cooldown of 350ms prevents spam but allows the hit to re-fire if the
-      // platform is still falling through the player (e.g. player is running under it).
-      if(p._crumbleHitCooldown === undefined) p._crumbleHitCooldown = 0;
-      p._crumbleHitCooldown = Math.max(0, (p._crumbleHitCooldown || 0) - dt * 16.67);
+      // ── Crumble-collision: knock player down while platform is falling ──
+      // Re-check every frame (flag cleared between falls) so platform hitting
+      // player from above is caught regardless of relative position.
+          if(!p._crumbleHitPlayer){
+            // Use a slight horizontal shake offset for collision, same as drawing
+            const shakeX = p.crumbleShakeX || 0;
+            const platLeft = p.x + shakeX;
+            const platRight = p.x + p.w + shakeX;
 
-      if(p._crumbleHitCooldown <= 0){
-        const shakeX  = p.crumbleShakeX || 0;
-        const platLeft  = p.x + shakeX;
-        const platRight = p.x + p.w + shakeX;
+            // More generous overlap – use a small tolerance (2px) to catch edge cases
+            const overlapX = player.x + player.w > platLeft - 2 && player.x < platRight + 2;
+            const overlapY = player.y + player.h > p.y && player.y < p.y + p.h;
 
-        // Generous vertical overlap: the falling slab is 18px tall; add 14px below
-        // so the collision fires as it sweeps downward past the player's head.
-        const overlapX = player.x + player.w > platLeft - 4 && player.x < platRight + 4;
-        const overlapY = player.y < p.y + p.h + 14 && player.y + player.h > p.y - 4;
+            if(overlapX && overlapY){
+              p._crumbleHitPlayer = true;
 
-        if(overlapX && overlapY){
-          p._crumbleHitCooldown = 350;  // 350ms before it can hit again
+              // ----- Forceful push: player loses footing and is thrown off -----
+              // Stronger downward push (6.0) ensures noticeable displacement
+              player.vy = Math.max(player.vy, 6.0);
+              // Make sure player is no longer considered on any platform
+              player.onGround = false;
+              player.currentPlatformIndex = -1;
 
-          if(player.onGround){
-            // ── Case A: player is standing on ANY platform ──
-            // The falling slab knocks their footing away completely.
-            player.onGround = false;
-            player.currentPlatformIndex = -1;
-            // Downward velocity strong enough to overcome a double jump
-            player.vy = 13.0;
-            // Small sideways nudge so they visibly stumble off
-            player.vx += (Math.random() < 0.5 ? -1 : 1) * 2.5;
-          } else {
-            // ── Case B: player is in the air ──
-            // Overwhelm any upward jump — cancel upward momentum first
-            if(player.vy < 0) player.vy = 0;
-            player.vy = Math.max(player.vy, 14.0);
+              // Add a random horizontal nudge (left or right) to simulate being knocked aside
+              const pushDir = (Math.random() - 0.5) * 2; // -1 .. 1
+              player.vx += pushDir * 3.5;
+
+              // Play a distinct sound for crumble hit (optional)
+              playSound('sticky'); // reuse sticky sound, or create 'crumble' sound if preferred
+
+              showNotif('💥 Crumbling platform hit you!');
+            }
           }
-
-          // ── Trigger the poke-tongue / tilt animation (the "hit" face from the screenshot) ──
-          anim.active    = true;
-          anim.type      = 'tilt';
-          anim.angle     = 0;
-          anim.progress  = 0;
-          anim.funnyFace = true;          // activates the star-eyes / excited face
-          anim.tiltDir   = (Math.random() < 0.5) ? 1 : -1;
-
-          playSound('sticky');
-          showNotif('💥 Crumbling platform hit you!');
-        }
-      }
 
       if(p.crumbleTimer <= 0){
         p.crumbleState = 'gone';
@@ -3099,6 +3139,7 @@ function updateTippingPlatforms(dt){
 			player.vy = -2;                            // normal upward
 		  }
 		  player.onGround = false;
+		  player.currentPlatformIndex = -1;  // must clear so next landing re-evaluates platformCount
 		  // Clear sticky/purple state so physics don't fight the push
 		  onSticky = false; stickyTimer = 0; stickyPlatform = null;
 		  if(onPurple){ onPurple=false; purpleTimer=0; purplePlatform=null; document.getElementById('purpleWarning').style.opacity='0'; }
@@ -3748,11 +3789,21 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
   if(lavaShipActive){
     lavaShipTimer += dt * 16.67;
     if(lavaShipTimer < LAVA_SHIP_DURATION){
-      // Move player upward fast — 50 platforms total over the duration
       const speedPx = (50 * PLATFORM_GAP) / (LAVA_SHIP_DURATION / 16.67);
       player.y -= speedPx * dt;
       player.vy = 0;
       player.onGround = false;
+      // ── Keep platformCount in sync while ship ascends ──
+      const shipNearPlat = platforms.filter(p =>
+        p.y >= player.y - PLATFORM_GAP*0.5 && p.y <= player.y + PLATFORM_GAP*2
+        && p.crumbleState !== 'gone').sort((a,b)=>a.y-b.y)[0];
+      if(shipNearPlat && shipNearPlat.index > platformCount){
+        platformCount = shipNearPlat.index;
+        player.currentPlatformIndex = shipNearPlat.index;
+        const nl = Math.floor(platformCount/100)+1;
+        if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
+        updateHUD();
+      }
     } else {
       lavaShipActive = false;
       lavaShipTimer = 0;
@@ -3776,7 +3827,8 @@ while (platforms.filter(p => p.y < player.y).length < minAbove && platforms.leng
   const last = platforms[platforms.length - 1];
   
   let chunkAdded = false;
-  if(last.index >= nextCustomChunkAt){
+  // ── STORY MODE: never inject custom level chunks — use makePlatform only ──
+  if(!currentStoryEpisode && last.index >= nextCustomChunkAt){
     const chunk = getCustomLevelChunk(last.index + 1);
     if(chunk && chunk.length > 0){
       console.log(`[GEN] Custom chunk found! ${chunk.length} platforms`);
@@ -3912,7 +3964,7 @@ function drawGame(){
 
     // ── CRUMBLING PLATFORM (active shaking/falling) ──
     if(p.crumbleState && p.crumbleState !== 'idle'){
-      const alpha = p.crumbleState === 'crumbling' ? Math.max(0.08, p.crumbleTimer / CRUMBLE_FALL_MS) : 1;
+      const alpha = p.crumbleState === 'crumbling' ? Math.max(0.1, p.crumbleTimer / 500) : 1;
       gCtx.save();
       gCtx.globalAlpha = alpha;
       const fc = COLORS['crumble'];
@@ -7711,7 +7763,7 @@ function scorchaCreateRescuePlatform() {
 function scorchaEpisodePowers(storyEpId) {
   // Direct power mapping per episode (overrides automatic progression)
   const powerMap = {
-    0: [2, 4],            // Krakatoa – crumble only
+    0: [2],            // Krakatoa – crumble only
     3: [1],            // Campi Flegrei → solo tip
     6: [2],            // Ol Doinyo Lengai → solo crumble
     9: [3],            // Hekla → solo sticky
