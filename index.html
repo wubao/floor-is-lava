@@ -6175,60 +6175,72 @@ async function forceSaveSettings() {
   const btn = document.querySelector('.accountActionBtn[onclick="forceSaveSettings()"]');
   if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
 
-  // 1. Always save locally first (backup)
+  // Save locally as backup
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(e) { console.warn(e); }
 
-  // 2. If no user, done.
   if (!currentUser) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = '💾 Settings Saved Locally';
-      setTimeout(() => {
-        if (btn) btn.textContent = '💾 Save Settings to Cloud';
-      }, 2000);
+      setTimeout(() => { if (btn) btn.textContent = '💾 Save Settings to Cloud'; }, 2000);
     }
     sAccountMsg('No account – settings saved locally.', '#ffe066');
     return;
   }
 
-  // 3. Update local user object
+  // Update local user object
   currentUser.ud.settings = s;
   dbSave();
 
-  // 4. Attempt cloud save only if user has a Firebase UID
-  if (currentUser.uid) {
-    const ok = await syncUserProfile(3);
+  // 🔥 Get the actual Firebase Auth user (not just stored uid)
+  const firebaseUser = firebase.auth().currentUser;
+  if (!firebaseUser || !firebaseUser.uid) {
     if (btn) {
       btn.disabled = false;
-      if (ok) {
-        btn.textContent = '✅ Settings Saved!';
-        btn.style.borderColor = '#44ff88';
-        btn.style.color = '#44ff88';
-        sAccountMsg('Settings saved to cloud.', '#44ff88');
-      } else {
-        btn.textContent = '⚠️ Cloud Save Failed (local backup ok)';
-        btn.style.borderColor = '#ff9944';
-        btn.style.color = '#ff9944';
-        sAccountMsg('Cloud save failed – settings kept locally. Check internet / Firebase rules.', '#ff9944');
+      btn.textContent = '⚠️ Not logged into Firebase – saved locally';
+      setTimeout(() => { if (btn) btn.textContent = '💾 Save Settings to Cloud'; }, 2500);
+    }
+    sAccountMsg('Firebase session missing. Please log out and back in.', '#ff9944');
+    return;
+  }
+
+  // Ensure the stored uid matches the Firebase user (optional)
+  if (currentUser.uid !== firebaseUser.uid) {
+    console.warn('UID mismatch, updating session');
+    currentUser.uid = firebaseUser.uid;
+    localStorage.setItem('fil_current_user', JSON.stringify({ name: currentUser.name, uid: currentUser.uid, ud: currentUser.ud }));
+  }
+
+  // Force token refresh to avoid stale authentication
+  try {
+    await firebaseUser.getIdToken(true);
+  } catch (tokenErr) {
+    console.warn('Token refresh failed', tokenErr);
+    // Continue anyway – maybe still works
+  }
+
+  // Now attempt cloud sync
+  const ok = await syncUserProfile(3);
+  if (btn) {
+    btn.disabled = false;
+    if (ok) {
+      btn.textContent = '✅ Settings Saved!';
+      btn.style.borderColor = '#44ff88';
+      btn.style.color = '#44ff88';
+      sAccountMsg('Settings saved to cloud.', '#44ff88');
+    } else {
+      btn.textContent = '⚠️ Cloud Save Failed – check connection';
+      btn.style.borderColor = '#ff9944';
+      btn.style.color = '#ff9944';
+      sAccountMsg('Cloud save failed. Try again later.', '#ff9944');
+    }
+    setTimeout(() => {
+      if (btn) {
+        btn.textContent = '💾 Save Settings to Cloud';
+        btn.style.borderColor = '#4a9fd4';
+        btn.style.color = '#aadeff';
       }
-      setTimeout(() => {
-        if (btn) {
-          btn.textContent = '💾 Save Settings to Cloud';
-          btn.style.borderColor = '#4a9fd4';
-          btn.style.color = '#aadeff';
-        }
-      }, 3000);
-    }
-  } else {
-    // Guest user without Firebase UID (should not happen, but safety)
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '💾 Settings Saved Locally (no cloud)';
-      setTimeout(() => {
-        if (btn) btn.textContent = '💾 Save Settings to Cloud';
-      }, 2000);
-    }
-    sAccountMsg('Guest: settings saved locally. Create an account to save to cloud.', '#ffe066');
+    }, 3000);
   }
 }
 
