@@ -539,6 +539,29 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   transform: scale(1.05);
 }
 
+/* Fix notification text color and size */
+#notifList .notif-item > div:first-child {
+  color: #e8e0ff !important;
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+}
+#notifList .notif-item > div:last-child {
+  font-size: 8px !important;
+  color: #aaa !important;
+}
+/* Optional: style the mark read button to match game theme */
+#notifList .mark-read-btn {
+  background: #1a1a3e !important;
+  border: 1px solid #4a5fd4 !important;
+  color: #aad4ff !important;
+  font-size: 8px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+}
+#notifList .mark-read-btn:hover {
+  background: #2a2a5e !important;
+}
 </style>
 </head>
 <body>
@@ -5808,17 +5831,20 @@ function setMode(m){
   else{if(currentUser)showScreen('startScreen');else showScreen('authScreen');}
   updateBgMusic();
 }
-
-// ═══ BACKGROUND MUSIC ═══
 const BG_MUSIC = {
-  menu:           'Menu.mp3',
-  multiplayer:    'Frogger.mp3',
-  climber:        'Climber.mp3',
-  storyMap:       'WorldMap.mp3',        // Story Mode world map screen
-  storyStart:     'StoryMode-Start.mp3', // Pre-game start animation
-  storyPlay1:     'StoryMode1.mp3',      // In-game gameplay (randomly alternates v1/v2)
-  storyPlay2:     'StoryMode2.mp3',      // In-game gameplay v2
-  storyVictory:   'Victory.mp3'          // Level complete animation + end stats screen
+  menu:           'music/Menu.mp3',
+  multiplayer:    'music/Frogger.mp3',
+  climber:        'music/Climber.mp3',
+  storyMap:       'music/WorldMap.mp3',
+  storyStart:     'music/StoryMode-Start.mp3',
+  storyPlay1:     'music/StoryMode1.mp3',
+  storyPlay2:     'music/StoryMode2.mp3',
+  storyPlay3:     'music/StoryMode3.mp3',   // new
+  storyPlay4:     'music/StoryMode4.mp3',   // new
+  storyPlay5:     'music/StoryMode5.mp3',   // new
+  storyPlay6:     'music/StoryMode6.mp3',   // new
+  storyVictory:   'music/Victory.mp3',
+  endCredits:     'music/EndCredits.mp3'    // new
 };
 
 // Track which story gameplay variant was last played (alternate each level)
@@ -5871,15 +5897,16 @@ function updateBgMusic(){
   const id = screen.id;
   if(id==='editorScreen'){ stopBgMusic(); edAutoSaveStop(); edAutoSave(); }
   else if(id==='leaderboardScreen'){ playBgMusic('menu'); return; }  // keep menu music
-  else if(id==='gameScreen'){
-    if (currentStoryEpisode) {
-      // Story mode in-game: alternate between storyPlay1 and storyPlay2 randomly
-      const variant = (Math.random() < 0.5) ? 'storyPlay1' : 'storyPlay2';
-      playBgMusic(variant);
-    } else {
-      playBgMusic(versusMode ? 'multiplayer' : gameMode==='frogger' ? 'multiplayer' : 'climber');
-    }
-  } else {
+	else if(id === 'gameScreen'){
+	  if (currentStoryEpisode) {
+		// Story mode: randomly pick one of the 6 storyPlay tracks
+		const variants = ['storyPlay1', 'storyPlay2', 'storyPlay3', 'storyPlay4', 'storyPlay5', 'storyPlay6'];
+		const variant = variants[Math.floor(Math.random() * variants.length)];
+		playBgMusic(variant);
+	  } else {
+		playBgMusic(versusMode ? 'multiplayer' : gameMode === 'frogger' ? 'multiplayer' : 'climber');
+	  }
+	} else {
     playBgMusic('menu');
   }
 }
@@ -7634,7 +7661,7 @@ function scorchaCreateRescuePlatform() {
 function scorchaEpisodePowers(storyEpId) {
   // Direct power mapping per episode (overrides automatic progression)
   const powerMap = {
-    0: [2],            // Krakatoa – crumble only
+    0: [4],            // Krakatoa – crumble only
     3: [1],            // Campi Flegrei → solo tip
     6: [2],            // Ol Doinyo Lengai → solo crumble
     9: [3],            // Hekla → solo sticky
@@ -9062,6 +9089,9 @@ function renderLbStory() {
 
 // Open the end credits screen after finishing all episodes
 function showStoryEndCredits() {
+  // Play the end credits music
+  if (typeof playBgMusic === 'function') playBgMusic('endCredits');
+
   storyRunLoad();
   const storyEps = window.VOLCANO_EPISODES || [];
   const el = document.getElementById('creditsRunTimes');
