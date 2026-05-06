@@ -4497,6 +4497,24 @@ function _gameEnd(fromPurple) {
     if (rematchBtn) rematchBtn.style.display = 'none';
     if (playAgainBtn) playAgainBtn.style.display = 'inline-block';
   }
+    // ── Customize menu button for editor test mode (practice) ──
+  const menuBtn = document.getElementById('menuBtn');
+  if (practiceMode) {
+    // Change button to "✏️ Editor" with an arrow
+    menuBtn.textContent = '✏️ Editor →';
+    // Replace onclick: return to editor instead of main menu
+    menuBtn.onclick = () => {
+      setMode('editor');        // switch to editor screen
+      gameRunning = false;      // ensure game loop stops
+      paused = false;
+      cancelAnimationFrame(animId);
+      // No need to goToMenu – setMode already shows the editor screen
+    };
+  } else {
+    // Restore original menu button for normal play
+    menuBtn.textContent = '🏠 Menu';
+    menuBtn.onclick = goToMenu;   // original function
+  }
 
   document.getElementById('gameOver').classList.add('show');
 }
