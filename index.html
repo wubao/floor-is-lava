@@ -1052,10 +1052,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div id="shopCoins"></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">On-demand super-jump. 3 uses. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">20 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">💫 Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. 3 uses. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">20 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Automatically activates when falling. No button needed.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Big head! Pull platform above. 5 uses. Key 3 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! 1 use. Key 4.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">150 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Keeps the light on and night mode at bay.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">50 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Automatically activates when falling. No button needed. Key 5.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Keeps the light on and night mode at bay. Key 6.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">50 🪙</button></div>
       <button id="closeShop" onclick="closeShop()">▶ Resume</button>
     </div>
   </div>
@@ -2669,10 +2669,12 @@ document.addEventListener('keydown', e => {
   keys[e.code] = true;
   if(e.code==='Space'||e.code==='KeyA'){e.preventDefault(); jump(keys['ArrowDown']||keys['KeyS'], false);}
   if(e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault(); if(dialPendingFire){fireSelectedSlot();}else{const slot=DIAL_SLOTS[selectedSlot];if(slot&&slot.getCount()>0)fireSelectedSlot();}}
-  if(e.code==='Digit1'){e.preventDefault(); jump(false, true);}
-  if(e.code==='Digit2'){e.preventDefault(); activateSkip();}
-  if(e.code==='Digit3'){e.preventDefault(); activateBook();}
-  if(e.code==='Digit4'){e.preventDefault(); activateLavaShip();}
+  if(e.code==='Digit1'){e.preventDefault(); if((jumpBoosts||0)<=0){triggerQuickBuyIfEmpty('boost');}else{jump(false, true);}}
+  if(e.code==='Digit2'){e.preventDefault(); if((skipUses||0)<=0){triggerQuickBuyIfEmpty('skip');}else{activateSkip();}}
+  if(e.code==='Digit3'){e.preventDefault(); if((bookUses||0)<=0){triggerQuickBuyIfEmpty('book');}else{activateBook();}}
+  if(e.code==='Digit4'){e.preventDefault(); if((lavaShips||0)<=0){triggerQuickBuyIfEmpty('ship');}else{activateLavaShip();}}
+  if(e.code==='Digit5'){e.preventDefault(); if((parachutes||0)<=0){triggerQuickBuyIfEmpty('chute');}}
+  if(e.code==='Digit6'){e.preventDefault(); triggerQuickBuyIfEmpty('battery');}
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyW','KeyD','KeyS'].includes(e.code)) e.preventDefault();
 });
 document.addEventListener('keyup', e => {
@@ -5144,8 +5146,9 @@ function updateEndPlatform(){
 const QB_CONFIG = {
   boost:   { icon:'⬆️',  label:'BOOST JUMP',  cost:20,  buyKey:'jump',     emptyText:'EMPTY'   },
   skip:    { icon:'💫',  label:'PLATFORM SKIP',cost:20,  buyKey:'skip',     emptyText:'EMPTY'   },
-  chute:   { icon:'🪂',  label:'PARACHUTE',   cost:50,  buyKey:'chute',    emptyText:'EMPTY'   },
+  book:    { icon:'📖',  label:'THE BOOK',     cost:100, buyKey:'book',     emptyText:'EMPTY'   },
   ship:    { icon:'🚀',  label:'LAVA SHIP',   cost:150, buyKey:'ship',     emptyText:'EMPTY'   },
+  chute:   { icon:'🪂',  label:'PARACHUTE',   cost:50,  buyKey:'chute',    emptyText:'EMPTY'   },
   battery: { icon:'🔦',  label:'TORCH BATTERY',cost:50, buyKey:'battery',  emptyText:'DRAINED' },
 };
 
