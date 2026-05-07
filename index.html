@@ -486,6 +486,18 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
 .edBtn:hover{background:#333;}
 .edBtn.primary{background:#27ae60;border-color:#27ae60;color:#fff;}
 .edBtn.danger{border-color:#e05;color:#f88;}
+/* Platform Configurator Styles */
+.pcSection{border:1px solid #1e2a3e;border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#090915;}
+.pcSectionTitle{font-size:11px;font-weight:bold;color:#7dd4ff;margin-bottom:8px;letter-spacing:0.5px;text-transform:uppercase;}
+.pcRow{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.pcLabel{font-size:11px;color:#ccc;width:110px;flex-shrink:0;}
+.pcSlider{flex:1;height:4px;cursor:pointer;accent-color:#3a9cd4;}
+.pcVal{font-size:11px;color:#7dd4ff;width:52px;text-align:right;flex-shrink:0;}
+.pcToggle{width:16px;height:16px;cursor:pointer;accent-color:#3a9cd4;flex-shrink:0;}
+.pcToggle:disabled{opacity:0.3;cursor:default;}
+.pcCountBtn{padding:5px 10px;background:#111;border:1px solid #3a9cd4;color:#7dd4ff;border-radius:7px;cursor:pointer;font-size:11px;font-weight:bold;}
+.pcCountBtn:hover{background:#1a3a5a;}
+.pcCountBtn.active{background:#1a5c8a;color:#fff;}
 #editorCanvas{cursor:crosshair;display:block;width:100%;flex:1;}
 
 /* Editor save toast */
@@ -1257,6 +1269,9 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <button class="edBtn danger" onclick="editorClear()">🗑</button>
 	<button class="edBtn" onclick="edToggleZoom()" title="Cycle zoom">🔍</button>
     <button class="edBtn" onclick="editorLoad()">📥 Play</button>
+	<button class="edBtn" id="platCfgBtn" onclick="openPlatConfigurator()" style="background:#1a5c8a; color:#7dd4ff; border-color:#3a9cd4;">🎲 Platform Configurator</button>
+	<button class="edBtn" id="platCfgKeepBtn" onclick="platCfgKeep()" style="display:none;background:#27ae60;color:#fff;border-color:#27ae60;">✅ Keep</button>
+	<button class="edBtn" id="platCfgDiscardBtn" onclick="platCfgDiscard()" style="display:none;background:#c0392b;color:#fff;border-color:#c0392b;">🗑 Discard</button>
 	<button class="edBtn" onclick="startTestPowerUps()" style="background:#9b27af; color:#fff;">🧪 Test Power Ups</button>
 	
     
@@ -1277,6 +1292,65 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
         <button onclick="saveEditorLevel();goToMenu();" style="padding:10px;border-radius:10px;background:linear-gradient(135deg,#27ae60,#1a7a40);color:#fff;border:none;font-weight:bold;font-size:13px;cursor:pointer;">💾 Save &amp; Exit</button>
         <button onclick="goToMenu();" style="padding:10px;border-radius:10px;background:rgba(255,100,60,0.15);color:#ff9977;border:1.5px solid #ff6644;font-weight:bold;font-size:13px;cursor:pointer;">🚪 Exit without saving</button>
         <button onclick="document.getElementById('edExitModal').style.display='none';" style="padding:8px;border-radius:10px;background:transparent;color:#666;border:1px solid #333;font-size:12px;cursor:pointer;">← Keep editing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLATFORM CONFIGURATOR MODAL -->
+  <div id="platCfgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:300;align-items:flex-start;justify-content:center;overflow-y:auto;padding:12px 0;">
+    <div style="background:#0e0e22;border:1.5px solid #3a9cd4;border-radius:18px;padding:20px 22px;max-width:480px;width:94%;margin:auto;box-shadow:0 8px 50px rgba(0,0,0,0.9);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:18px;font-weight:bold;color:#7dd4ff;">🎲 Platform Configurator</div>
+        <button onclick="closePlatConfigurator()" style="background:transparent;border:1px solid #555;color:#aaa;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:13px;">✕</button>
+      </div>
+
+      <!-- Color Mix Section -->
+      <div class="pcSection">
+        <div class="pcSectionTitle">🎨 Platform Color Mix</div>
+        <div class="pcRow"><span class="pcLabel">🟪 Purple</span><input type="range" class="pcSlider" id="pcPurple" min="0" max="40" step="1" value="5"><span class="pcVal" id="pcPurpleVal">5%</span></div>
+        <div class="pcRow"><span class="pcLabel">🟩 Green</span><input type="range" class="pcSlider" id="pcGreen" min="0" max="40" step="1" value="8"><span class="pcVal" id="pcGreenVal">8%</span></div>
+        <div class="pcRow"><span class="pcLabel">❄️ Ice</span><input type="range" class="pcSlider" id="pcIce" min="0" max="40" step="1" value="8"><span class="pcVal" id="pcIceVal">8%</span></div>
+        <div style="font-size:10px;color:#556;margin-top:4px;margin-left:2px;">Remaining % is split equally among Red / Blue / Yellow (standard platforms)</div>
+      </div>
+
+      <!-- Hazard Platforms Section -->
+      <div class="pcSection">
+        <div class="pcSectionTitle">⚠️ Hazard Platforms</div>
+        <div class="pcRow"><span class="pcLabel" id="pcSwingLbl">🪝 Swing</span><input type="range" class="pcSlider" id="pcSwing" min="0" max="30" step="1" value="4"><span class="pcVal" id="pcSwingVal">4%</span><input type="checkbox" class="pcToggle" id="pcSwingOn" checked title="Enable"></div>
+        <div class="pcRow"><span class="pcLabel" id="pcStickyLbl">🍯 Sticky</span><input type="range" class="pcSlider" id="pcSticky" min="0" max="30" step="1" value="3"><span class="pcVal" id="pcStickyVal">3%</span><input type="checkbox" class="pcToggle" id="pcStickyOn" checked title="Enable"></div>
+        <div class="pcRow"><span class="pcLabel" id="pcCrumbleLbl">💥 Crumble</span><input type="range" class="pcSlider" id="pcCrumble" min="0" max="30" step="1" value="4"><span class="pcVal" id="pcCrumbleVal">4%</span><input type="checkbox" class="pcToggle" id="pcCrumbleOn" checked title="Enable"></div>
+        <div class="pcRow"><span class="pcLabel" id="pcIceLbl">❄️ Ice Plats</span><span style="font-size:9px;color:#7dd4ff;width:120px;">Controlled by Ice % above</span><input type="checkbox" class="pcToggle" id="pcIcePlatOn" checked title="Enable Ice platforms"></div>
+        <div class="pcRow"><span class="pcLabel" id="pcTipLbl">↗ Tipping</span><input type="range" class="pcSlider" id="pcTipping" min="0" max="30" step="1" value="4"><span class="pcVal" id="pcTippingVal">4%</span><input type="checkbox" class="pcToggle" id="pcTippingOn" checked title="Enable"></div>
+        <div class="pcRow"><span class="pcLabel" id="pcPurpleLbl">🟪 Purple Plats</span><span style="font-size:9px;color:#c77dff;width:120px;">Controlled by Purple % above</span><input type="checkbox" class="pcToggle" id="pcPurplePlatOn" checked title="Enable Purple platforms"></div>
+      </div>
+
+      <!-- Gap Settings -->
+      <div class="pcSection">
+        <div class="pcSectionTitle">🕳 Gap Settings</div>
+        <div class="pcRow"><span class="pcLabel">Gap Chance (base)</span><input type="range" class="pcSlider" id="pcGap" min="0" max="40" step="1" value="5"><span class="pcVal" id="pcGapVal">5%</span></div>
+        <div class="pcRow"><span class="pcLabel">Unreachable Gap Limit</span><input type="range" class="pcSlider" id="pcUnreachable" min="5" max="100" step="5" value="25"><span class="pcVal" id="pcUnreachableVal">1 per 25</span></div>
+      </div>
+
+      <!-- Live Preview -->
+      <div class="pcSection">
+        <div class="pcSectionTitle">👁 Live Platform Preview</div>
+        <canvas id="pcPreviewCanvas" width="436" height="90" style="width:100%;border-radius:8px;background:#0a0a18;border:1px solid #2a2a4a;display:block;"></canvas>
+        <div style="font-size:9px;color:#445;text-align:center;margin-top:3px;">Sample of platform mix with current settings</div>
+      </div>
+
+      <!-- Generate -->
+      <div class="pcSection" style="border:none;padding-bottom:0;">
+        <div class="pcSectionTitle">⚙️ Generate Platforms</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px;">
+          <span style="color:#aaa;font-size:11px;">Count:</span>
+          <button class="pcCountBtn active" data-count="25" onclick="pcSetCount(25,this)">25</button>
+          <button class="pcCountBtn" data-count="50" onclick="pcSetCount(50,this)">50</button>
+          <button class="pcCountBtn" data-count="100" onclick="pcSetCount(100,this)">100</button>
+          <button class="pcCountBtn" data-count="200" onclick="pcSetCount(200,this)">200</button>
+          <button class="pcCountBtn" data-count="500" onclick="pcSetCount(500,this)">500</button>
+          <button class="pcCountBtn" data-count="1000" onclick="pcSetCount(1000,this)">1000</button>
+        </div>
+        <button onclick="platCfgGenerate()" style="width:100%;margin-top:12px;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1a5c8a,#3a9cd4);color:#fff;border:none;font-weight:bold;font-size:14px;cursor:pointer;letter-spacing:0.5px;">🎲 Generate Platforms</button>
       </div>
     </div>
   </div>
@@ -5880,6 +5954,250 @@ function editorLoad(){
   if(!edPlatforms.length){alert('Add platforms first!');return;}
   customPlayPlatforms=[...edPlatforms].sort((a,b)=>b.y-a.y).map((p,i)=>({...p,index:i}));
   setMode('play');startGame();
+}
+
+// ── PLATFORM CONFIGURATOR ──
+let _platCfgGenerated = []; // snapshot of platforms before generation (for discard)
+let _platCfgCount = 25;
+
+function openPlatConfigurator() {
+  const modal = document.getElementById('platCfgModal');
+  modal.style.display = 'flex';
+  pcBindSliders();
+  pcUpdatePreview();
+}
+
+function closePlatConfigurator() {
+  document.getElementById('platCfgModal').style.display = 'none';
+}
+
+function pcSetCount(n, btn) {
+  _platCfgCount = n;
+  document.querySelectorAll('.pcCountBtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function pcVal(id) {
+  return parseInt(document.getElementById(id).value, 10);
+}
+
+function pcBindSliders() {
+  const sliders = [
+    ['pcPurple','pcPurpleVal','%'],
+    ['pcGreen','pcGreenVal','%'],
+    ['pcIce','pcIceVal','%'],
+    ['pcSwing','pcSwingVal','%'],
+    ['pcSticky','pcStickyVal','%'],
+    ['pcCrumble','pcCrumbleVal','%'],
+    ['pcTipping','pcTippingVal','%'],
+    ['pcGap','pcGapVal','%'],
+    ['pcUnreachable','pcUnreachableVal',null],
+  ];
+  sliders.forEach(([sid, vid, suffix]) => {
+    const el = document.getElementById(sid);
+    if (!el) return;
+    el.oninput = () => {
+      const v = parseInt(el.value, 10);
+      const valEl = document.getElementById(vid);
+      if (sid === 'pcUnreachable') {
+        valEl.textContent = '1 per ' + v;
+      } else {
+        valEl.textContent = v + '%';
+      }
+      pcUpdatePreview();
+    };
+  });
+  // Purple plat and ice plat toggles (no slider pairing, just preview)
+  ['pcPurplePlatOn','pcIcePlatOn'].forEach(tid => {
+    const t = document.getElementById(tid);
+    if (t) t.onchange = () => pcUpdatePreview();
+  });
+  const togglePairs = [
+    ['pcSwingOn','pcSwing'], ['pcStickyOn','pcSticky'],
+    ['pcCrumbleOn','pcCrumble'], ['pcTippingOn','pcTipping'],
+  ];
+  togglePairs.forEach(([tid, sid]) => {
+    const t = document.getElementById(tid);
+    if (!t) return;
+    t.onchange = () => {
+      document.getElementById(sid).disabled = !t.checked;
+      pcUpdatePreview();
+    };
+  });
+}
+
+function pcBuildCfg() {
+  const purplePct  = pcVal('pcPurple')  / 100;
+  const greenPct   = pcVal('pcGreen')   / 100;
+  const icePct     = pcVal('pcIce')     / 100;
+  const swingPct   = document.getElementById('pcSwingOn').checked   ? pcVal('pcSwing')   / 100 : 0;
+  const stickyPct  = document.getElementById('pcStickyOn').checked  ? pcVal('pcSticky')  / 100 : 0;
+  const crumblePct = document.getElementById('pcCrumbleOn').checked ? pcVal('pcCrumble') / 100 : 0;
+  const tippingPct = document.getElementById('pcTippingOn').checked ? pcVal('pcTipping') / 100 : 0;
+  const gapPct     = pcVal('pcGap') / 100;
+  const unreachable = pcVal('pcUnreachable');
+
+  // If ice or purple toggles are off, zero their colour probability
+  const effectivePurple = document.getElementById('pcPurplePlatOn').checked ? purplePct : 0;
+  const effectiveIce    = document.getElementById('pcIcePlatOn').checked    ? icePct    : 0;
+
+  return {
+    purple:   effectivePurple,
+    green:    greenPct,
+    ice:      effectiveIce,
+    swing:    swingPct,
+    sticky:   stickyPct,
+    crumble:  crumblePct,
+    tipping:  tippingPct,
+    gap:      gapPct,
+    vine:     0.30,
+    maxUnreachableRatio: unreachable,
+    widthBase: null,
+  };
+}
+
+function pcUpdatePreview() {
+  const canvas = document.getElementById('pcPreviewCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const cfg = pcBuildCfg();
+  const preview = pcGenerateSample(cfg, 18);
+  const slotW = W / preview.length;
+  const ph = 12;
+  const baseY = H / 2;
+
+  // Draw sample platforms staggered
+  preview.forEach((color, i) => {
+    const x = i * slotW + 4;
+    const w = slotW - 8;
+    const y = baseY + Math.sin(i * 1.1) * 18;
+    const fc = COLORS[color] || '#888';
+    ctx.fillStyle = fc;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, ph, 3);
+    ctx.fill();
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = '7px sans-serif';
+    ctx.textAlign = 'center';
+    const label = color === 'red' ? 'R' : color === 'blue' ? 'B' : color === 'yellow' ? 'Y' :
+                  color === 'green' ? 'G' : color === 'purple' ? 'P' : color === 'ice' ? '❄' :
+                  color === 'swing' ? '🪝' : color === 'crumble' ? '💥' : color === 'sticky' ? '🍯' :
+                  color === 'gap' ? '—' : '?';
+    ctx.fillText(label, x + w/2, y + ph/2 + 3);
+  });
+}
+
+function pcGenerateSample(cfg, count) {
+  const results = [];
+  const purple   = cfg.purple   || 0;
+  const green    = cfg.green    || 0;
+  const ice      = cfg.ice      || 0;
+  const pSwing   = cfg.swing    || 0;
+  const pSticky  = cfg.sticky   || 0;
+  const pCrumble = cfg.crumble  || 0;
+  const tipping  = cfg.tipping  || 0;
+  const gap      = cfg.gap      || 0;
+
+  for (let i = 0; i < count; i++) {
+    if (Math.random() < gap) { results.push('gap'); continue; }
+    const r = Math.random();
+    let color;
+    if (r < purple)                  color = 'purple';
+    else if (r < purple + green)     color = 'green';
+    else if (r < purple + green + ice) color = 'ice';
+    else color = ['red','blue','yellow'][Math.floor(Math.random()*3)];
+
+    if (color !== 'purple') {
+      const sr = Math.random();
+      if (sr < pSwing)                        color = 'swing';
+      else if (sr < pSwing + pCrumble)        color = 'crumble';
+      else if (sr < pSwing + pCrumble + pSticky) color = 'sticky';
+    }
+    results.push(color);
+  }
+  return results;
+}
+
+function platCfgGenerate() {
+  // Save snapshot for discard
+  _platCfgGenerated = JSON.parse(JSON.stringify(edPlatforms));
+
+  const cfg = pcBuildCfg();
+  const count = _platCfgCount;
+
+  // Find insertion Y — one PLATFORM_GAP above highest existing platform, or start near top
+  let startY;
+  if (edPlatforms.length > 0) {
+    const topY = Math.min(...edPlatforms.map(p => p.y));
+    startY = topY - PLATFORM_GAP;
+  } else {
+    startY = -PLATFORM_GAP * 2;
+  }
+
+  // Save old storyPlatformCfg and temporarily apply configurator cfg
+  const prevCfg = storyPlatformCfg;
+  storyPlatformCfg = cfg;
+  const prevUnreach = {u: _unreachCount, r: _reachSinceUnreach};
+  _unreachCount = 0; _reachSinceUnreach = 0;
+
+  let prevX, prevW;
+  if (edPlatforms.length > 0) {
+    const topPlat = edPlatforms.reduce((a,b) => a.y < b.y ? a : b);
+    prevX = topPlat.x;
+    prevW = topPlat.w;
+  }
+
+  const newPlats = [];
+  for (let i = 0; i < count; i++) {
+    const y = startY - i * PLATFORM_GAP;
+    const p = makePlatform(y, edPlatforms.length + i, prevX, prevW);
+    // Flatten platform object to editor-compatible form
+    newPlats.push({
+      x: p.x, y: p.y, w: p.w, h: p.h, color: p.color,
+      _idx: edPlatforms.length + i,
+      _cfgGenerated: true,
+    });
+    prevX = p.x; prevW = p.w;
+  }
+
+  // Restore cfg
+  storyPlatformCfg = prevCfg;
+  _unreachCount = prevUnreach.u;
+  _reachSinceUnreach = prevUnreach.r;
+
+  // Add to editor
+  edPlatforms.push(...newPlats);
+  // Scroll editor to show new platforms
+  if (newPlats.length > 0) {
+    const topNew = Math.min(...newPlats.map(p => p.y));
+    edScrollY = topNew - edH * 0.3;
+  }
+  drawEditor();
+
+  // Show Keep/Discard, close modal
+  document.getElementById('platCfgKeepBtn').style.display = '';
+  document.getElementById('platCfgDiscardBtn').style.display = '';
+  closePlatConfigurator();
+}
+
+function platCfgKeep() {
+  // Keep is already in edPlatforms — just hide the buttons
+  _platCfgGenerated = [];
+  document.getElementById('platCfgKeepBtn').style.display = 'none';
+  document.getElementById('platCfgDiscardBtn').style.display = 'none';
+}
+
+function platCfgDiscard() {
+  // Restore the snapshot taken before generation
+  edPlatforms = _platCfgGenerated;
+  _platCfgGenerated = [];
+  document.getElementById('platCfgKeepBtn').style.display = 'none';
+  document.getElementById('platCfgDiscardBtn').style.display = 'none';
+  drawEditor();
 }
 
 // ── POWER-UP TEST MODE ──
