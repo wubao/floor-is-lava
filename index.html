@@ -5526,22 +5526,8 @@ function quickBuyAction(){
   _qbBought = true;
   updateHUD();
 
-  // Reset to BUY state after 0.6s — rapid key presses cancel the timer and buy immediately
-  _qbTimer = setTimeout(()=>{
-    const stillWanted = canQuickBuyMore(_qbType);
-    if(stillWanted && _qbActive){
-      if(status) status.textContent = QB_CONFIG[_qbType]?.emptyText || 'EMPTY', status.className = '';
-      if(btxt)   btxt.textContent = 'BUY';
-      if(check)  check.style.display = 'none';
-      if(btn)    btn.className = '', btn.disabled = coins < cfg.cost, btn.style.opacity = coins < cfg.cost ? '0.5' : '1';
-      if(cost)   cost.textContent = cfg.cost + '🪙';
-      // Auto-hide after 4s of inactivity
-      clearTimeout(_qbTimer);
-      _qbTimer = setTimeout(hideQuickBuy, 4000);
-    } else {
-      hideQuickBuy();
-    }
-  }, 600);
+  // Close popup after a brief confirmation flash — next key press will activate the item
+  _qbTimer = setTimeout(hideQuickBuy, 800);
 }
 
 // Can the player buy more of this type? (boost can stack up to 20, others can always buy more)
