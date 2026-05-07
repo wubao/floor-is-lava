@@ -713,6 +713,10 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
         <label>Hide Play Button in Navbar</label>
         <div class="settingsToggle" id="sHidePlayBtnToggle" onclick="toggleHidePlayBtn();saveSettings();"></div>
       </div>
+      <div class="settingsRow">
+        <label style="line-height:1.4;">Quick Buy Popup<br><span style="font-size:9px;color:#666;font-weight:normal;">Show buy prompt when power-up hits 0<br>Desktop: press same key again to buy</span></label>
+        <div class="settingsToggle on" id="sQuickBuyToggle" onclick="toggleQuickBuyPopup();"></div>
+      </div>
     </div>
     <!-- CHARACTER EDITOR -->
     <div class="settingsSection">
@@ -2348,7 +2352,7 @@ function getCustomLevelChunk(startIndex){
   const enabled = savedLevels.filter(l=>l.enabled && l.platforms && l.platforms.length > 0);
   if(!enabled.length) return null;
   const lvl = enabled[Math.floor(Math.random() * enabled.length)];
-  return lvl.platforms.map((p, i) => ({
+  const platforms = lvl.platforms.map((p, i) => ({
     ...p,
     index: startIndex + i,
     hasCoin: p.color === 'green',
@@ -2357,10 +2361,13 @@ function getCustomLevelChunk(startIndex){
     isGap: false,
     iceUsed: false
   }));
+  return { platforms, name: lvl.name || 'Custom' };
 }
 
 // Track when to inject custom chunks
 let nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
+let activeCustomChunkName = null;   // name of the custom level currently injected
+let activeCustomChunkEndIndex = -1; // platform index where the current chunk ends
 
 function initGame(){
   // ── TEST POWER-UPS MODE: skip profile load entirely ──
@@ -2438,6 +2445,8 @@ function initGame(){
   gameRunning = true; paused = false;
   platforms = [];
   nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
+  activeCustomChunkName = null;
+  activeCustomChunkEndIndex = -1;
   bgAnimations = [];
 
 // Story mode must never use customPlayPlatforms even if stale from a prior editor session
@@ -2516,12 +2525,26 @@ function getHudModeLabel(){
   if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode) return '';
   if(testPowerUpsMode) return '🧪 Power-Up Test';
   if(typeof versusMode !== 'undefined' && versusMode) return '⚔️ Versus Mode';
+  // Standalone custom play (direct editor Play button — no normal game mode)
   if(typeof isCustomPlayMode === 'function' && isCustomPlayMode()) return '🗂 Custom Level';
   if(typeof gameMode !== 'undefined'){
     if(gameMode === 'frogger') return '🐸 Frogger Mode';
     return '🧗 Climber Mode';
   }
   return '';
+}
+// Returns the sub-label for custom chunk integration (shown below mode label)
+function getCustomChunkHudLabel(){
+  if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode) return '';
+  if(isCustomPlayMode()) return ''; // standalone mode — main label already says Custom Level
+  if(!activeCustomChunkName) return '';
+  // Clear stale chunk name once player has passed the chunk
+  if(activeCustomChunkEndIndex >= 0 && platformCount > activeCustomChunkEndIndex + 5){
+    activeCustomChunkName = null;
+    activeCustomChunkEndIndex = -1;
+    return '';
+  }
+  return 'Custom Platforms: 📐 ' + activeCustomChunkName;
 }
 // ── STATE LOG every ~5 s — diagnose episode/platformCount/mode issues ──
 let _hudLogTimer = 0;
@@ -2532,8 +2555,8 @@ function _logGameState(){
     ? '[EP '+(currentStoryEpisode.id+1)+'] '+currentStoryEpisode.name+' (target='+currentStoryEpisode.targetPlats+')'
     : 'no episode';
   const mode = (typeof versusMode !== 'undefined' && versusMode) ? 'versus'
-    : (typeof isCustomPlayMode === 'function' && isCustomPlayMode()) ? 'custom'
-    : (typeof gameMode !== 'undefined' ? gameMode : '?');
+    : (typeof isCustomPlayMode === 'function' && isCustomPlayMode()) ? 'custom-standalone'
+    : (typeof gameMode !== 'undefined' ? gameMode + (activeCustomChunkName ? '+chunk' : '') : '?');
   const locked = (typeof storyLockedEndPlatform !== 'undefined' && storyLockedEndPlatform)
     ? 'locked='+storyLockedEndPlatform : 'free';
   // Detect if platformCount has frozen (same value as last 5s snapshot)
@@ -2555,6 +2578,17 @@ function _updateHUD(){
   document.getElementById('coinDisplay').textContent = '🪙 ' + coins;
   const hudModeEl = document.getElementById('hudModeDisplay');
   if(hudModeEl) hudModeEl.textContent = getHudModeLabel();
+  // Custom chunk integration sub-label
+  const chunkLbl = getCustomChunkHudLabel();
+  let chunkEl = document.getElementById('hudChunkDisplay');
+  if(!chunkEl){
+    chunkEl = document.createElement('div');
+    chunkEl.id = 'hudChunkDisplay';
+    chunkEl.style.cssText = 'font-size:9px;color:#ffe066;text-shadow:1px 1px 2px #000;margin-top:1px;line-height:1.4;white-space:pre;';
+    const hud = document.getElementById('hud');
+    if(hud) hud.appendChild(chunkEl);
+  }
+  if(chunkEl) chunkEl.textContent = chunkLbl;
   document.getElementById('levelDisplay').textContent = 'Level ' + level + (parachuteActive ? ' 🪂' : '');
   document.getElementById('platformDisplay').textContent = 'Plt ' + platformCount + (endPlatform > 0 ? '/'+endPlatform : '');
   document.getElementById('lavaInfo').textContent = 'Lava: ' + (lavaPixPerFrame * 60 / PLATFORM_GAP).toFixed(1) + ' plt/s';
@@ -2787,12 +2821,34 @@ document.addEventListener('keydown', e => {
   keys[e.code] = true;
   if(e.code==='Space'||e.code==='KeyA'){e.preventDefault(); jump(keys['ArrowDown']||keys['KeyS'], false);}
   if(e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault(); if(dialPendingFire){fireSelectedSlot();}else{const slot=DIAL_SLOTS[selectedSlot];if(slot&&slot.getCount()>0)fireSelectedSlot();}}
-  if(e.code==='Digit1'){e.preventDefault(); if((jumpBoosts||0)<=0){triggerQuickBuyIfEmpty('boost');}else{jump(false, true);}}
-  if(e.code==='Digit2'){e.preventDefault(); if((skipUses||0)<=0){triggerQuickBuyIfEmpty('skip');}else{activateSkip();}}
-  if(e.code==='Digit3'){e.preventDefault(); if((bookUses||0)<=0){triggerQuickBuyIfEmpty('book');}else{activateBook();}}
-  if(e.code==='Digit4'){e.preventDefault(); if((lavaShips||0)<=0){triggerQuickBuyIfEmpty('ship');}else{activateLavaShip();}}
-  if(e.code==='Digit5'){e.preventDefault(); if((parachutes||0)<=0){triggerQuickBuyIfEmpty('chute');}}
-  if(e.code==='Digit6'){e.preventDefault(); triggerQuickBuyIfEmpty('battery');}
+  if(e.code==='Digit1'){e.preventDefault();
+    if(_qbActive && _qbType==='boost'){ quickBuyAction(); }
+    else if((jumpBoosts||0)<=0){ triggerQuickBuyIfEmpty('boost'); }
+    else{ jump(false, true); }
+  }
+  if(e.code==='Digit2'){e.preventDefault();
+    if(_qbActive && _qbType==='skip'){ quickBuyAction(); }
+    else if((skipUses||0)<=0){ triggerQuickBuyIfEmpty('skip'); }
+    else{ activateSkip(); }
+  }
+  if(e.code==='Digit3'){e.preventDefault();
+    if(_qbActive && _qbType==='book'){ quickBuyAction(); }
+    else if((bookUses||0)<=0){ triggerQuickBuyIfEmpty('book'); }
+    else{ activateBook(); }
+  }
+  if(e.code==='Digit4'){e.preventDefault();
+    if(_qbActive && _qbType==='ship'){ quickBuyAction(); }
+    else if((lavaShips||0)<=0){ triggerQuickBuyIfEmpty('ship'); }
+    else{ activateLavaShip(); }
+  }
+  if(e.code==='Digit5'){e.preventDefault();
+    if(_qbActive && _qbType==='chute'){ quickBuyAction(); }
+    else if((parachutes||0)<=0){ triggerQuickBuyIfEmpty('chute'); }
+  }
+  if(e.code==='Digit6'){e.preventDefault();
+    if(_qbActive && _qbType==='battery'){ quickBuyAction(); }
+    else triggerQuickBuyIfEmpty('battery');
+  }
   if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyQ','KeyW','KeyD','KeyS'].includes(e.code)) e.preventDefault();
 });
 document.addEventListener('keyup', e => {
@@ -4092,12 +4148,17 @@ while (platforms.filter(p => p.y < player.y).length < minAbove && platforms.leng
   let chunkAdded = false;
   // Story mode: never inject custom level chunks — always use makePlatform
   if(!currentStoryEpisode && last.index >= nextCustomChunkAt){
-    const chunk = getCustomLevelChunk(last.index + 1);
-    if(chunk && chunk.length > 0){
-      console.log(`[GEN] Custom chunk found! ${chunk.length} platforms`);
+    const result = getCustomLevelChunk(last.index + 1);
+    if(result && result.platforms.length > 0){
+      const chunk = result.platforms;
+      console.log(`[GEN] Custom chunk found! ${chunk.length} platforms — "${result.name}"`);
       const dy = last.y - PLATFORM_GAP - chunk[0].y;
       chunk.forEach(p => { p.y += dy; p.origY += dy; });
       platforms.push(...chunk);
+      // Track which chunk is active for HUD display
+      activeCustomChunkName = result.name;
+      activeCustomChunkEndIndex = platforms[platforms.length-1].index;
+      updateHUD();
       
       nextCustomChunkAt = platforms[platforms.length-1].index + 100 + Math.floor(Math.random() * 150);
       const enabled = savedLevels.filter(l => l.enabled && l.repeatable);
@@ -5456,7 +5517,7 @@ function quickBuyAction(){
   const btxt   = document.getElementById('qbBuyText');
   const check  = document.getElementById('qbCheckmark');
 
-  status.textContent = 'BOUGHT';
+  status.textContent = 'BOUGHT ✓';
   status.className   = 'bought';
   btn.className      = 'bought';
   btxt.textContent   = '';
@@ -5465,29 +5526,22 @@ function quickBuyAction(){
   _qbBought = true;
   updateHUD();
 
-  // Allow repeated buys (e.g. boost jumps) — reset after 1s so they can tap again
-  clearTimeout(_qbTimer);
+  // Reset to BUY state after 0.6s — rapid key presses cancel the timer and buy immediately
   _qbTimer = setTimeout(()=>{
-    // If item can still be bought (boost can stack), reset to BUY state
     const stillWanted = canQuickBuyMore(_qbType);
     if(stillWanted && _qbActive){
-      const status2 = document.getElementById('qbStatus');
-      const btn2    = document.getElementById('qbBuyBtn');
-      const btxt2   = document.getElementById('qbBuyText');
-      const check2  = document.getElementById('qbCheckmark');
-      const cost2   = document.getElementById('qbCoinCost');
-      if(status2) status2.textContent = QB_CONFIG[_qbType]?.emptyText || 'EMPTY', status2.className = '';
-      if(btxt2)   btxt2.textContent = 'BUY';
-      if(check2)  check2.style.display = 'none';
-      if(btn2)    btn2.className = '', btn2.disabled = coins < cfg.cost, btn2.style.opacity = coins < cfg.cost ? '0.5' : '1';
-      if(cost2)   cost2.textContent = cfg.cost + '🪙';
-      // Auto-hide after another 4s
+      if(status) status.textContent = QB_CONFIG[_qbType]?.emptyText || 'EMPTY', status.className = '';
+      if(btxt)   btxt.textContent = 'BUY';
+      if(check)  check.style.display = 'none';
+      if(btn)    btn.className = '', btn.disabled = coins < cfg.cost, btn.style.opacity = coins < cfg.cost ? '0.5' : '1';
+      if(cost)   cost.textContent = cfg.cost + '🪙';
+      // Auto-hide after 4s of inactivity
       clearTimeout(_qbTimer);
       _qbTimer = setTimeout(hideQuickBuy, 4000);
     } else {
       hideQuickBuy();
     }
-  }, 1000);
+  }, 600);
 }
 
 // Can the player buy more of this type? (boost can stack up to 20, others can always buy more)
@@ -5503,6 +5557,7 @@ function canQuickBuyMore(type){
 // ── Trigger Quick Buy when a power-up hits 0 ──
 function triggerQuickBuyIfEmpty(type){
   // Only show during active gameplay, not in shop/menu
+  if(!quickBuyPopupEnabled) return;
   const gs = document.getElementById('gameScreen');
   if(!gs || !gs.classList.contains('active')) return;
   if(!document.getElementById('powerWheel') ||
@@ -5586,9 +5641,10 @@ function playCustomLevel(i){
     index: j,
     iceUsed: false
   }));
-  customPlayIsIntegrated = !!(savedLevels[i].enabled);
+  customPlayIsIntegrated = false; // standalone Play = always practice mode
   setMode('play');
   startGame();
+  _injectPracticeModeExitBtn();
 }
 function deleteLevel(i){if(confirm('Delete "'+savedLevels[i].name+'"?')){savedLevels.splice(i,1);levelsSave();renderCustomLevelsList();}}
 function exportSingleLevel(i){
@@ -7065,6 +7121,7 @@ let botDifficulty = 'easy';   // 'easy' | 'normal' | 'hard'
 let hudSide = 'left';
 let hideResetBtn = false;
 let hidePlayBtn = false;
+let quickBuyPopupEnabled = true; // true = show quick buy popup when power-up hits 0
 
 // Bot interval bases: [Roxy(slowest), Blaze(mid), Zippy(fastest)] per difficulty
 const BOT_INTERVALS = {
@@ -7090,7 +7147,8 @@ function defaultSettings(){
     hidePlayBtn: false,
     retainPowerups: false,
     charConfig: defaultCharConfig(),
-	showTutorial: true
+	showTutorial: true,
+    quickBuyPopupEnabled: true
   };
 }
 
@@ -7243,7 +7301,8 @@ function captureSettings(){
     hidePlayBtn,
     retainPowerups,
     charConfig: {...charConfig},
-	showTutorial: showTutorial 
+	showTutorial: showTutorial,
+    quickBuyPopupEnabled
   };
 }
 
@@ -7322,6 +7381,10 @@ function applySettings(s){
   hidePlayBtn = s.hidePlayBtn ?? false;
   syncToggle('sHidePlayBtnToggle', hidePlayBtn);
   applyHidePlayBtn();
+
+  // Quick Buy popup
+  quickBuyPopupEnabled = s.quickBuyPopupEnabled ?? true;
+  syncToggle('sQuickBuyToggle', quickBuyPopupEnabled);
 
   // Character config
   charConfig = Object.assign(defaultCharConfig(), s.charConfig || {});
@@ -7499,6 +7562,13 @@ function applyHidePlayBtn(){
   if(pb) pb.style.display = hidePlayBtn ? 'none' : '';
 }
 
+function toggleQuickBuyPopup(){
+  quickBuyPopupEnabled = !quickBuyPopupEnabled;
+  syncToggle('sQuickBuyToggle', quickBuyPopupEnabled);
+  if(!quickBuyPopupEnabled) hideQuickBuy();
+  saveSettings();
+}
+
 let showTutorial = true; // default
 
 function toggleShowTutorial() {
@@ -7657,16 +7727,19 @@ function setHudSide(side, silent){
   const rb = document.getElementById('rightBtns');
   const pw = document.getElementById('powerWheel');
   const hud = document.getElementById('hud');
+  const qb = document.getElementById('quickBuyPopup');
   if(side === 'right'){
     // Buttons go right → HUD info goes left (default)
     if(rb){ rb.style.left='auto'; rb.style.right='6px'; }
     if(pw){ pw.style.left='auto'; pw.style.right='6px'; }
     if(hud){ hud.style.left='7px'; hud.style.right='auto'; hud.style.textAlign='left'; }
+    if(qb){ qb.style.left='auto'; qb.style.right='14px'; }
   } else {
     // Buttons go left → HUD info goes right
     if(rb){ rb.style.left='6px'; rb.style.right='auto'; }
     if(pw){ pw.style.left='6px'; pw.style.right='auto'; }
     if(hud){ hud.style.left='auto'; hud.style.right='7px'; hud.style.textAlign='right'; }
+    if(qb){ qb.style.left='14px'; qb.style.right='auto'; }
   }
 }
 
