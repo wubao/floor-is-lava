@@ -1052,7 +1052,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <div id="shopCoins"></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">On-demand super-jump. +5 uses per buy. Max 20. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">30 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">💫 Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. +5 uses per buy. Max 20. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">30 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Pull platform above you. +5 uses per buy. Max 20. Key 3 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Pull platform above you. +3 uses per buy. Max 20. Key 3 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! Max 20. Key 4.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">120 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Auto-activates when falling. Max 20. Key 5.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
       <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Max 20 charges. Key 6.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">30 🪙</button></div>
@@ -2485,15 +2485,20 @@ function _updateHUD(){
     const ts = Math.floor(levelTimerSecs), tm = Math.floor(ts/60), tr = ts%60;
     hudTimerEl.textContent = tm>0 ? `${tm}m${String(tr).padStart(2,'0')}s` : `${ts}s`;
   }
-  // Lava distance in platforms
+  // Lava distance in platforms (hidden in test mode — lava is artificial)
   if(typeof lavaWorldY !== 'undefined' && typeof player !== 'undefined'){
-    const lavaDist = lavaWorldY - player.y;
-    const platsDist = (lavaDist / PLATFORM_GAP).toFixed(1);
     const distEl = document.getElementById('lavaDistDisplay');
     if(distEl){
-      const sign = lavaDist >= 0 ? '+' : '';
-      distEl.textContent = '🌋 ' + sign + platsDist + ' plts below';
-      distEl.style.color = lavaDist < 3 * PLATFORM_GAP ? '#ff3322' : lavaDist < 8 * PLATFORM_GAP ? '#ff7744' : '#ff9966';
+      if(testPowerUpsMode){
+        distEl.textContent = '🧪 No lava';
+        distEl.style.color = '#aaffaa';
+      } else {
+        const lavaDist = lavaWorldY - player.y;
+        const platsDist = (lavaDist / PLATFORM_GAP).toFixed(1);
+        const sign = lavaDist >= 0 ? '+' : '';
+        distEl.textContent = '🌋 ' + sign + platsDist + ' plts below';
+        distEl.style.color = lavaDist < 3 * PLATFORM_GAP ? '#ff3322' : lavaDist < 8 * PLATFORM_GAP ? '#ff7744' : '#ff9966';
+      }
     }
   }
   document.getElementById('zoomDisplay').textContent = 'Zoom: ' + Math.round(currentZoom * 100) + '%';
@@ -3907,7 +3912,8 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
     }
   }
 
-// ── LAVA SURGE MECHANIC ──
+// ── LAVA SURGE MECHANIC (suppressed in test mode) ──
+  if(!testPowerUpsMode){
   const SURGE_THRESHOLD_BASE = 15 * PLATFORM_GAP;
   const SURGE_TARGET_PLATFORMS = 5;
   const SURGE_PLATFORM_COOLDOWN = 10;
@@ -3930,6 +3936,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
   if(lavaSurgeCooldown > 0 && platformCount >= lavaSurgeCooldown) lavaSurgeCooldown = 0;
   if(lavaSurgeCooldown > 0) lavaSurgeCooldown -= dt;
   if(lavaSurgeFlash > 0) lavaSurgeFlash -= dt;
+  }
 
   // ── LAVA SHIP ANIMATION ──
   if(lavaShipActive){
@@ -5239,7 +5246,7 @@ function buyItem(type){
   if(type==='jump'&&coins>=30&&(jumpBoosts||0)<20){coins-=30;jumpBoosts=Math.min((jumpBoosts||0)+5,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('⬆️ Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
   else if(type==='skip'&&coins>=30&&(skipUses||0)<20){coins-=30;const b=Math.min(5,(20-(skipUses||0)));skipUses=Math.min((skipUses||0)+5,20);showNotif('💫 +'+b+' skips ('+skipUses+'/20, key 2)');playSound('buy');}
   else if(type==='chute'&&coins>=50&&(parachutes||0)<20){coins-=50;parachutes=Math.min((parachutes||0)+1,20);if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+'/20 owned)');playSound('buy');}
-  else if(type==='book'&&coins>=100&&(bookUses||0)<20){coins-=100;booksOwned++;bigHead=true;bookUses=Math.min((bookUses||0)+5,20);showNotif('📖 Book! ('+bookUses+'/20 uses, key 3)');playSound('buy');}
+  else if(type==='book'&&coins>=100&&(bookUses||0)<20){coins-=100;booksOwned++;bigHead=true;bookUses=Math.min((bookUses||0)+3,20);showNotif('📖 Book! ('+bookUses+'/20 uses, key 3)');playSound('buy');}
   else if(type==='ship'&&coins>=120&&(lavaShips||0)<20){coins-=120;lavaShips=Math.min((lavaShips||0)+1,20);if(currentUser) currentUser.ud.lavaShips = lavaShips;showNotif('🚀 Lava Ship! ('+lavaShips+'/20 ready)');playSound('buy');
   }
   else if(type==='battery'&&coins>=30){
@@ -10060,7 +10067,7 @@ function restoreOrConvertPowerupSession() {
       jumpBoosts: 6,    // 30 coins / 5 boosts
       parachutes: 50,   // per parachute (price unchanged)
       skipUses:   6,    // 30 coins / 5 skips
-      bookUses:   20,   // 100 coins / 5 uses
+      bookUses:   33,   // 100 coins / 3 uses
       lavaShips:  120   // per ship (price updated)
     };
     let bonusCoins = state.coins || 0;
