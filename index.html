@@ -2531,7 +2531,7 @@ function activateSkip(){
   // Try to land on the 5th platform above; if not enough exist, count down to 1st
   let target = null;
   let skippedCount = 0;
-  for(let attempt = Math.min(5, above.length); attempt >= 1; attempt--){
+  for(let attempt = Math.min(4, above.length); attempt >= 1; attempt--){
     const candidate = above[attempt - 1];
     if(candidate){
       target = candidate;
