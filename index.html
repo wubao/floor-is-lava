@@ -1050,12 +1050,12 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <button id="shopCloseX" onclick="closeShop()" title="Close Shop">✕</button>
       <h2>🛍️ SHOP</h2>
       <div id="shopCoins"></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">On-demand super-jump. 3 uses. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">20 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">💫 Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. 3 uses. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">20 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Big head! Pull platform above. 5 uses. Key 3 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! 1 use. Key 4.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">150 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Automatically activates when falling. No button needed. Key 5.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
-      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Keeps the light on and night mode at bay. Key 6.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">50 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">⬆️ Jump Boost</div><div class="shopItemDesc">On-demand super-jump. +5 uses per buy. Max 20. Key 1 or wheel.</div><div class="shopItemStock" id="jumpStock"></div></div><button class="shopBuyBtn" id="buyJumpBtn" onclick="buyItem('jump')">30 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">💫 Platform Skip</div><div class="shopItemDesc">Skip 1–2 platforms. +5 uses per buy. Max 20. Key 2 or wheel.</div><div class="shopItemStock" id="skipStock"></div></div><button class="shopBuyBtn" id="buySkipBtn" onclick="buyItem('skip')">30 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">📖 The Book</div><div class="shopItemDesc">Pull platform above you. +5 uses per buy. Max 20. Key 3 or wheel.</div><div class="shopItemStock" id="bookStock"></div></div><button class="shopBuyBtn" id="buyBookBtn" onclick="buyItem('book')">100 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🚀 Lava Ship</div><div class="shopItemDesc">Launch 50 platforms up instantly! Max 20. Key 4.</div><div class="shopItemStock" id="shipStock"></div></div><button class="shopBuyBtn" id="buyShipBtn" onclick="buyItem('ship')">120 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🪂 Parachute</div><div class="shopItemDesc">Auto-activates when falling. Max 20. Key 5.</div><div class="shopItemStock" id="chuteStock"></div></div><button class="shopBuyBtn" id="buyChuteBtn" onclick="buyItem('chute')">50 🪙</button></div>
+      <div class="shopItem"><div style="flex:1"><div class="shopItemName">🔋 Torch Battery</div><div class="shopItemDesc">Refills torch to 100%. Max 20 charges. Key 6.</div><div class="shopItemStock" id="batteryStock"></div></div><button class="shopBuyBtn" id="buyBatteryBtn" onclick="buyItem('battery')">30 🪙</button></div>
       <button id="closeShop" onclick="closeShop()">▶ Resume</button>
     </div>
   </div>
@@ -1251,17 +1251,20 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <option value="600">600</option>
     </select>
     <button class="edBtn" onclick="stepEdWidth(50)">▶</button>
-    <button class="edBtn" onclick="editorUndo()">↩</button>
-    <button class="edBtn" id="edMoveBtn" onclick="edToggleMove()" title="Move a placed platform">✥ Move</button>
+	<button class="edBtn" id="edMoveBtn" onclick="edToggleMove()" title="Move a placed platform">✥ Move</button>
+	<button class="edBtn" id="bpToggleBtn" onclick="bpToggle()" title="Block Pattern mode" style="border-color:#27ae60;color:#7af07a;">🧱 Pattern</button>
+	<button class="edBtn" onclick="editorUndo()">↩</button>
     <button class="edBtn danger" onclick="editorClear()">🗑</button>
-    <label>Name:</label>
-    <input type="text" id="edLevelName" placeholder="My Level" style="width:80px">
+	<button class="edBtn" onclick="edToggleZoom()" title="Cycle zoom">🔍</button>
     <button class="edBtn" onclick="editorLoad()">📥 Play</button>
-    <button class="edBtn" onclick="exportLevel()">📤 Export</button>
-    <button class="edBtn" id="bpToggleBtn" onclick="bpToggle()" title="Block Pattern mode" style="border-color:#27ae60;color:#7af07a;">🧱 Pattern</button>
-    <button class="edBtn" onclick="edToggleZoom()" title="Cycle zoom" style="margin-left:auto;">🔍</button>
-    <button class="edBtn primary" onclick="saveEditorLevel()" title="Save level">💾 Save</button>
+	<button class="edBtn" onclick="startTestPowerUps()" style="background:#9b27af; color:#fff;">🧪 Test Power Ups</button>
+	
+    
+    <label style="margin-left:auto;">Name:</label>
+    <input type="text" id="edLevelName" placeholder="My Level" style="width:80px">
+	<button class="edBtn primary" onclick="saveEditorLevel()" title="Save level">💾 Save</button>
     <button class="edBtn" onclick="confirmEditorExit()" style="border-color:#ff6644;color:#ff9977;" title="Exit editor">🚪 Exit</button>
+	<button class="edBtn" onclick="exportLevel()">📤 Export</button>
     <span style="color:#444;font-size:9px;" id="edClickHint">Click=place</span>
   </div>
   <!-- Editor Exit Confirmation Modal -->
@@ -2108,6 +2111,7 @@ let purpleTimer=0, onPurple=false, purplePlatform=null;
 let onSticky=false, stickyTimer=0, stickyPlatform=null;
 // stickyTimer: >0 = fully stuck (1s), then transitions to slow movement
 let gameRunning=false, paused=false, animId, lastTime=null;
+let testPowerUpsMode = false; // true while in Power-Up Test sandbox
 let levelTimerSecs = 0;   // seconds elapsed in the current level/episode
 let levelTimerStart = 0;  // performance.now() at game start
 let anim = {active:false, type:'none', angle:0, funnyFace:false, tiltDir:1, progress:0, vine: null};
@@ -2283,8 +2287,14 @@ function getCustomLevelChunk(startIndex){
 let nextCustomChunkAt = 150 + Math.floor(Math.random() * 100);
 
 function initGame(){
-  // --- STORY MODE: preserve coin amount, but always ensure power-ups are defined ---
-  if (currentStoryEpisode && typeof storyStartCoins !== 'undefined') {
+  // ── TEST POWER-UPS MODE: skip profile load entirely ──
+  if (testPowerUpsMode) {
+    // Power-ups will be set to 1000 by startTestPowerUps() after this call
+    // bigHead must be true for the book elevator to work
+    coins = 0;
+    bigHead = true;
+  } else if (currentStoryEpisode && typeof storyStartCoins !== 'undefined') {
+    // --- STORY MODE: preserve coin amount, but always ensure power-ups are defined ---
     // Keep coins as-is; only load power-ups if they are currently undefined (e.g. after F5)
     console.log('[STORY] Story mode active, preserving coins =', coins);
     if (currentUser) {
@@ -2327,7 +2337,7 @@ function initGame(){
 
   // --- The rest of the existing initGame code (unchanged, follows below) ---
   levelTimerSecs = 0; levelTimerStart = performance.now(); window.levelTimerSecs = 0;
-  level = 1; platformCount = 0; bigHead = false;
+  level = 1; platformCount = 0; bigHead = testPowerUpsMode ? true : false;
   _unreachCount = 0; _reachSinceUnreach = 0;  // F5 reset
   _torchWarnedAt5 = false; hideQuickBuy();
   // Show/hide practice mode badge in HUD
@@ -2340,7 +2350,7 @@ function initGame(){
   parachuteActive = false; parachuteDeployY = null;
   document.getElementById('parachuteHUD').style.opacity = '0';
   anim = {active:false, type:'none', angle:0, funnyFace:false, tiltDir:1, progress:0};
-  lavaWorldY = 80;
+  lavaWorldY = testPowerUpsMode ? 999999 : 80;
   lavaPixPerFrame = lavaSpeedForLevel(1) / 60;
   initialTimer = 5; initialTimerActive = true;
   piggyAttemptUnlocked=false;
@@ -2424,6 +2434,7 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
 function getHudModeLabel(){
   // Story mode: episode info already shown in levelDisplay by story updateHUD wrapper — don't duplicate here
   if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode) return '';
+  if(testPowerUpsMode) return '🧪 Power-Up Test';
   if(typeof versusMode !== 'undefined' && versusMode) return '⚔️ Versus Mode';
   if(typeof isCustomPlayMode === 'function' && isCustomPlayMode()) return '🗂 Custom Level';
   if(typeof gameMode !== 'undefined'){
@@ -2488,15 +2499,15 @@ function _updateHUD(){
   document.getElementById('zoomDisplay').textContent = 'Zoom: ' + Math.round(currentZoom * 100) + '%';
   const zl = document.getElementById('zoomLabel'); if(zl) zl.textContent = Math.round(currentZoom * 100) + '%';
   const bj=document.getElementById('buyJumpBtn'),bs=document.getElementById('buySkipBtn'),bb=document.getElementById('buyBookBtn'),bc=document.getElementById('buyChuteBtn'),bship=document.getElementById('buyShipBtn');
-  if(bj)bj.disabled=coins<20;if(bs)bs.disabled=coins<20;if(bb)bb.disabled=coins<100;if(bc)bc.disabled=coins<50;if(bship)bship.disabled=coins<150;
-  const bbat=document.getElementById('buyBatteryBtn');if(bbat)bbat.disabled=coins<50;
+  if(bj)bj.disabled=coins<30||(jumpBoosts||0)>=20;if(bs)bs.disabled=coins<30||(skipUses||0)>=20;if(bb)bb.disabled=coins<100||(bookUses||0)>=20;if(bc)bc.disabled=coins<50||(parachutes||0)>=20;if(bship)bship.disabled=coins<120||(lavaShips||0)>=20;
+  const bbat=document.getElementById('buyBatteryBtn');if(bbat)bbat.disabled=coins<30;
   document.getElementById('shopCoins').textContent = '🪙 ' + coins + ' coins';
   const js=document.getElementById('jumpStock'),ss=document.getElementById('skipStock'),bks=document.getElementById('bookStock'),cs=document.getElementById('chuteStock'),shs=document.getElementById('shipStock');
   if(js) js.textContent = jumpBoosts > 0 ? '✅ ' + jumpBoosts + '/20 (key 1)' : '';
-  if(ss) ss.textContent = skipUses > 0 ? '✅ ' + skipUses + ' left (key 2)' : '';
-  if(bks) bks.textContent = bookUses > 0 ? '✅ ' + bookUses + ' uses (key 3)' : booksOwned > 0 ? 'Owned' : '';
-  if(cs) cs.textContent = parachutes > 0 ? '✅ ' + parachutes + ' owned (auto)' : '';
-  if(shs) shs.textContent = lavaShips > 0 ? '✅ ' + lavaShips + ' ready (key 4)' : lavaShipActive ? '🚀 LAUNCHING!' : '';
+  if(ss) ss.textContent = skipUses > 0 ? '✅ ' + skipUses + '/20 (key 2)' : '';
+  if(bks) bks.textContent = bookUses > 0 ? '✅ ' + bookUses + '/20 uses (key 3)' : booksOwned > 0 ? 'Owned' : '';
+  if(cs) cs.textContent = parachutes > 0 ? '✅ ' + parachutes + '/20 owned (auto)' : '';
+  if(shs) shs.textContent = lavaShips > 0 ? '✅ ' + lavaShips + '/20 ready (key 4)' : lavaShipActive ? '🚀 LAUNCHING!' : '';
   updateWheelDial();
   // Keep Quick Buy button affordance in sync with coin balance
   if(_qbActive){
@@ -2789,9 +2800,9 @@ function updateBgAnims(dt){
   bgAnimations = bgAnimations.filter(a => a.life < a.maxLife && a.x > -100 && a.x < gW + 100);
   // spawn randomly — more during lava chase tension
   if(Math.random() < 0.008 * dt) spawnBgAnim();
-  // extra bones when lava is close
+  // extra bones when lava is close (not in test mode)
   const lavaScrY = lavaWorldY - camera.y / currentZoom;
-  if(lavaScrY < gH - 60 && Math.random() < 0.025 * dt) bgAnimations.push({type:'bone',x:Math.random()*gW,y:lavaScrY-5,vx:0,vy:-(3+Math.random()*4),life:0,maxLife:70,frame:0,fromRight:false});
+  if(!testPowerUpsMode && lavaScrY < gH - 60 && Math.random() < 0.025 * dt) bgAnimations.push({type:'bone',x:Math.random()*gW,y:lavaScrY-5,vx:0,vy:-(3+Math.random()*4),life:0,maxLife:70,frame:0,fromRight:false});
 }
 function drawBgAnims(){
   bgAnimations.forEach(a=>{
@@ -3585,6 +3596,16 @@ if(SCORCHA && SCORCHA.playerEnsnared){
   if(player.x < -EDGE_BUFFER) player.x = -EDGE_BUFFER;
   if(player.x + player.w > WORLD_W + EDGE_BUFFER) player.x = WORLD_W + EDGE_BUFFER - player.w;
 
+  // ── TEST MODE: solid floor barrier below starting platform ──
+  if(testPowerUpsMode){
+    const TEST_FLOOR_WORLD_Y = PLATFORM_H + 4;
+    if(player.y + player.h > TEST_FLOOR_WORLD_Y){
+      player.y = TEST_FLOOR_WORLD_Y - player.h;
+      player.vy = 0;
+      player.onGround = true;
+    }
+  }
+
   checkParachute();
 
   // coin collection
@@ -3832,7 +3853,8 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
   const maxCamX = WORLD_W - getZoomedCanvasW() * 0.7; // can see some void on right
   camera.x = Math.max(minCamX, Math.min(maxCamX, camera.x));
 
-  if(!initialTimerActive) lavaWorldY -= lavaPixPerFrame * dt;
+  if(!initialTimerActive && !testPowerUpsMode) lavaWorldY -= lavaPixPerFrame * dt;
+  if(testPowerUpsMode) lavaWorldY = player.y + 99999; // keep lava far below
   updateTippingPlatforms(dt);
   updateSwingPlatforms(dt);
   updateCrumblePlatforms(dt);
@@ -3875,7 +3897,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
       bookElevatorState = 'idle';
       bookElevatorSpeed = 0;
       // Catapult: full jump boost force + extra
-      player.vy = JUMP_BOOST_FORCE * 1.3;
+      player.vy = JUMP_BOOST_FORCE * 1.8;
       player.onGround = false;
       bookUses--;
       maybeTriggerTrick();
@@ -3945,7 +3967,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
   }
 
   // ── STALAGMITE UPDATE ──
-  if(stalagmitesEnabled) updateStalagmites(dt);
+  if(!testPowerUpsMode && stalagmitesEnabled) updateStalagmites(dt);
 // spawn more platforms — Climber mode: need 10 above player, Frogger: need 2 above player
 const isFrogger = (typeof gameMode !== 'undefined' && gameMode === 'frogger');
 const minAbove = isFrogger ? 2 : 10;
@@ -4039,7 +4061,7 @@ const climberExtraAbove = (typeof gameMode !== 'undefined' && gameMode === 'clim
     phud.style.top = sy + 'px';
   }
 
-  if(player.y + player.h > lavaWorldY){gameEnd(false); return;}
+  if(!testPowerUpsMode && player.y + player.h > lavaWorldY){gameEnd(false); return;}
 
   drawGame();  // lavaScreenY computed internally
   animId = requestAnimationFrame(gameLoop);
@@ -4292,17 +4314,20 @@ function drawSwingPlatform(p){
     gCtx.font = '28px Arial'; gCtx.textAlign = 'center'; gCtx.fillText('🪂', px, py - 10);
   }
 
-  if(stalagmitesEnabled) drawStalagmites();
-  drawLavaG(lavaScreenY);
+  if(!testPowerUpsMode && stalagmitesEnabled) drawStalagmites();
+  if(!testPowerUpsMode) drawLavaG(lavaScreenY);
 
-  // Lava surge flash overlay
-  if(lavaSurgeFlash > 0){
+  // Lava surge flash overlay — suppressed in test mode
+  if(!testPowerUpsMode && lavaSurgeFlash > 0){
     const flashAlpha = Math.min(0.45, lavaSurgeFlash / 20 * 0.45);
     gCtx.fillStyle = 'rgba(255,0,0,' + flashAlpha + ')';
     gCtx.fillRect(0, 0, zW, zH);
   }
   // purple timer bar
   if(onPurple){const frac=Math.max(purpleTimer/PURPLE_DEATH_MS,0);gCtx.fillStyle='#ff00ff22';gCtx.fillRect(0,0,zW,6);gCtx.fillStyle=frac>0.5?'#ff44ff':'#ff0000';gCtx.fillRect(0,0,zW*frac,6);}
+
+  // ── TEST POWER-UPS MODE: draw floor barrier + measuring tape ──
+  if(testPowerUpsMode) drawTestModeOverlays(zW, zH);
 
   gCtx.restore();
 }
@@ -4473,6 +4498,86 @@ function drawLavaG(lavaScreenY){
   gCtx.lineTo(zW,zH);gCtx.lineTo(0,zH);gCtx.closePath();gCtx.fill();
   gCtx.fillStyle='rgba(255,210,0,0.18)';
   for(let i=0;i<5;i++){const bx=((zW*0.2*i+lavaT.t*180*(i%2?1:-1))%zW+zW)%zW;gCtx.beginPath();gCtx.ellipse(bx,lavaScreenY+9+Math.sin(lavaT.t+i)*5,7+i*2,4,0,0,Math.PI*2);gCtx.fill();}
+}
+
+// ── TEST MODE: floor barrier + measuring tape ──
+function drawTestModeOverlays(zW, zH){
+  // The floor is at world y = PLATFORM_H (just below the starting platform at y=0)
+  // We draw it as a thick white band across the full world width
+  const TEST_FLOOR_WORLD_Y = PLATFORM_H + 4; // just below starting platform bottom
+  const floorScreenY = TEST_FLOOR_WORLD_Y - camera.y;
+
+  // Draw floor if visible
+  if(floorScreenY < zH + 20){
+    // Solid white floor extending full world width
+    const floorLeft = -camera.x;
+    const floorWidth = WORLD_W;
+    gCtx.fillStyle = '#ffffff';
+    gCtx.fillRect(floorLeft, floorScreenY, floorWidth, 20);
+    // Subtle top-highlight
+    gCtx.fillStyle = 'rgba(200,230,255,0.6)';
+    gCtx.fillRect(floorLeft, floorScreenY, floorWidth, 4);
+    // Label
+    gCtx.fillStyle = '#000';
+    gCtx.font = 'bold 11px Arial';
+    gCtx.textAlign = 'center';
+    gCtx.fillText('— FLOOR BARRIER —', floorLeft + floorWidth / 2, floorScreenY + 14);
+  }
+
+  // ── MEASURING TAPE ──
+  // Tape sits on the right edge of the platforms (platX + 600) in world coords
+  const platX = Math.max(0, (WORLD_W - 600) / 2);
+  const tapeWorldX = platX + 600 + 8; // 8px gap to right of platforms
+  const tapeWidth = 28;
+  const tapeScreenX = tapeWorldX - camera.x;
+
+  // Only draw if tape is on screen (at least partially)
+  if(tapeScreenX > zW + tapeWidth || tapeScreenX + tapeWidth < 0) return;
+
+  // Each platform occupies PLATFORM_GAP in world coords
+  // Platform 0 is at world y=0, platform N is at world y = -N * PLATFORM_GAP
+  // Screen y for platform N top = (-N * PLATFORM_GAP) - camera.y
+
+  const numTicks = 61; // 0 through 60
+  for(let n = 0; n < numTicks; n++){
+    const platWorldY = -n * PLATFORM_GAP;
+    const tickScreenY = platWorldY - camera.y;
+
+    // Cull off-screen ticks
+    if(tickScreenY > zH + PLATFORM_GAP) continue;
+    if(tickScreenY < -PLATFORM_GAP) continue;
+
+    // Tape background block for this segment
+    const segTop = tickScreenY;
+    const segH = PLATFORM_GAP;
+
+    // Alternating tape colour
+    const isEven = n % 2 === 0;
+    gCtx.fillStyle = isEven ? '#f5e642' : '#f0f0f0';
+    gCtx.fillRect(tapeScreenX, segTop - segH, tapeWidth, segH);
+
+    // Tick mark line at platform level
+    gCtx.strokeStyle = '#333';
+    gCtx.lineWidth = 1.5;
+    gCtx.beginPath();
+    gCtx.moveTo(tapeScreenX, segTop);
+    gCtx.lineTo(tapeScreenX + tapeWidth, segTop);
+    gCtx.stroke();
+
+    // Number label — show on every tick
+    gCtx.fillStyle = '#111';
+    gCtx.font = `bold ${n % 5 === 0 ? 10 : 8}px Arial`;
+    gCtx.textAlign = 'center';
+    gCtx.fillText(String(n), tapeScreenX + tapeWidth / 2, segTop - segH / 2 + 4);
+  }
+
+  // Tape border
+  const tapeTopWorldY = -(numTicks - 1) * PLATFORM_GAP;
+  const tapeTopScreenY = tapeTopWorldY - camera.y;
+  const tapeBotScreenY = PLATFORM_H - camera.y; // bottom = floor
+  gCtx.strokeStyle = '#888';
+  gCtx.lineWidth = 1;
+  gCtx.strokeRect(tapeScreenX, tapeTopScreenY - PLATFORM_GAP, tapeWidth, tapeBotScreenY - tapeTopScreenY + PLATFORM_GAP);
 }
 
 // ═══ SAVE SCORE ═══
@@ -4713,6 +4818,17 @@ document.getElementById('mathInput').addEventListener('keydown',e=>{if(e.key==='
 let diedInVersus = false; // tracks whether last death was mid-versus-game
 
 function _gameEnd(fromPurple) {
+  // ── TEST POWER-UPS MODE: on death, just restart the sandbox (no death screen) ──
+  if (testPowerUpsMode) {
+    gameRunning = false;
+    cancelAnimationFrame(animId);
+    const exitBtn = document.getElementById('testModeExitBtn');
+    if(exitBtn) exitBtn.remove();
+    // Rebuild and restart immediately
+    customPlayPlatforms = null; // will be rebuilt in startTestPowerUps
+    startTestPowerUps();
+    return;
+  }
   if (versusMode) {
     endVersus(false, fromPurple ? 'Burned on purple!' : 'You burned!');
     return;
@@ -5047,6 +5163,14 @@ function _goToMenu() {
   cancelAnimationFrame(animId);
   lastGameWon = false;
   diedInVersus = false;
+  // Clean up test mode if active
+  if(testPowerUpsMode){
+    testPowerUpsMode = false;
+    customPlayPlatforms = null;
+    jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; lavaShips = 0;
+    const exitBtn = document.getElementById('testModeExitBtn');
+    if(exitBtn) exitBtn.remove();
+  }
 
   // If player is leaving from the death screen without watching ad/playing RPS,
   // commit the death transaction now — move held coins to piggy.
@@ -5112,14 +5236,14 @@ function closeShop(){
   if(paused){paused=false;lastTime=null;animId=requestAnimationFrame(gameLoop);}
 }
 function buyItem(type){
-  if(type==='jump'&&coins>=20&&(jumpBoosts||0)<20){coins-=20;jumpBoosts=Math.min((jumpBoosts||0)+5,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('🚀 Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
-  else if(type==='skip'&&coins>=20){coins-=20;const b=(booksOwned||0)>0?5*(booksOwned||0):5;skipUses=(skipUses||0)+b;showNotif('⬆️ +'+b+' skips (key 2)');playSound('buy');}
-  else if(type==='chute'&&coins>=50){coins-=50;parachutes=(parachutes||0)+1;if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+' owned)');playSound('buy');}
-  else if(type==='book'&&coins>=100){coins-=100;booksOwned++;bigHead=true;bookUses+=5;showNotif('📖 Big head! Key 4 or wheel.');playSound('buy');}
-  else if(type==='ship'&&coins>=150){coins-=150;lavaShips++;if(currentUser) currentUser.ud.lavaShips = lavaShips;showNotif('🚀 Lava Ship ready!');playSound('buy');
-}
-  else if(type==='battery'&&coins>=50){
-    coins-=50;
+  if(type==='jump'&&coins>=30&&(jumpBoosts||0)<20){coins-=30;jumpBoosts=Math.min((jumpBoosts||0)+5,20);if(currentUser)currentUser.ud.jumpBoosts=jumpBoosts;showNotif('⬆️ Boost added! ('+jumpBoosts+'/20)');playSound('buy');}
+  else if(type==='skip'&&coins>=30&&(skipUses||0)<20){coins-=30;const b=Math.min(5,(20-(skipUses||0)));skipUses=Math.min((skipUses||0)+5,20);showNotif('💫 +'+b+' skips ('+skipUses+'/20, key 2)');playSound('buy');}
+  else if(type==='chute'&&coins>=50&&(parachutes||0)<20){coins-=50;parachutes=Math.min((parachutes||0)+1,20);if(currentUser)currentUser.ud.parachutes=parachutes;showNotif('🪂 Parachute! ('+parachutes+'/20 owned)');playSound('buy');}
+  else if(type==='book'&&coins>=100&&(bookUses||0)<20){coins-=100;booksOwned++;bigHead=true;bookUses=Math.min((bookUses||0)+5,20);showNotif('📖 Book! ('+bookUses+'/20 uses, key 3)');playSound('buy');}
+  else if(type==='ship'&&coins>=120&&(lavaShips||0)<20){coins-=120;lavaShips=Math.min((lavaShips||0)+1,20);if(currentUser) currentUser.ud.lavaShips = lavaShips;showNotif('🚀 Lava Ship! ('+lavaShips+'/20 ready)');playSound('buy');
+  }
+  else if(type==='battery'&&coins>=30){
+    coins-=30;
     torchBattery=100;
     nightMode=false;
     nightVisiblePlatforms.clear();
@@ -5144,12 +5268,12 @@ function updateEndPlatform(){
 // hits 0 (or torch hits 5%), lets player buy with a single tap
 // ══════════════════════════════════════════════════════════════
 const QB_CONFIG = {
-  boost:   { icon:'⬆️',  label:'BOOST JUMP',  cost:20,  buyKey:'jump',     emptyText:'EMPTY'   },
-  skip:    { icon:'💫',  label:'PLATFORM SKIP',cost:20,  buyKey:'skip',     emptyText:'EMPTY'   },
-  book:    { icon:'📖',  label:'THE BOOK',     cost:100, buyKey:'book',     emptyText:'EMPTY'   },
-  ship:    { icon:'🚀',  label:'LAVA SHIP',   cost:150, buyKey:'ship',     emptyText:'EMPTY'   },
-  chute:   { icon:'🪂',  label:'PARACHUTE',   cost:50,  buyKey:'chute',    emptyText:'EMPTY'   },
-  battery: { icon:'🔦',  label:'TORCH BATTERY',cost:50, buyKey:'battery',  emptyText:'DRAINED' },
+  boost:   { icon:'⬆️',  label:'BOOST JUMP',   cost:30,  buyKey:'jump',     emptyText:'EMPTY'   },
+  skip:    { icon:'💫',  label:'PLATFORM SKIP', cost:30,  buyKey:'skip',     emptyText:'EMPTY'   },
+  book:    { icon:'📖',  label:'THE BOOK',      cost:100, buyKey:'book',     emptyText:'EMPTY'   },
+  ship:    { icon:'🚀',  label:'LAVA SHIP',     cost:120, buyKey:'ship',     emptyText:'EMPTY'   },
+  chute:   { icon:'🪂',  label:'PARACHUTE',     cost:50,  buyKey:'chute',    emptyText:'EMPTY'   },
+  battery: { icon:'🔦',  label:'TORCH BATTERY', cost:30,  buyKey:'battery',  emptyText:'DRAINED' },
 };
 
 let _qbActive = false;       // is popup showing?
@@ -5253,8 +5377,12 @@ function quickBuyAction(){
 
 // Can the player buy more of this type? (boost can stack up to 20, others can always buy more)
 function canQuickBuyMore(type){
-  if(type === 'boost') return jumpBoosts < 20;
-  return true;  // skip, chute, ship, battery always rebuyable
+  if(type === 'boost')   return (jumpBoosts||0) < 20;
+  if(type === 'skip')    return (skipUses||0) < 20;
+  if(type === 'chute')   return (parachutes||0) < 20;
+  if(type === 'book')    return (bookUses||0) < 20;
+  if(type === 'ship')    return (lavaShips||0) < 20;
+  return true; // battery always rebuyable
 }
 
 // ── Trigger Quick Buy when a power-up hits 0 ──
@@ -5745,6 +5873,97 @@ function editorLoad(){
   if(!edPlatforms.length){alert('Add platforms first!');return;}
   customPlayPlatforms=[...edPlatforms].sort((a,b)=>b.y-a.y).map((p,i)=>({...p,index:i}));
   setMode('play');startGame();
+}
+
+// ── POWER-UP TEST MODE ──
+function startTestPowerUps(){
+  // 60 stacked platforms, 600px wide, centred horizontally, no stagger
+  const colors = ['red','blue','yellow'];
+  const platW = 600;
+  const numPlats = 60;
+  const platX = Math.max(0, (WORLD_W - platW) / 2); // centred
+  const builtPlats = [];
+
+  // Platform index 0 = starting platform (ground level, y=0)
+  // Each higher platform is one PLATFORM_GAP above previous
+  for(let i = 0; i < numPlats; i++){
+    const colorGroup = Math.floor((i % 30) / 10); // 0=red,1=blue,2=yellow, repeats
+    const color = colors[colorGroup];
+    const y = -i * PLATFORM_GAP;
+    builtPlats.push({
+      x: platX,
+      y,
+      w: platW,
+      h: PLATFORM_H,
+      color,
+      index: i,
+      hasCoin: false,
+      origY: y,
+      pulled: false,
+      isGap: false,
+      iceUsed: false,
+      tipping: null, tipDir: 'left', tipAngle: 0, tipTimer: 0, tipShakeTimer: 0, tipPivotX: 0, tipPivotY: 0,
+      vine: null,
+      swingData: null,
+      crumbleState: null, crumbleTimer: 0, crumbleShakeX: 0,
+    });
+  }
+
+  customPlayPlatforms = builtPlats;
+  testPowerUpsMode = true;
+
+  // Power-ups — set before startGame so initGame's test-mode branch doesn't wipe them
+  jumpBoosts = 1000;
+  parachutes = 1000;
+  skipUses   = 1000;
+  bookUses   = 1000;
+  lavaShips  = 1000;
+  bigHead    = true;  // required for book elevator to fire
+  torchBattery = 10000; // massive torch — won't run out
+
+  // No music
+  stopBgMusic();
+  setMode('play');
+  startGame();
+
+  // Re-apply after initGame (which runs inside startGame and could reset values)
+  jumpBoosts = 1000;
+  parachutes = 1000;
+  skipUses   = 1000;
+  bookUses   = 1000;
+  lavaShips  = 1000;
+  bigHead    = true;  // initGame resets bigHead=false, so restore it
+  torchBattery = 10000;
+
+  updateHUD();
+  showNotif('🧪 Power-Up Test Mode — No lava · 1000× all power-ups · 🔦 unlimited!');
+  _injectTestModeExitBtn();
+}
+
+function _injectTestModeExitBtn(){
+  const existing = document.getElementById('testModeExitBtn');
+  if(existing) existing.remove();
+  const btn = document.createElement('button');
+  btn.id = 'testModeExitBtn';
+  btn.textContent = '🚪 Exit Test';
+  btn.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:50;' +
+    'background:#9b27af;color:#fff;border:none;border-radius:20px;padding:6px 16px;' +
+    'font-size:12px;font-weight:bold;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+  btn.onclick = exitTestPowerUps;
+  const gs = document.getElementById('gameScreen');
+  if(gs) gs.appendChild(btn);
+}
+
+function exitTestPowerUps(){
+  testPowerUpsMode = false;
+  customPlayPlatforms = null;
+  gameRunning = false;
+  cancelAnimationFrame(animId);
+  // Reset power-ups to zero (don't pollute real profile)
+  jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; lavaShips = 0;
+  const exitBtn = document.getElementById('testModeExitBtn');
+  if(exitBtn) exitBtn.remove();
+  setMode('editor');
 }
 function exportLevel(){
   if(!edPlatforms.length){alert('Nothing to export!');return;}
@@ -7332,7 +7551,8 @@ function edAutoSaveRestore(){
 function isCustomPlayMode(){
   return !!(customPlayPlatforms && customPlayPlatforms.length > 0
             && !currentStoryEpisode
-            && !versusMode);
+            && !versusMode
+            && !testPowerUpsMode);
 }
 
 const DIAL_SLOTS = [
@@ -9837,11 +10057,11 @@ function restoreOrConvertPowerupSession() {
 
     // Convert any saved power-ups to their coin value and add to the user's wallet
     const POWERUP_COIN_VALUES = {
-      jumpBoosts: 4,    // 20 coins / 5 boosts
-      parachutes: 50,   // per parachute
-      skipUses:   4,    // 20 coins / 5 skips
+      jumpBoosts: 6,    // 30 coins / 5 boosts
+      parachutes: 50,   // per parachute (price unchanged)
+      skipUses:   6,    // 30 coins / 5 skips
       bookUses:   20,   // 100 coins / 5 uses
-      lavaShips:  150   // per ship
+      lavaShips:  120   // per ship (price updated)
     };
     let bonusCoins = state.coins || 0;
     bonusCoins += (state.jumpBoosts || 0) * POWERUP_COIN_VALUES.jumpBoosts;
