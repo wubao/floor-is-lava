@@ -1074,7 +1074,8 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
   <div id="pauseOverlay">
     <h2>⏸ PAUSED</h2>
     <button class="pauseBtn" onclick="togglePause()">▶ Resume</button>
-    <button class="pauseBtn pauseBtnSec" onclick="openShop()">🛍️ Shop</button>
+    <button class="pauseBtn pauseBtnSec" id="pauseEditorBtn" onclick="pauseReturnToEditor()" style="display:none;">↩ Editor</button>
+    <button class="pauseBtn pauseBtnSec" id="pauseShopBtn" onclick="openShop()">🛍️ Shop</button>
     <button class="pauseBtn pauseBtnSec" onclick="goToMenu()">🏠 Menu</button>
   </div>
 
@@ -1703,6 +1704,7 @@ Object.defineProperty(window, 'endPlatform', {
 });
 let gameMode = 'climber'; // 'climber' = see 10 above; 'frogger' = blind mode
 let customPlayPlatforms = null; // set when "Play" is hit in editor
+let customPlayIsIntegrated = false; // true when playing an "enabled" (integrate into game) level
 let isMobile = ('ontouchstart' in window);
 
 // ═══ Guest login ═══
@@ -2416,7 +2418,11 @@ function initGame(){
   _torchWarnedAt5 = false; hideQuickBuy();
   // Show/hide practice mode badge in HUD
   const pracBadge = document.getElementById('practiceHudBadge');
-  if(pracBadge) pracBadge.style.display = isCustomPlayMode() ? 'block' : 'none';
+  if(pracBadge){
+    const showPractice = (isCustomPlayMode() && !customPlayIsIntegrated) || testPowerUpsMode;
+    pracBadge.style.display = showPractice ? 'block' : 'none';
+    pracBadge.textContent = testPowerUpsMode ? '🧪 TEST MODE — no saves' : '🎮 PRACTICE — not saving';
+  }
   booksOwned = 0; 
   movingPlatformAbove = null; bookPlatformPulled = false;
   onPurple = false; purpleTimer = 0; purplePlatform = null;
@@ -2690,7 +2696,7 @@ function isDangerous(){
 function doReset(){
   if(!gameRunning && !paused) return;
   const danger = isDangerous(), pen = danger ? PENALTY : 0;
-  if(danger){if(!isCustomPlayMode()){coins = Math.max(0, coins - pen); if(currentUser){currentUser.ud.coins = coins; dbSave(); syncUserProfile();}} showNotif('⚠️ Cheat reset! –' + pen + ' coins 💸');}
+  if(danger){if(!isCustomPlayMode()||isIntegratedCustomPlay()){coins = Math.max(0, coins - pen); if(currentUser){currentUser.ud.coins = coins; dbSave(); syncUserProfile();}} showNotif('⚠️ Cheat reset! –' + pen + ' coins 💸');}
   paused = false; document.getElementById('pauseOverlay').classList.remove('show');
   gameRunning = false; cancelAnimationFrame(animId); lastTime = null; initGame(); animId = requestAnimationFrame(gameLoop);
 }
@@ -2699,7 +2705,29 @@ function togglePause(){
   paused = !paused;
   document.getElementById('pauseOverlay').classList.toggle('show', paused);
   document.getElementById('pauseBtn').textContent = paused ? '▶' : '⏸';
+  if(paused){
+    const inEditorMode = testPowerUpsMode || isCustomPlayMode();
+    const edBtn = document.getElementById('pauseEditorBtn');
+    const shopBtn = document.getElementById('pauseShopBtn');
+    if(edBtn) edBtn.style.display = inEditorMode ? '' : 'none';
+    if(shopBtn) shopBtn.style.display = inEditorMode ? 'none' : '';
+  }
   if(!paused){lastTime = null; animId = requestAnimationFrame(gameLoop);}
+}
+function pauseReturnToEditor(){
+  paused = false;
+  document.getElementById('pauseOverlay').classList.remove('show');
+  if(testPowerUpsMode){
+    exitTestPowerUps();
+  } else {
+    // Custom play — return to editor
+    gameRunning = false;
+    cancelAnimationFrame(animId);
+    customPlayPlatforms = null;
+    const exitBtn = document.getElementById('practiceModeExitBtn');
+    if(exitBtn) exitBtn.remove();
+    setMode('editor');
+  }
 }
 function resumeGame(){paused=false;document.getElementById('pauseOverlay').classList.remove('show');document.getElementById('pauseBtn').textContent='⏸';lastTime=null;gameRunning=true;animId=requestAnimationFrame(gameLoop);}
 
@@ -2726,7 +2754,7 @@ function jump(half, boostOverride){
     }
     if(boostOverride && jumpBoosts > 0){
       force = JUMP_BOOST_FORCE; jumpBoosts--;
-      if(currentUser && !isCustomPlayMode()) { currentUser.ud.jumpBoosts = jumpBoosts; dbSave(); syncUserProfile(); }
+      if(currentUser && (!isCustomPlayMode()||isIntegratedCustomPlay())) { currentUser.ud.jumpBoosts = jumpBoosts; dbSave(); syncUserProfile(); }
       showNotif('⬆️ Boost! (' + jumpBoosts + ' left)'); updateHUD();
       if(jumpBoosts <= 0) triggerQuickBuyIfEmpty('boost');
     }
@@ -2926,7 +2954,7 @@ function checkParachute(){
     if(parachuteDeployY === null) parachuteDeployY = player.y;
     if(player.y - parachuteDeployY >= PARACHUTE_DEPLOY_PX){
       parachuteActive = true; parachutes--;
-      if(currentUser && !isCustomPlayMode()) { currentUser.ud.parachutes = parachutes; dbSave(); syncUserProfile(); }
+      if(currentUser && (!isCustomPlayMode()||isIntegratedCustomPlay())) { currentUser.ud.parachutes = parachutes; dbSave(); syncUserProfile(); }
       showNotif('🪂 Parachute auto-deployed!');
       if(parachutes <= 0) triggerQuickBuyIfEmpty('chute');
       document.getElementById('parachuteHUD').style.opacity = '1';
@@ -3692,7 +3720,7 @@ if(SCORCHA && SCORCHA.playerEnsnared){
     if(p.color==='green' && p.hasCoin){
       const cx = p.x + p.w/2, cy = p.y - 12;
       if(player.x + player.w > cx - 10 && player.x < cx + 10 && player.y + player.h > cy - 10 && player.y < cy + 10){
-        p.hasCoin = false; if(!isCustomPlayMode()){coins += 20;} playSound('coin'); showNotif(isCustomPlayMode()?'+20 coins (practice)':'+20 coins! 🪙'); updateHUD();
+        p.hasCoin = false; if(!isCustomPlayMode() || isIntegratedCustomPlay()){coins += 20; if(currentUser && isIntegratedCustomPlay()){currentUser.ud.coins=coins;}} playSound('coin'); showNotif((isCustomPlayMode()&&!isIntegratedCustomPlay())?'+20 coins (practice)':'+20 coins! 🪙'); updateHUD();
       }
     }
   }
@@ -3784,7 +3812,7 @@ if(SCORCHA && SCORCHA.playerEnsnared){
             // Leaving a non-sticky platform clears sticky state if was airborne
             if(stickyPlatform && stickyPlatform !== p){ onSticky=false; stickyTimer=0; stickyPlatform=null; }
           }
-          if(p.color==='green' && p.hasCoin){p.hasCoin=false;if(!isCustomPlayMode()){coins+=20;if(currentUser)currentUser.ud.coins=coins;}playSound('coin');showNotif(isCustomPlayMode()?'+20 coins (practice — not saved)':'+20 coins! 🪙');updateHUD();}
+          if(p.color==='green' && p.hasCoin){p.hasCoin=false;if(!isCustomPlayMode()||isIntegratedCustomPlay()){coins+=20;if(currentUser)currentUser.ud.coins=coins;}playSound('coin');showNotif((isCustomPlayMode()&&!isIntegratedCustomPlay())?'+20 coins (practice — not saved)':'+20 coins! 🪙');updateHUD();}
 // Ice platform: lowers lava by 2 platform gaps
 if (p.color === 'ice' && !p.iceUsed) {
   p.iceUsed = true;
@@ -3805,8 +3833,8 @@ if (p.color === 'ice' && !p.iceUsed) {
             const nl = Math.floor(platformCount / 100) + 1;
 			if(nl !== level){
 			  level = nl; lavaPixPerFrame = lavaSpeedForLevel(level) / 60;
-			  if(!isCustomPlayMode()) coins += 50; playSound('coin');
-			  showNotif(isCustomPlayMode() ? '🌋 Level ' + level + '! (practice)' : '🌋 Level ' + level + '! +50 coins 🪙');
+			  if(!isCustomPlayMode()||isIntegratedCustomPlay()) coins += 50; playSound('coin');
+			  showNotif((isCustomPlayMode()&&!isIntegratedCustomPlay()) ? '🌋 Level ' + level + '! (practice)' : '🌋 Level ' + level + '! +50 coins 🪙');
 			  if(level >= NIGHT_MODE_LEVEL && !nightMode && torchBattery <= 0){ nightMode = true; nightVisiblePlatforms.clear(); }
 			}
             // Story mode safety: unconditionally enforce the locked target EVERY frame.
@@ -4665,7 +4693,7 @@ function drawTestModeOverlays(zW, zH){
 function saveScore(){
   if(!currentUser) return;
   // Practice mode: no leaderboard, no score/power-up persistence
-  if(isCustomPlayMode()) return;
+  if(isCustomPlayMode() && !isIntegratedCustomPlay()) return;
   const ud = currentUser.ud;
   // Submit to leaderboard (normal modes)
   if (!currentStoryEpisode && !versusMode) {
@@ -4725,7 +4753,7 @@ async function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
 
   } else if(outcome === 'menu'){
     // Sell power-ups → coins, keep coins, go to menu
-    if(!isCustomPlayMode()){
+    if(!isCustomPlayMode() || isIntegratedCustomPlay()){
       sellAllPowerUps();
       if(currentUser){
         currentUser.ud.coins = coins;
@@ -4744,7 +4772,7 @@ async function handleCoinsAndPowerUps(outcome, animate=false, onDone=null){
 
   } else if(outcome === 'menu-retain'){
     // Keep power-ups and coins exactly as they are
-    if(currentUser && !isCustomPlayMode()){
+    if(currentUser && (!isCustomPlayMode() || isIntegratedCustomPlay())){
       currentUser.ud.coins = coins;
       currentUser.ud.jumpBoosts = jumpBoosts;
       currentUser.ud.parachutes = parachutes;
@@ -4917,8 +4945,11 @@ function _gameEnd(fromPurple) {
   gameRunning = false;
   cancelAnimationFrame(animId);
   resetScorcha();
+  // Clean up editor exit buttons if present
+  const practBtn = document.getElementById('practiceModeExitBtn');
+  if(practBtn) practBtn.remove();
 
-  const practiceMode = isCustomPlayMode();
+  const practiceMode = isCustomPlayMode() && !isIntegratedCustomPlay();
 
   if (!practiceMode) {
     saveScore();
@@ -5038,8 +5069,11 @@ function _gameEnd(fromPurple) {
 function _gameWin() {
   gameRunning = false;
   cancelAnimationFrame(animId);
+  // Clean up editor exit buttons if present
+  const practBtnW = document.getElementById('practiceModeExitBtn');
+  if(practBtnW) practBtnW.remove();
 
-  const practiceMode = isCustomPlayMode();
+  const practiceMode = isCustomPlayMode() && !isIntegratedCustomPlay();
 
 if (!practiceMode) {
     saveScore();
@@ -5332,7 +5366,7 @@ function buyItem(type){
     playSound('buy');
     updateTorchHUD();
   }
-  if(currentUser && !isCustomPlayMode()){currentUser.ud.coins=coins;dbSave();syncUserProfile();}updateHUD();
+  if(currentUser && (!isCustomPlayMode()||isIntegratedCustomPlay())){currentUser.ud.coins=coins;dbSave();syncUserProfile();}updateHUD();
 }
 function updateEndPlatform(){
   // Story mode: never allow the selector to override the locked target
@@ -5552,6 +5586,7 @@ function playCustomLevel(i){
     index: j,
     iceUsed: false
   }));
+  customPlayIsIntegrated = !!(savedLevels[i].enabled);
   setMode('play');
   startGame();
 }
@@ -5953,7 +5988,9 @@ function showEdSaveToast(msg){
 function editorLoad(){
   if(!edPlatforms.length){alert('Add platforms first!');return;}
   customPlayPlatforms=[...edPlatforms].sort((a,b)=>b.y-a.y).map((p,i)=>({...p,index:i}));
+  customPlayIsIntegrated = false; // direct editor play is always practice
   setMode('play');startGame();
+  _injectPracticeModeExitBtn();
 }
 
 // ── PLATFORM CONFIGURATOR ──
@@ -6279,6 +6316,28 @@ function _injectTestModeExitBtn(){
   if(gs) gs.appendChild(btn);
 }
 
+function _injectPracticeModeExitBtn(){
+  const existing = document.getElementById('practiceModeExitBtn');
+  if(existing) existing.remove();
+  const btn = document.createElement('button');
+  btn.id = 'practiceModeExitBtn';
+  btn.textContent = '↩ Exit Practice Mode';
+  btn.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:50;' +
+    'background:linear-gradient(135deg,#1a5c8a,#3a9cd4);color:#fff;border:none;border-radius:20px;padding:6px 16px;' +
+    'font-size:12px;font-weight:bold;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.5);white-space:nowrap;';
+  btn.onclick = () => {
+    gameRunning = false;
+    cancelAnimationFrame(animId);
+    paused = false;
+    document.getElementById('pauseOverlay').classList.remove('show');
+    customPlayPlatforms = null;
+    btn.remove();
+    setMode('editor');
+  };
+  const gs = document.getElementById('gameScreen');
+  if(gs) gs.appendChild(btn);
+}
+
 function exitTestPowerUps(){
   testPowerUpsMode = false;
   customPlayPlatforms = null;
@@ -6288,6 +6347,8 @@ function exitTestPowerUps(){
   jumpBoosts = 0; parachutes = 0; skipUses = 0; bookUses = 0; lavaShips = 0;
   const exitBtn = document.getElementById('testModeExitBtn');
   if(exitBtn) exitBtn.remove();
+  const practBtn = document.getElementById('practiceModeExitBtn');
+  if(practBtn) practBtn.remove();
   setMode('editor');
 }
 function exportLevel(){
@@ -7878,6 +7939,10 @@ function isCustomPlayMode(){
             && !currentStoryEpisode
             && !versusMode
             && !testPowerUpsMode);
+}
+// Returns true when playing an "Integrate into game" enabled custom level — coins & progress ARE saved
+function isIntegratedCustomPlay(){
+  return isCustomPlayMode() && customPlayIsIntegrated;
 }
 
 const DIAL_SLOTS = [
