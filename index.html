@@ -875,6 +875,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     </div>
   </div>
   <button class="startBtn" id="playStartBtn" onclick="startGame()">▶ PLAY</button>
+  <button class="startBtn" style="background:linear-gradient(135deg,#c0392b,#7b0d00);color:#fff;border:2px solid #ff6644;" onclick="startTimerMode()">⏱ TIMER MODE — Race the Clock</button>
   <button class="startBtn" style="background:linear-gradient(135deg,#9c27b0,#6a1b9a);color:#fff;" onclick="startVersus()">⚔️ VERSUS — 3 Opponents</button>
   <!-- GAME MODE TOGGLE -->
   <div id="gameModeToggle" style="display:flex;align-items:center;gap:10px;margin:8px auto 2px;background:#1a1a3e;border:1.5px solid #4a5fd4;border-radius:30px;padding:6px 14px;width:fit-content;cursor:pointer;" onclick="toggleGameMode()">
@@ -904,6 +905,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
     <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1.5px solid #2a2a4a;padding-bottom:8px;">
       <button class="lbTab active" id="lbTabClimt" onclick="showLbTab('climber')">🧗 Climber</button>
       <button class="lbTab" id="lbTabFrogg" onclick="showLbTab('frogger')">🐸 Frogger</button>
+      <button class="lbTab" id="lbTabTimer" onclick="showLbTab('timer')">⏱ Timer</button>
       <button class="lbTab" id="lbTabStory" onclick="showLbTab('story')">🌋 Story</button>
 	  <button class="lbTab" id="lbTabCommunity" onclick="showLbTab('community')">🌍 Community</button>
     </div>
@@ -956,6 +958,7 @@ html,body{width:100%;height:100%;background:#0d0d2b;overflow:hidden;font-family:
       <h3>🎮 Game Modes</h3>
       <div class="infoRow"><div class="infoIcon">🧗</div><div class="infoText"><b>Climber</b> — You can see 10 platforms above. Great for beginners and high scores.</div></div>
       <div class="infoRow"><div class="infoIcon">🐸</div><div class="infoText"><b>Frogger</b> — Blind mode. You can only see 2 platforms above. Platforms still exist above — jump to find them!</div></div>
+      <div class="infoRow"><div class="infoIcon">⏱</div><div class="infoText"><b>Timer Mode</b> — Race the clock to hit platform checkpoints (100, 250, 500, 1000…). Lava speeds up as you climb. Miss the deadline and lava floods the screen! Best times set the new record for all players.</div></div>
       <div class="infoRow"><div class="infoIcon">⚔️</div><div class="infoText"><b>Versus</b> — Race 3 AI bots (Roxy, Blaze, Zippy) to the highest platform. Death costs 30 coins.</div></div>
       <div class="infoRow"><div class="infoIcon">🌋</div><div class="infoText"><b>Volcano Chronicles</b> — Story mode. Rescue artifacts from real-world volcanoes. Each volcano's elevation = your platform target.</div></div>
     </div>
@@ -1441,6 +1444,24 @@ const LAVA_SPEED_INCREASE = 0.06; // gentle 6% increase per level
 const LAVA_MAX_PPS = (4 * PLATFORM_GAP) / (2 * 2 * Math.abs(JUMP_FORCE) / GRAVITY / 60) * 60 * 0.98;
 // Precalculated ≈ 42.3 px/sec
 
+// ── TIMER MODE CONSTANTS ──
+// Checkpoint platform counts
+const TIMER_CHECKPOINTS = [100, 250, 500, 1000, 2000, 5000];
+// Default cumulative times (seconds from start) — based on ~0.96s/platform * 0.9 challenge factor
+// (Lance spec: 4 min / 240s for 250 platforms → 0.96s/plt, then -10% = 0.864s/plt)
+const TIMER_DEFAULT_TIMES = { 100: 86, 250: 216, 500: 432, 1000: 864, 2000: 1728, 5000: 4320 };
+const TIMER_LB_KEY = 'fil_timer_lb_v1';
+
+// ── TIMER MODE LAVA SPEED — tweak these three values to tune difficulty ──
+// Starting speed: lava speed at platform 0.  Normal Climber starts at 0.70 plt/s.
+// Default 1.40 plt/s = double Climber start, as requested.
+const TIMER_LAVA_START_PLAT_PER_SEC = 1.40; // ← change this: starting speed (platforms per second)
+
+// Speed growth: adds TIMER_LAVA_STEP_PCT% every TIMER_LAVA_STEP_PLATFORMS platforms (additive).
+// At 1000 platforms: 50 steps × 2% = +100% on top of the starting speed → 2× 1.40 = 2.80 plt/s.
+const TIMER_LAVA_STEP_PLATFORMS = 20;        // ← change this: platform interval between speed bumps
+const TIMER_LAVA_STEP_PCT       = 2;         // ← change this: % added per bump (additive)
+
 // PINCH_ZOOM: min/max zoom scale (1.0 = no change, 0.2 = zoomed way out)
 const ZOOM_MIN = 0.2;    // most zoomed out (see most of level)
 const ZOOM_MAX = 1.0;    // normal size (starting zoom)
@@ -1506,6 +1527,37 @@ function lavaSpeedForLevel(lvl) {
   const intervals = Math.floor((lvl - 1) / LAVA_LEVEL_INTERVAL);
   const pps = LAVA_INITIAL_PLAT_PER_SEC * PLATFORM_GAP * Math.pow(1 + LAVA_SPEED_INCREASE, intervals);
   return Math.min(pps, LAVA_MAX_PPS);
+}
+
+// ── TIMER MODE: lava speed as a function of platform count ──
+// Phase 1 (0–125 platforms): initial speed → LAVA_MAX_PPS in steps of 5 platforms
+// Phase 2 (125–250 platforms): LAVA_MAX_PPS → 2×LAVA_MAX_PPS, then capped
+// Lava speed for Timer Mode.
+// Formula: TIMER_LAVA_START_PLAT_PER_SEC × PLATFORM_GAP × (1 + steps × TIMER_LAVA_STEP_PCT/100)
+// where steps = Math.floor(platformCount / TIMER_LAVA_STEP_PLATFORMS)
+// Example (defaults): start=1.40, step=20 plts, +2%/step
+//   → at 1000 plts: 50 steps × 2% = +100% → 2× 1.40 = 2.80 plt/s
+// To tune: edit the three TIMER_LAVA_ constants above (search "TIMER_LAVA_START_PLAT_PER_SEC").
+function timerModeLavaPixPerFrame(plt) {
+  const initialPPS = TIMER_LAVA_START_PLAT_PER_SEC * PLATFORM_GAP; // starting px/sec
+  const steps      = Math.floor(Math.max(0, plt) / TIMER_LAVA_STEP_PLATFORMS);
+  const multiplier = 1 + (steps * TIMER_LAVA_STEP_PCT / 100);      // additive: +2% per step
+  return (initialPPS * multiplier) / 60;                            // returns px per frame
+}
+
+// Start a Timer Mode run
+function startTimerMode() {
+  timerMode = true;
+  timerCheckpointIdx = 0;
+  timerCheckpointPassed = [];
+  timerCheckpointFlash = 0;
+  timerCheckpointFlashText = '';
+  timerFlagAnimT = 0;
+  timerExpired = false;
+  timerLastSurgeStep = -1;
+  timerSurgeFlash = 0;
+  timerLBLoad();
+  startGame();
 }
 
 window.VOLCANO_EPISODES = [
@@ -1628,6 +1680,47 @@ function lbLoad() {
 function lbSave() {
   try { localStorage.setItem(LB_KEY, JSON.stringify(leaderboard)); } catch(e) {}
 }
+
+// ── TIMER MODE LEADERBOARD ──
+// Stores per-checkpoint best times: { entries: [{name, secs, checkpoint, date}], bests: {100: secs, ...} }
+let timerLB = { entries: [], bests: {} };
+
+function timerLBLoad() {
+  try {
+    const s = localStorage.getItem(TIMER_LB_KEY);
+    if (s) timerLB = JSON.parse(s);
+  } catch(e) {}
+  if (!timerLB.entries) timerLB.entries = [];
+  if (!timerLB.bests)   timerLB.bests   = {};
+  // Also load into timerBestTimes for quick access
+  timerBestTimes = Object.assign({}, timerLB.bests);
+}
+function timerLBSave() {
+  try { localStorage.setItem(TIMER_LB_KEY, JSON.stringify(timerLB)); } catch(e) {}
+}
+
+// Submit a completed Timer Mode run checkpoint
+function timerLBSubmit(name, checkpoint, secs) {
+  if (!name) return;
+  const entry = { name, checkpoint, secs: Math.round(secs), date: _lbDate() };
+  timerLB.entries.push(entry);
+  timerLB.entries.sort((a,b) => a.checkpoint - b.checkpoint || a.secs - b.secs);
+  // Keep top 50 entries
+  timerLB.entries = timerLB.entries.slice(0, 50);
+  // Update per-checkpoint best times
+  if (!timerLB.bests[checkpoint] || secs < timerLB.bests[checkpoint]) {
+    timerLB.bests[checkpoint] = Math.round(secs);
+    timerBestTimes[checkpoint] = Math.round(secs);
+  }
+  timerLBSave();
+}
+
+// Get the effective time limit (cumulative seconds) for a given checkpoint
+function timerGetEffectiveTime(checkpoint) {
+  // Use the leaderboard best if it exists (it becomes the new bar), else fall back to default
+  return timerLB.bests[checkpoint] || TIMER_DEFAULT_TIMES[checkpoint] || (checkpoint * 0.864);
+}
+
 function storyRunLoad() {
   try { const s = localStorage.getItem(STORY_RUN_KEY); if(s) storyRunTimes = JSON.parse(s); } catch(e) {}
 }
@@ -2192,6 +2285,19 @@ let onSticky=false, stickyTimer=0, stickyPlatform=null;
 // stickyTimer: >0 = fully stuck (1s), then transitions to slow movement
 let gameRunning=false, paused=false, animId, lastTime=null;
 let testPowerUpsMode = false; // true while in Power-Up Test sandbox
+
+// ── TIMER MODE STATE ──
+let timerMode = false;
+let lastWasTimerMode = false; // set in _gameEnd so restartGame() can route back to Timer Mode
+let timerCheckpointIdx = 0;      // index into TIMER_CHECKPOINTS — which one we're racing toward
+let timerCheckpointPassed = [];  // [{checkpoint, secs}] — checkpoints cleared this run
+let timerBestTimes = {};         // {100: secs, ...} — best times per checkpoint (loaded from storage)
+let timerCheckpointFlash = 0;    // countdown frames for checkpoint overlay
+let timerCheckpointFlashText = '';
+let timerFlagAnimT = 0;          // flag waver animation timer
+let timerExpired = false;        // true when timer ran out → lava-fill death pending
+let timerLastSurgeStep = -1;     // last TIMER_LAVA_STEP_PLATFORMS step that triggered a surge anim
+let timerSurgeFlash = 0;         // frames remaining for the bottom-edge surge flash
 let levelTimerSecs = 0;   // seconds elapsed in the current level/episode
 let levelTimerStart = 0;  // performance.now() at game start
 let anim = {active:false, type:'none', angle:0, funnyFace:false, tiltDir:1, progress:0, vine: null};
@@ -2510,6 +2616,13 @@ if(customPlayPlatforms && customPlayPlatforms.length > 0){
   lavaShipActive = false;
   lavaShipTimer = 0;
   lavaShipSurgeThreshold = 25;
+  // Timer Mode: reset per-run state (but keep timerMode flag, set before startGame() is called)
+  timerCheckpointIdx = 0;
+  timerCheckpointPassed = [];
+  timerCheckpointFlash = 0;
+  timerCheckpointFlashText = '';
+  timerFlagAnimT = 0;
+  timerExpired = false;
   stalagmites = [];
   stalagmiteHiss = [];
   torchBattery = 100;
@@ -2524,6 +2637,7 @@ function getHudModeLabel(){
   // Story mode: episode info already shown in levelDisplay by story updateHUD wrapper — don't duplicate here
   if(typeof currentStoryEpisode !== 'undefined' && currentStoryEpisode) return '';
   if(testPowerUpsMode) return '🧪 Power-Up Test';
+  if(timerMode) return '⏱ Timer Mode';
   if(typeof versusMode !== 'undefined' && versusMode) return '⚔️ Versus Mode';
   // Standalone custom play (direct editor Play button — no normal game mode)
   if(typeof isCustomPlayMode === 'function' && isCustomPlayMode()) return '🗂 Custom Level';
@@ -2596,8 +2710,30 @@ function _updateHUD(){
   // Live game timer in HUD
   const hudTimerEl = document.getElementById('hudTimer');
   if(hudTimerEl && typeof levelTimerSecs !== 'undefined' && gameRunning) {
-    const ts = Math.floor(levelTimerSecs), tm = Math.floor(ts/60), tr = ts%60;
-    hudTimerEl.textContent = tm>0 ? `${tm}m${String(tr).padStart(2,'0')}s` : `${ts}s`;
+    if (timerMode) {
+      // Timer Mode: show countdown to next checkpoint
+      const curChk = TIMER_CHECKPOINTS[timerCheckpointIdx];
+      if (curChk !== undefined) {
+        const timeLimit = timerGetEffectiveTime(curChk);
+        const timeLeft  = Math.max(0, timeLimit - levelTimerSecs);
+        const tl = Math.ceil(timeLeft);
+        const tlm = Math.floor(tl / 60), tlr = tl % 60;
+        const tlStr = tlm > 0 ? `${tlm}m${String(tlr).padStart(2,'0')}s` : `${tl}s`;
+        const pct = timeLeft / timeLimit;
+        hudTimerEl.textContent = `⏱ ${tlStr}`;
+        hudTimerEl.style.color = pct < 0.2 ? '#ff3322' : pct < 0.4 ? '#ff9922' : '#aaffaa';
+        hudTimerEl.style.fontWeight = pct < 0.2 ? 'bold' : '';
+        hudTimerEl.title = `Next checkpoint: ${curChk} platforms`;
+      } else {
+        hudTimerEl.textContent = '⏱ ✓ All Done!';
+        hudTimerEl.style.color = '#aaffaa';
+      }
+    } else {
+      const ts = Math.floor(levelTimerSecs), tm = Math.floor(ts/60), tr = ts%60;
+      hudTimerEl.textContent = tm>0 ? `${tm}m${String(tr).padStart(2,'0')}s` : `${ts}s`;
+      hudTimerEl.style.color = '#aaa';
+      hudTimerEl.style.fontWeight = '';
+    }
   }
   // Lava distance in platforms (hidden in test mode — lava is artificial)
   if(typeof lavaWorldY !== 'undefined' && typeof player !== 'undefined'){
@@ -2959,6 +3095,10 @@ function updateBgAnims(dt){
     if(a.type==='bird'){const wave=Math.sin(a.life*0.15)*8;a.y+=wave*0.05*dt;}
     if(a.type==='star'){a.pulse+=0.08*dt;}
     if(a.type==='ghost'){a.x+=(Math.random()-0.5)*0.5*dt;}
+    if(a.type==='lavasurge'){
+      a.vy += 0.22*dt;  // gravity pulls them back down
+      if(a.rot !== undefined) a.rot += a.rotV*dt;
+    }
   });
   bgAnimations = bgAnimations.filter(a => a.life < a.maxLife && a.x > -100 && a.x < gW + 100);
   // spawn randomly — more during lava chase tension
@@ -2967,6 +3107,32 @@ function updateBgAnims(dt){
   const lavaScrY = lavaWorldY - camera.y / currentZoom;
   if(!testPowerUpsMode && lavaScrY < gH - 60 && Math.random() < 0.025 * dt) bgAnimations.push({type:'bone',x:Math.random()*gW,y:lavaScrY-5,vx:0,vy:-(3+Math.random()*4),life:0,maxLife:70,frame:0,fromRight:false});
 }
+// ── TIMER MODE LAVA SURGE BURST ──
+// Spawns rocks and lava splatter hurling upward from the bottom of the screen,
+// signalling that the lava has just gotten faster (speed bump every 20 platforms).
+function spawnTimerSurgeBurst() {
+  const count = 14 + Math.floor(Math.random() * 8); // 14–22 particles
+  for (let i = 0; i < count; i++) {
+    const isRock  = Math.random() < 0.4;
+    const isFlame = !isRock && Math.random() < 0.5;
+    bgAnimations.push({
+      type: 'lavasurge',
+      x:    Math.random() * gW,             // screen pixels (pre-zoom)
+      y:    gH + 10,                         // start just off bottom
+      vx:   (Math.random() - 0.5) * 6,      // scatter left/right
+      vy:   -(6 + Math.random() * 9),        // hurl upward
+      life: 0,
+      maxLife: 55 + Math.random() * 35,
+      size: isRock ? (4 + Math.random() * 7) : (3 + Math.random() * 5),
+      isRock,
+      isFlame,
+      rot: Math.random() * Math.PI * 2,
+      rotV: (Math.random() - 0.5) * 0.2,
+      hue: isRock ? 20 + Math.random() * 25 : (isFlame ? 10 + Math.random() * 30 : 40 + Math.random() * 20),
+    });
+  }
+}
+
 function drawBgAnims(){
   bgAnimations.forEach(a=>{
     gCtx.save();
@@ -2998,9 +3164,75 @@ function drawBgAnims(){
       gCtx.font='22px Arial';gCtx.textAlign='center';gCtx.fillText('👻',a.x,a.y);
     } else if(a.type==='leaf'){
       gCtx.font='16px Arial';gCtx.textAlign='center';gCtx.fillText('🍃',a.x,a.y);
+    } else if(a.type==='lavasurge'){
+      // Drawn in screen-pixel coords but inside zoom-scaled context — divide by zoom
+      const z = currentZoom || 1;
+      const px = a.x / z, py = a.y / z;
+      const lifeT = a.life / a.maxLife; // 0→1
+      if (a.isRock) {
+        // Tumbling rock fragment — dark brown/grey rectangle, rotates
+        gCtx.save();
+        gCtx.translate(px, py);
+        gCtx.rotate(a.rot || 0);
+        const shade = Math.round(80 + lifeT * 40);
+        gCtx.fillStyle = `rgba(${shade+30},${shade},${Math.round(shade*0.6)},${gCtx.globalAlpha})`;
+        gCtx.fillRect(-a.size/2, -a.size/3, a.size, a.size * 0.6);
+        // Hot glow edge
+        gCtx.strokeStyle = `rgba(255,${Math.round(80+a.hue*2)},0,${gCtx.globalAlpha * 0.7})`;
+        gCtx.lineWidth = 1.2;
+        gCtx.strokeRect(-a.size/2, -a.size/3, a.size, a.size * 0.6);
+        gCtx.restore();
+      } else if (a.isFlame) {
+        // Teardrop flame blob
+        const r = a.size * (1 - lifeT * 0.3);
+        const grd = gCtx.createRadialGradient(px, py, 0, px, py, r * 2.2);
+        grd.addColorStop(0, `rgba(255,240,80,${gCtx.globalAlpha})`);
+        grd.addColorStop(0.4, `rgba(255,${Math.round(80+a.hue*3)},0,${gCtx.globalAlpha * 0.8})`);
+        grd.addColorStop(1, `rgba(180,0,0,0)`);
+        gCtx.fillStyle = grd;
+        gCtx.beginPath(); gCtx.arc(px, py, r * 2.2, 0, Math.PI*2); gCtx.fill();
+      } else {
+        // Molten lava blob — bright orange/yellow
+        const r = a.size * (1 - lifeT * 0.4);
+        const grd = gCtx.createRadialGradient(px, py, 0, px, py, r * 1.8);
+        grd.addColorStop(0, `rgba(255,255,160,${gCtx.globalAlpha})`);
+        grd.addColorStop(0.5, `rgba(255,${Math.round(120+a.hue*2)},0,${gCtx.globalAlpha * 0.9})`);
+        grd.addColorStop(1, `rgba(200,30,0,0)`);
+        gCtx.fillStyle = grd;
+        gCtx.beginPath(); gCtx.arc(px, py, r * 1.8, 0, Math.PI*2); gCtx.fill();
+        // Small trailing drip
+        if (a.vy < 0) {
+          gCtx.fillStyle = `rgba(255,80,0,${gCtx.globalAlpha * 0.5})`;
+          gCtx.beginPath(); gCtx.arc(px, py + r * 1.2, r * 0.5, 0, Math.PI*2); gCtx.fill();
+        }
+      }
     }
     gCtx.restore();
   });
+  // ── Timer Mode: bottom-edge surge flash ──
+  if (timerSurgeFlash > 0 && timerMode) {
+    const z = currentZoom || 1;
+    const flashAlpha = Math.min(1, timerSurgeFlash / 20) * 0.5;
+    const flashH = (gH / z) * 0.18; // bottom 18% of screen
+    const grd2 = gCtx.createLinearGradient(0, gH/z - flashH, 0, gH/z);
+    grd2.addColorStop(0, `rgba(255,60,0,0)`);
+    grd2.addColorStop(1, `rgba(255,120,0,${flashAlpha})`);
+    gCtx.fillStyle = grd2;
+    gCtx.fillRect(0, gH/z - flashH, gW/z, flashH);
+    // "LAVA SURGE" text at bottom
+    if (timerSurgeFlash > 10) {
+      const textAlpha = Math.min(1, timerSurgeFlash / 30);
+      gCtx.save();
+      gCtx.globalAlpha = textAlpha;
+      gCtx.font = `bold ${Math.round(11/z)}px Arial Black, sans-serif`;
+      gCtx.textAlign = 'center';
+      gCtx.fillStyle = '#ffcc00';
+      gCtx.shadowColor = '#ff4400';
+      gCtx.shadowBlur = 6;
+      gCtx.fillText('🌋 LAVA SURGE — Speeding Up!', gW / z / 2, gH/z - 8);
+      gCtx.restore();
+    }
+  }
 }
 
 // ═══ PARACHUTE ═══
@@ -3073,7 +3305,7 @@ function updateAnim(dt){
       player.currentPlatformIndex = vineNearPlat.index;
       console.log('[PLT] vine: platformCount='+platformCount+' | p.index='+vineNearPlat.index+' | source=vineLaunch');
       const nl = Math.floor(platformCount/100)+1;
-      if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
+      if(nl !== level){ level=nl; if(!timerMode) lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
       updateHUD();
     }
     if(elapsed >= 1){
@@ -4008,7 +4240,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
   //           Frogger mode: player centered (can't see much above)
   const CAM_CLIMBER_OFFSET = 0.75; // player at 75% down = see more above
   const CAM_FROGGER_OFFSET = 0.50; // player centered
-  const camYOffset = (gameMode === 'climber') ? CAM_CLIMBER_OFFSET : CAM_FROGGER_OFFSET;
+  const camYOffset = (timerMode || gameMode === 'climber') ? CAM_CLIMBER_OFFSET : CAM_FROGGER_OFFSET;
   camera.y += ((player.y + player.h/2 - zH * camYOffset) - camera.y) * 0.10 * dt;
   // Clamp camera so void panels are visible but we don't scroll too far off world
   // Allow camera to show up to EDGE_BUFFER beyond each side
@@ -4018,6 +4250,74 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
 
   if(!initialTimerActive && !testPowerUpsMode) lavaWorldY -= lavaPixPerFrame * dt;
   if(testPowerUpsMode) lavaWorldY = player.y + 99999; // keep lava far below
+
+  // ── TIMER MODE: dynamic lava speed + checkpoint tracking + expiry ──
+  if (timerMode && gameRunning) {
+    // Override lava speed based on platformCount
+    lavaPixPerFrame = timerModeLavaPixPerFrame(platformCount);
+
+    // Check for timer expiry — if time runs out before reaching current checkpoint, lava fills
+    const curCheckpoint = TIMER_CHECKPOINTS[timerCheckpointIdx];
+    if (curCheckpoint !== undefined) {
+      const timeLimit = timerGetEffectiveTime(curCheckpoint);
+      const timeLeft  = timeLimit - levelTimerSecs;
+      if (!timerExpired && timeLeft <= 0 && platformCount < curCheckpoint) {
+        // TIME'S UP — slam lava to top of screen instantly
+        timerExpired = true;
+        lavaWorldY = player.y - 200; // lava jumps to player
+        playSound('death');
+        showNotif('⏱ TIMES UP! Lava claims you!');
+      }
+    }
+
+    // Checkpoint detection — did we just pass a checkpoint?
+    const nextChk = TIMER_CHECKPOINTS[timerCheckpointIdx];
+    if (nextChk !== undefined && platformCount >= nextChk) {
+      const timeReached = levelTimerSecs;
+      timerCheckpointPassed.push({ checkpoint: nextChk, secs: timeReached });
+      // Submit to leaderboard
+      const pName = currentUser ? currentUser.name : 'Anon';
+      timerLBSubmit(pName, nextChk, timeReached);
+      // Flash overlay
+      timerCheckpointFlashText = `🏁 ${nextChk} Platforms Cleared!`;
+      timerCheckpointFlash = 180; // ~3 seconds at 60fps
+      // Speak "Keep Going!" — male voice, excited exclamation
+      try {
+        if (window.speechSynthesis) {
+          // Cancel any queued speech first so it fires immediately
+          window.speechSynthesis.cancel();
+          const utt = new SpeechSynthesisUtterance('Keep going!');
+          utt.rate  = 1.35;  // faster = more urgent/excited
+          utt.pitch = 0.75;  // lower pitch = male
+          utt.volume = 1.0;
+          // Try to pick an English male voice
+          const voices = window.speechSynthesis.getVoices();
+          const malePrefs = ['daniel','alex','david','james','fred','tom','mike','male','en-us','en_us'];
+          const maleVoice = voices.find(v => {
+            const n = (v.name + v.lang).toLowerCase();
+            return malePrefs.some(p => n.includes(p)) && v.lang.toLowerCase().startsWith('en');
+          }) || voices.find(v => v.lang.toLowerCase().startsWith('en'));
+          if (maleVoice) utt.voice = maleVoice;
+          window.speechSynthesis.speak(utt);
+        }
+      } catch(e) {}
+      playSound('coin');
+      timerCheckpointIdx++;
+      timerFlagAnimT = 0; // reset flag animation
+    }
+
+    // Flag waver animation counter
+    timerFlagAnimT += dt;
+
+    // ── Speed bump detection → spawn lava surge animation ──
+    const currentSurgeStep = Math.floor(platformCount / TIMER_LAVA_STEP_PLATFORMS);
+    if (currentSurgeStep > timerLastSurgeStep && timerLastSurgeStep >= 0) {
+      spawnTimerSurgeBurst();
+      timerSurgeFlash = 45; // ~0.75s edge flash
+    }
+    timerLastSurgeStep = currentSurgeStep;
+    if (timerSurgeFlash > 0) timerSurgeFlash -= dt;
+  }
   updateTippingPlatforms(dt);
   updateSwingPlatforms(dt);
   updateCrumblePlatforms(dt);
@@ -4070,8 +4370,8 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
     }
   }
 
-// ── LAVA SURGE MECHANIC (suppressed in test mode) ──
-  if(!testPowerUpsMode){
+// ── LAVA SURGE MECHANIC (suppressed in test mode and timer mode) ──
+  if(!testPowerUpsMode && !timerMode){
   const SURGE_THRESHOLD_BASE = 15 * PLATFORM_GAP;
   const SURGE_TARGET_PLATFORMS = 5;
   const SURGE_PLATFORM_COOLDOWN = 10;
@@ -4120,7 +4420,7 @@ if (!anim.active || anim.type !== 'vineSwing') { // only check if not already sw
         player.currentPlatformIndex = shipPassedPlat.index;
         console.log('[PLT] ship: platformCount='+platformCount+' | p.index='+shipPassedPlat.index+' | source=lavaShip');
         const nl = Math.floor(platformCount/100)+1;
-        if(nl !== level){ level=nl; lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
+        if(nl !== level){ level=nl; if(!timerMode) lavaPixPerFrame=lavaSpeedForLevel(level)/60; }
         updateHUD();
       }
     } else {
@@ -4199,7 +4499,7 @@ if (platformCount > 180 && platformCount < 200) {
   if(versusMode && typeof bots !== 'undefined'){
     bots.forEach(b => { if(!b.eliminated) entitiesNeedingPlatforms.push({y: b.y}); });
   }
-  if(typeof gameMode !== 'undefined' && gameMode === 'climber'){
+  if((typeof gameMode !== 'undefined' && gameMode === 'climber') || timerMode){
     entitiesNeedingPlatforms.push({y: player.y});
   }
   entitiesNeedingPlatforms.forEach(entity => {
@@ -4212,10 +4512,15 @@ if (platformCount > 180 && platformCount < 200) {
       }
     }
   });
-const climberExtraAbove = (typeof gameMode !== 'undefined' && gameMode === 'climber') ? 1000 * PLATFORM_GAP : 0;
+const climberExtraAbove = ((typeof gameMode !== 'undefined' && gameMode === 'climber') || timerMode) ? 1000 * PLATFORM_GAP : 0;
   const totalExtraAbove = Math.max(versusExtraAbove, climberExtraAbove);
   platforms = platforms.filter(p => {
-    if(p.tipping && p.tipping !== 'idle' && p.tipping !== 'waiting') return true;               // never cull active tipping platforms
+    if(p.tipping && p.tipping !== 'idle' && p.tipping !== 'waiting') return true; // never cull active tipping platforms
+    if(timerMode) {
+      // Timer Mode: keep everything above lava + a buffer below lava so lava always
+      // has visible platforms around it. Only cull things that are far below lava.
+      return p.y <= lavaWorldY + 10 * PLATFORM_GAP;
+    }
     if(totalExtraAbove > 0 && p.y < highestActiveY - totalExtraAbove) return false;
     if(p.y < playerWorldY) return true;                              // above player — always keep
     if(p.y <= playerWorldY + PLATFORM_HISTORY_BELOW) return true;   // below player — keep history
@@ -4499,7 +4804,141 @@ function drawSwingPlatform(p){
   // ── TEST POWER-UPS MODE: draw floor barrier + measuring tape ──
   if(testPowerUpsMode) drawTestModeOverlays(zW, zH);
 
+  // ── TIMER MODE OVERLAYS ──
+  if(timerMode) {
+    drawTimerModeOverlays(zW, zH);
+  }
+
   gCtx.restore();
+}
+
+// ── TIMER MODE: draw checkpoint flash + flag waver + countdown bar ──
+function drawTimerModeOverlays(zW, zH) {
+  const ctx = gCtx;
+  const curChk = TIMER_CHECKPOINTS[timerCheckpointIdx];
+
+  // ── Checkpoint flash overlay ──
+  if (timerCheckpointFlash > 0) {
+    timerCheckpointFlash--;
+    const alpha = Math.min(1, timerCheckpointFlash / 30) * 0.85;
+    // Gold flash bg
+    ctx.save();
+    ctx.fillStyle = `rgba(255,200,0,${alpha * 0.22})`;
+    ctx.fillRect(0, 0, zW, zH);
+    // Text banner
+    const bannerH = 80;
+    ctx.fillStyle = `rgba(0,0,0,${alpha * 0.75})`;
+    ctx.fillRect(0, zH * 0.38 - bannerH/2, zW, bannerH);
+    ctx.font = `bold ${Math.round(zW * 0.055)}px Arial Black, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `rgba(255,210,0,${alpha})`;
+    ctx.shadowColor = '#ff8800';
+    ctx.shadowBlur = 12;
+    ctx.fillText(timerCheckpointFlashText, zW / 2, zH * 0.38 + 8);
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${Math.round(zW * 0.035)}px Arial, sans-serif`;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.fillText('Keep Going!', zW / 2, zH * 0.38 + 38);
+    ctx.restore();
+  }
+
+  // ── Flag waver (appears near next checkpoint platform) ──
+  if (curChk !== undefined) {
+    // Find if the checkpoint platform is near-screen (within ~4 platforms above camera top)
+    const checkpointWorldY = -(curChk * PLATFORM_GAP) + (platforms[0] ? platforms[0].y + PLATFORM_GAP : 0);
+    // Approximate: checkpoint platform index curChk → world Y
+    const firstPlatY = platforms.length > 0 ? platforms[0].y : 0;
+    // The platform at index curChk is at approx: firstPlatY - (curChk - (platforms[0]?.index||0)) * PLATFORM_GAP
+    const firstIdx = platforms[0] ? platforms[0].index : 0;
+    const chkPlatWorldY = firstPlatY - (curChk - firstIdx) * PLATFORM_GAP;
+    const chkScreenY = chkPlatWorldY - camera.y;
+
+    // Draw flag waver if checkpoint is visible or up to 80px above screen
+    if (chkScreenY > -80 && chkScreenY < zH + 20) {
+      // Position: inside the play area, near right edge.
+      // camera.x is world-space, so (WORLD_W - camera.x) = screen-x of right world boundary.
+      // We place him ~65 units inside from that boundary so he's in the dark game background.
+      const worldRightEdge = WORLD_W - camera.x;
+      const flagX = Math.min(zW - 30, worldRightEdge - 65);
+      drawTimerFlagWaver(ctx, flagX, chkScreenY - 10, timerFlagAnimT);
+    }
+  }
+
+  // ── Countdown bar at bottom of screen ──
+  if (curChk !== undefined && !timerExpired) {
+    const timeLimit = timerGetEffectiveTime(curChk);
+    const timeLeft  = Math.max(0, timeLimit - levelTimerSecs);
+    const pct       = timeLeft / timeLimit;
+    const barW      = zW * 0.7;
+    const barX      = (zW - barW) / 2;
+    const barY      = zH - 24;
+    const barH      = 8;
+    // Background
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 4); ctx.fill();
+    // Bar fill
+    const barColor = pct < 0.2 ? '#ff3322' : pct < 0.4 ? '#ff9922' : '#44dd66';
+    ctx.fillStyle = barColor;
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW * pct, barH, 3); ctx.fill();
+    // Label
+    ctx.font = 'bold 9px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    const tl = Math.ceil(timeLeft);
+    const tlm = Math.floor(tl/60), tlr = tl % 60;
+    const tlStr = tlm > 0 ? `${tlm}m ${String(tlr).padStart(2,'0')}s` : `${tl}s`;
+    ctx.fillText(`⏱ ${tlStr} → 🏁 ${curChk} plts`, zW / 2, barY - 4);
+    ctx.restore();
+  }
+}
+
+// Draw the little flag-waving character on the right void edge
+function drawTimerFlagWaver(ctx, sx, sy, t) {
+  ctx.save();
+  // Offset so the body is flush against the void edge; flag pole extends right into the void.
+  ctx.translate(sx - 14, sy);
+  const wave = Math.sin(t * 0.12) * 0.35;
+  // Torso
+  ctx.strokeStyle = '#ffe066';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 18); ctx.stroke();
+  // Head
+  ctx.fillStyle = '#ffcc88';
+  ctx.beginPath(); ctx.arc(0, -7, 5, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#cc9944'; ctx.lineWidth = 1;
+  ctx.stroke();
+  // Left arm (grips the wall edge behind them)
+  ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(-8, 9); ctx.stroke();
+  // Right arm — raises & waves the flag outward to the right
+  ctx.save();
+  ctx.translate(0, 3);
+  ctx.rotate(wave - 0.6);
+  ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(12, -6); ctx.stroke();
+  // Flag pole extends right
+  ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(12, -6); ctx.lineTo(12, -22); ctx.stroke();
+  // Checkered flag (2×2 grid)
+  const fw = 12, fh = 9;
+  const fx = 12, fy = -22;
+  const waveFlag = Math.sin(t * 0.15) * 2.5;
+  for(let row = 0; row < 2; row++) {
+    for(let col = 0; col < 2; col++) {
+      ctx.fillStyle = (row + col) % 2 === 0 ? '#fff' : '#111';
+      // Slight wave on outer column
+      const yOff = col === 1 ? waveFlag * 0.4 : 0;
+      ctx.fillRect(fx + col * fw/2, fy + row * fh/2 + yOff, fw/2, fh/2);
+    }
+  }
+  ctx.restore();
+  // Legs
+  ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 18); ctx.lineTo(-4, 28); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, 18); ctx.lineTo(4, 28); ctx.stroke();
+  ctx.restore();
 }
 
 function drawPlatform(p, sx, sy){
@@ -4757,9 +5196,15 @@ function saveScore(){
   if(isCustomPlayMode() && !isIntegratedCustomPlay()) return;
   const ud = currentUser.ud;
   // Submit to leaderboard (normal modes)
-  if (!currentStoryEpisode && !versusMode) {
+  if (!currentStoryEpisode && !versusMode && !timerMode) {
     const mode = (typeof gameMode !== 'undefined' && gameMode === 'frogger') ? 'frogger' : 'climber';
     lbSubmitNormal(mode, currentUser.name, platformCount, levelTimerSecs);
+  }
+  // Timer Mode: submit all passed checkpoints
+  if (timerMode && timerCheckpointPassed.length > 0) {
+    timerCheckpointPassed.forEach(cp => {
+      timerLBSubmit(currentUser.name, cp.checkpoint, cp.secs);
+    });
   }
   // Don't persist coins — they go to piggy on death (see loseCoinsToPiggy)
   // Only save best score and power-ups
@@ -5019,8 +5464,24 @@ function _gameEnd(fromPurple) {
 
   // Update UI elements
   document.getElementById('purpleWarning').style.opacity = '0';
-  document.getElementById('goTitle').textContent = fromPurple ? '💀 YOU DIED! (Purple got you)' : '💀 YOU DIED!';
-  document.getElementById('goScore').textContent = 'Platform ' + platformCount + ' — Level ' + level;
+  if (timerMode && timerExpired) {
+    document.getElementById('goTitle').textContent = '⏱ TIMES UP!';
+  } else {
+    document.getElementById('goTitle').textContent = fromPurple ? '💀 YOU DIED! (Purple got you)' : '💀 YOU DIED!';
+  }
+  if (timerMode) {
+    lastWasTimerMode = true;
+    const bestChk = timerCheckpointPassed.length > 0
+      ? timerCheckpointPassed[timerCheckpointPassed.length - 1].checkpoint
+      : 0;
+    document.getElementById('goScore').textContent = bestChk > 0
+      ? `Platform ${platformCount} — Best checkpoint: ${bestChk} 🏁`
+      : `Platform ${platformCount} — No checkpoint reached`;
+    timerMode = false; // reset after run ends
+  } else {
+    lastWasTimerMode = false;
+    document.getElementById('goScore').textContent = 'Platform ' + platformCount + ' — Level ' + level;
+  }
 
   // ── Practice mode: no coin penalty, no piggy, no RPS/Ad ──
   const practiceEl = document.getElementById('practiceNotice');
@@ -5094,7 +5555,7 @@ function _gameEnd(fromPurple) {
     if (rpsBtn) rpsBtn.style.display = heldCoins > 0 ? 'block' : 'none';
   }
 
-  // Show Rematch (versus) or Play Again (solo)
+  // Show Rematch (versus) or Play Timer Again or Play Again (solo)
   const rematchBtn = document.getElementById('goRematchBtn');
   const playAgainBtn = document.getElementById('restartBtn');
   if (diedInVersus) {
@@ -5102,7 +5563,19 @@ function _gameEnd(fromPurple) {
     if (playAgainBtn) playAgainBtn.style.display = 'none';
   } else {
     if (rematchBtn) rematchBtn.style.display = 'none';
-    if (playAgainBtn) playAgainBtn.style.display = 'inline-block';
+    if (playAgainBtn) {
+      playAgainBtn.style.display = 'inline-block';
+      // Customise label for Timer Mode
+      if (lastWasTimerMode) {
+        playAgainBtn.textContent = '⏱ Play Timer Again';
+        playAgainBtn.style.background = 'linear-gradient(135deg,#c0392b,#7b0d00)';
+        playAgainBtn.style.border = '1.5px solid #ff6644';
+      } else {
+        playAgainBtn.textContent = '▶ Play Again';
+        playAgainBtn.style.background = '';
+        playAgainBtn.style.border = '';
+      }
+    }
   }
     // ── Customize menu button for editor test mode (practice) ──
   const menuBtn = document.getElementById('menuBtn');
@@ -5212,6 +5685,12 @@ function restartGame(){
     const vr = document.getElementById('versusResult'); if(vr){vr.classList.remove('show'); vr.style.display='none';}
     const vh = document.getElementById('versusHUD'); if(vh){vh.classList.remove('show');}
     lastTime = null;
+    // Route back to Timer Mode if that's where the player came from
+    if (lastWasTimerMode) {
+      lastWasTimerMode = false;
+      startTimerMode();
+      return;
+    }
     initGame();
     animId = requestAnimationFrame(gameLoop);
   };
@@ -6783,7 +7262,7 @@ function updateBgMusic(){
 		const variant = variants[Math.floor(Math.random() * variants.length)];
 		playBgMusic(variant);
 	  } else {
-		playBgMusic(versusMode ? 'multiplayer' : gameMode === 'frogger' ? 'multiplayer' : 'climber');
+		playBgMusic(versusMode ? 'multiplayer' : timerMode ? 'multiplayer' : gameMode === 'frogger' ? 'multiplayer' : 'climber');
 	  }
 	} else {
     playBgMusic('menu');
@@ -9787,7 +10266,7 @@ function openStoryMode() {
 // ══════════════════════════════════════════════════════════════
 
 function openLeaderboard() {
-  lbLoad(); storyRunLoad();
+  lbLoad(); storyRunLoad(); timerLBLoad();
   showScreen('leaderboardScreen');
   showLbTab('climber');
 }
@@ -9797,23 +10276,73 @@ let currentLbTab = 'climber';
 function showLbTab(tab) {
   currentLbTab = tab;
   // Update active tab styling
-  ['Climt','Frogg','Story','Community'].forEach(t => {
+  ['Climt','Frogg','Timer','Story','Community'].forEach(t => {
     const id = 'lbTab' + t;
     const el = document.getElementById(id);
     if(el) el.classList.toggle('active',
-      (tab==='climber'&&t==='Climt')||(tab==='frogger'&&t==='Frogg')||(tab==='story'&&t==='Story')||(tab==='community'&&t==='Community'));
+      (tab==='climber'&&t==='Climt')||(tab==='frogger'&&t==='Frogg')||(tab==='timer'&&t==='Timer')||(tab==='story'&&t==='Story')||(tab==='community'&&t==='Community'));
   });
   const el = document.getElementById('lbContent');
   if(!el) return;
   if(tab === 'story') {
     el.innerHTML = renderLbStory();
   } else if(tab === 'community') {
-    // For the community tab, we'll load scores for a default mode, e.g., 'climber'
-    // You can add three small buttons inside the community tab to allow switching later.
     loadCommunityScores('climber');
+  } else if(tab === 'timer') {
+    timerLBLoad();
+    el.innerHTML = renderLbTimer();
   } else {
     el.innerHTML = renderLbNormal(tab);
   }
+}
+
+// ── Render Timer Mode Leaderboard ──
+function renderLbTimer() {
+  timerLBLoad();
+  const bests = timerLB.bests || {};
+  let html = `<div class="lbBucket">
+    <div class="lbBucketTitle">⏱ TIMER MODE — Best Times per Checkpoint</div>
+    <div style="font-size:10px;color:#aaa;margin-bottom:8px;padding:0 8px;">
+      🏆 Best times become the new target for all players. Fastest time wins!
+    </div>`;
+
+  TIMER_CHECKPOINTS.forEach(chk => {
+    const bestSecs = bests[chk];
+    const defaultSecs = TIMER_DEFAULT_TIMES[chk];
+    const activeSecs = bestSecs || defaultSecs;
+    // Find entries for this checkpoint, sorted by secs asc
+    const chkEntries = (timerLB.entries || [])
+      .filter(e => e.checkpoint === chk)
+      .sort((a,b) => a.secs - b.secs)
+      .slice(0, 5);
+
+    html += `<div style="margin-bottom:12px;border:1px solid #2a2a4a;border-radius:8px;overflow:hidden;">
+      <div style="background:#1a1a3e;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="color:#ffe066;font-weight:bold;font-size:12px;">🏁 ${chk} Platforms</span>
+        <span style="font-size:10px;color:${bestSecs ? '#44dd66' : '#aaa'};">
+          Target: <b style="color:${bestSecs ? '#44dd66' : '#ffcc44'}">${fmtTime(activeSecs)}</b>
+          ${bestSecs ? `<span style="color:#888;font-size:9px;"> (record!)</span>` : `<span style="color:#666;font-size:9px;"> (default)</span>`}
+        </span>
+      </div>`;
+
+    if (chkEntries.length === 0) {
+      html += `<div style="padding:8px 12px;color:#555;font-size:10px;font-style:italic;">No records yet — be the first!</div>`;
+    } else {
+      chkEntries.forEach((e, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+        html += `<div class="lbRow">
+          <div class="lbRank">${medal}</div>
+          <div class="lbName">${escapeHtml(e.name)}</div>
+          <div class="lbStat">⏱ ${fmtTime(e.secs)}</div>
+          <div class="lbDate">${e.date || '-'}</div>
+        </div>`;
+      });
+    }
+    html += `</div>`;
+  });
+
+  html += `</div>`;
+  return html;
 }
 
 function fmtTime(secs) {
@@ -12420,6 +12949,8 @@ function goToMenu() {
     restoreEndPlatform();
     currentStoryEpisode = null;
   }
+  lastWasTimerMode = false; // clear so plain Play button works normally after visiting menu
+  timerMode = false;
   _goToMenu();
 };
 
